@@ -127,7 +127,7 @@ echo "  ${DIM}[Entrée] accepter   M majeur ($(next_version major))   m mineur (
 # une erreur opaque au lieu de poser la question.
 [ -e /dev/tty ] || die "make release attend une réponse : lance-le depuis un terminal interactif."
 printf 'Ton choix : '
-read -r answer < /dev/tty || answer=q
+read -r answer < /dev/tty 2>/dev/null || answer=q
 echo
 
 case "${answer:-}" in
@@ -181,7 +181,7 @@ fi
 
 echo
 printf "Pousser %s et le tag sur %s ? [o/N] " "$branch" "$(git remote | head -1)"
-read -r push_answer < /dev/tty || push_answer=n
+read -r push_answer < /dev/tty 2>/dev/null || push_answer=n
 case "$push_answer" in
   o|O|y|Y)
     git push --follow-tags
