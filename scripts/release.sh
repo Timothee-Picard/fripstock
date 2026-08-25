@@ -122,8 +122,13 @@ suggested=$(next_version "$computed")
 echo
 echo "Bump calculé : ${BOLD}${computed}${OFF} → ${BOLD}v${suggested}${OFF}"
 echo "  ${DIM}[Entrée] accepter   M majeur ($(next_version major))   m mineur ($(next_version minor))   p patch ($(next_version patch))   q quitter${OFF}"
+# On lit sur /dev/tty et non sur stdin : `make check` plus haut consomme
+# l'entrée standard, et `read` tomberait sur EOF — le script mourrait alors sur
+# une erreur opaque au lieu de poser la question.
+[ -e /dev/tty ] || die "make release attend une réponse : lance-le depuis un terminal interactif."
 printf 'Ton choix : '
-read -r answer
+read -r answer < /dev/tty || answer=q
+echo
 
 case "${answer:-}" in
   '')  bump=$computed ;;
@@ -176,7 +181,7 @@ fi
 
 echo
 printf "Pousser %s et le tag sur %s ? [o/N] " "$branch" "$(git remote | head -1)"
-read -r push_answer
+read -r push_answer < /dev/tty || push_answer=n
 case "$push_answer" in
   o|O|y|Y)
     git push --follow-tags
