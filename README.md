@@ -70,6 +70,33 @@ Prisma 7 ne lit plus l'URL de connexion depuis le schéma : elle est dans
 Le client généré (`apps/api/src/generated/prisma`) n'est pas versionné, il se
 reconstruit avec `npx prisma generate`.
 
+## Authentification
+
+L'API est protégée par un guard JWT global : toute route exige un jeton, sauf
+`POST /auth/register`, `POST /auth/login` et `GET /health`, marquées `@Public()`.
+
+Le front stocke le jeton dans un **cookie httpOnly**, jamais dans `localStorage` : il
+reste illisible par le JavaScript de la page, donc une faille XSS ne peut pas
+l'exfiltrer. Le navigateur ne parle d'ailleurs jamais directement à l'API — tous les
+appels partent du serveur Next, qui rattache le jeton lui-même.
+
+Trois niveaux d'autorisation, tous appliqués côté API et jamais seulement dans l'UI :
+
+| Niveau          | Mécanisme                              | Exemple                                |
+| --------------- | -------------------------------------- | -------------------------------------- |
+| Authentifié     | `JwtAuthGuard` global                  | Toute route non `@Public()`            |
+| Gérant          | `@GerantUniquement()`                  | Créer une boutique, inviter un employé |
+| Permission fine | `@RequirePermission('produits.creer')` | Actions sur les produits (étape 5)     |
+
+Le gérant contourne entièrement la table des permissions, une seule fois, dans le guard.
+Pour un employé, `PermissionsGuard` retrouve la boutique concernée de trois façons :
+un `boutiqueId` explicite, une ressource ciblée par l'URL via
+`@BoutiqueDepuisRessource`, ou aucune — c'est alors le stock central, et la permission
+est accordée si l'employé la détient sur au moins une boutique.
+
+Aucune route n'exige encore de permission fine, les produits arrivant à l'étape 5 : le
+guard est donc couvert par ses propres tests (`permissions.guard.spec.ts`).
+
 ## Contribuer
 
 ### Convention de commit

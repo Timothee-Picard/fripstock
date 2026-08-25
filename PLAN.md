@@ -13,7 +13,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
 - [x] **Étape 2 — Base de données**
       Schéma Prisma complet, migration initiale, seed (templates d'attributs, statuts
       de base, un jeu de données de démo).
-- [ ] **Étape 3 — Auth & organisation**
+- [x] **Étape 3 — Auth & organisation**
       Inscription (Entreprise + gérant), login JWT, CRUD Boutiques, invitation
       employés + permissions par boutique, guards Nest, pages Next.js de base.
 - [ ] **Étape 4 — Catalogue**

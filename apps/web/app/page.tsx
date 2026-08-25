@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { connection } from 'next/server';
 
 // URL interne au réseau docker : le fetch est fait côté serveur, il vise le
@@ -62,6 +63,12 @@ export default async function Home() {
             : `L'API est attendue sur ${API_URL}. Vérifie que la stack tourne avec « make up », puis « make logs ».`}
         </p>
       </section>
+
+      <p className="text-sm text-slate-500">
+        <Link href="/dashboard" className="font-medium underline">
+          Accéder à l&apos;application
+        </Link>
+      </p>
     </main>
   );
 }
