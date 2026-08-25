@@ -3,6 +3,7 @@ Lis d'abord CLAUDE.md à la racine du repo pour le contexte complet du projet Fr
 Objectif de cette étape : poser le squelette du monorepo, rien de métier pour l'instant.
 
 1. Crée la structure de dossiers :
+
    ```
    fripstock/
    ├── apps/

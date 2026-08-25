@@ -6,6 +6,8 @@ dist/
 .next/
 out/
 *.tsbuildinfo
+# Généré par `next typegen` / `next dev` / `next build`
+apps/web/next-env.d.ts
 
 # Environnement — .env.example est versionné, .env ne l'est jamais
 .env

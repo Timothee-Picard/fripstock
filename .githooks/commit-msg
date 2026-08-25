@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Applique la convention de commit (voir commitlint.config.js et CLAUDE.md).
+#
+# On ne passe pas par `commitlint --edit` : cette option fait appel à git, qui
+# n'existe pas dans l'image node. Le hook tourne sur l'hôte, où git est
+# disponible — c'est donc lui qui retire les lignes de commentaire, et
+# commitlint reçoit le message nettoyé sur son entrée standard.
+git stripspace --strip-comments < "$1" | ./scripts/node-run.sh . npx --no -- commitlint

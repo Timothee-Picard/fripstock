@@ -1,0 +1,38 @@
+name: Release
+
+# Déclenché par le tag que pose `make release`.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publier la release GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Extraire la section du CHANGELOG
+        id: notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # De la ligne "## <tag>" jusqu'à la section de version suivante.
+          awk -v tag="$tag" '
+            $0 ~ "^## " tag " " { inside = 1; next }
+            inside && /^## v/    { exit }
+            inside               { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "Pas de section ${tag} dans CHANGELOG.md." > notes.md
+          fi
+          cat notes.md
+
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file notes.md

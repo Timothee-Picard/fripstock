@@ -6,7 +6,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
 
 - [x] **Étape 0 — Squelette du repo**
       Monorepo, docker-compose, Makefile, apps vides qui démarrent.
-- [ ] **Étape 1 — Qualité & CI**
+- [x] **Étape 1 — Qualité & CI**
       Conventional commits (husky + commitlint), `make check` (format, lint, types,
       dérive Prisma, tests, build), CI GitHub Actions, `make release` pour les tags
       `vX.Y.Z`.
@@ -46,13 +46,13 @@ dessus.
 
 ## Correspondance étapes ↔ prompts
 
-| Étape | Fichier prompt |
-|---|---|
-| 0 | `prompts/00-squelette-repo.md` |
-| 1 | `prompts/01-qualite-ci.md` |
-| 2 | `prompts/02-base-de-donnees.md` |
-| 3 | `prompts/03-auth-organisation.md` |
-| 4 | `prompts/04-catalogue.md` |
-| 5 | `prompts/05-produits.md` |
-| 6 | `prompts/06-depot-vente.md` |
-| 7 | `prompts/07-stats-export.md` |
+| Étape | Fichier prompt                    |
+| ----- | --------------------------------- |
+| 0     | `prompts/00-squelette-repo.md`    |
+| 1     | `prompts/01-qualite-ci.md`        |
+| 2     | `prompts/02-base-de-donnees.md`   |
+| 3     | `prompts/03-auth-organisation.md` |
+| 4     | `prompts/04-catalogue.md`         |
+| 5     | `prompts/05-produits.md`          |
+| 6     | `prompts/06-depot-vente.md`       |
+| 7     | `prompts/07-stats-export.md`      |

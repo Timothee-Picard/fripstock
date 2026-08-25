@@ -29,6 +29,7 @@ allowed-tools: Bash(make *), Bash(docker compose *), Bash(curl localhost:*), Bas
 ## Rapport attendu
 
 Résume clairement, étape par étape du `PLAN.md` en cours :
+
 - Ce qui fonctionne (avec la preuve : sortie de la commande, pas juste une affirmation)
 - Ce qui ne fonctionne pas, avec l'erreur exacte et une hypothèse sur la cause
 - Si tout fonctionne, rappelle explicitement quel est le critère de validation de

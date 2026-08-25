@@ -96,14 +96,15 @@ Entreprise (le compte parent, un gérant)
     les stats de stock disponible (utilisé pour "Rendu au client", "Retiré", "Vendu").
 - Valeurs des flags pour les statuts de base :
 
-  | Statut | `estVente` | `bloqueVente` | `sortStock` |
-  |---|---|---|---|
-  | En stock | ✗ | ✗ | ✗ |
-  | En rayon | ✗ | ✗ | ✗ |
-  | Réservé | ✗ | ✗ | ✗ |
-  | Vendu | ✓ | ✗ | ✓ |
-  | Rendu au client | ✗ | ✓ | ✓ |
-  | Retiré | ✗ | ✓ | ✓ |
+  | Statut          | `estVente` | `bloqueVente` | `sortStock` |
+  | --------------- | ---------- | ------------- | ----------- |
+  | En stock        | ✗          | ✗             | ✗           |
+  | En rayon        | ✗          | ✗             | ✗           |
+  | Réservé         | ✗          | ✗             | ✗           |
+  | Vendu           | ✓          | ✗             | ✓           |
+  | Rendu au client | ✗          | ✓             | ✓           |
+  | Retiré          | ✗          | ✓             | ✓           |
+
 - Chaque changement de statut est tracé dans `HistoriqueStatut` (produit, statut, qui,
   quand, note optionnelle).
 - Quand un produit passe à un statut avec `bloqueVente = true` (ex: "Rendu au client"),
@@ -159,7 +160,7 @@ permission dans **au moins une** boutique de son entreprise l'a aussi sur le sto
 (un employé doit pouvoir créer un produit avant de savoir dans quelle boutique il ira).
 
 **Statuts** : leur CRUD est réservé au gérant (`estGerant`), comme les boutiques — pas de
-clé de permission fine, puisqu'ils sont personnalisables *par le gérant*.
+clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
 
 ## Export CSV
 
@@ -201,7 +202,7 @@ clé de permission fine, puisqu'ils sont personnalisables *par le gérant*.
   `test`, `build`, `ci`, `chore`, `revert`. Scopes usuels : `api`, `web`, `db`, `docker`,
   `ci`, `deps`, `auth`, `catalogue`, `produits`, `depots`, `stats`.
 - Sujet sur **une seule ligne, 72 caractères maximum**, en minuscule, à l'impératif, sans
-  point final. Corps facultatif après une ligne vide, réservé au *pourquoi* d'un choix
+  point final. Corps facultatif après une ligne vide, réservé au _pourquoi_ d'un choix
   non évident. Breaking change : `feat!:` ou un pied `BREAKING CHANGE: ...`.
 
   ```

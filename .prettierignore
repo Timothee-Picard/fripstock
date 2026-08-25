@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+coverage/
+package-lock.json
+apps/web/app/favicon.ico
+# Régénéré par `next dev` à chaque lancement, le reformater crée une
+# modification non commitée en boucle.
+apps/web/AGENTS.md
+
+# Régénérés par Next à chaque `next dev` / `next build` : les formater crée une
+# modification qui revient toute seule.
+apps/web/next-env.d.ts
+apps/api/dist/

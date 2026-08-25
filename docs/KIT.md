@@ -139,7 +139,7 @@ avec `/nom-du-skill`, ou Claude les déclenche seul quand c'est pertinent.
 - **`revue-fripstock`** : relit le code récemment modifié à la lumière des règles
   métier du projet (scoping multi-tenant, permissions par boutique, logique de statut
   bloquant la revente). À utiliser après chaque étape, avant de passer à la suivante :
-  *"Utilise le subagent revue-fripstock sur les changements de cette étape."*
+  _"Utilise le subagent revue-fripstock sur les changements de cette étape."_
 - **`revue-schema-prisma`** : relit spécifiquement les changements du schéma Prisma
   (relations, `onDelete`, index sur les clés étrangères, présence du scoping
   multi-tenant sur chaque table qui en a besoin).

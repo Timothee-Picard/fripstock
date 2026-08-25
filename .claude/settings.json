@@ -24,7 +24,15 @@
       "Bash(git tag -l *)",
       "Bash(git describe *)",
       "Bash(gh pr *)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(./scripts/node-run.sh *)",
+      "Bash(./scripts/check-db.sh)",
+      "Bash(git stripspace *)",
+      "Bash(git check-ignore *)",
+      "Bash(docker compose run *)",
+      "Bash(docker compose logs *)",
+      "Bash(docker compose ps *)",
+      "Bash(docker compose exec *)"
     ],
     "ask": [
       "Bash(git push *)",
@@ -33,7 +41,10 @@
       "Bash(rm -rf *)",
       "Bash(make release)",
       "Bash(git push --follow-tags *)",
-      "Bash(git tag -d *)"
+      "Bash(git tag -d *)",
+      "Bash(./scripts/release.sh)",
+      "Bash(git update-ref *)",
+      "Bash(git commit-tree *)"
     ]
   },
   "hooks": {

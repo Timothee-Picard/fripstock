@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Même vérification que la CI, mais avant de pousser plutôt que trois minutes
+# après. Contournable avec --no-verify : la CI, elle, ne l'est pas.
+exec make check

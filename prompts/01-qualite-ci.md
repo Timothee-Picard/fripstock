@@ -26,7 +26,7 @@ Norme **Conventional Commits** : `type(scope): sujet`.
   frein dès qu'un module nouveau apparaît.
 - Sujet : une seule ligne, **72 caractères maximum en-tête compris**, en minuscule, à
   l'impératif, sans point final.
-- Corps facultatif, après une ligne vide, pour expliquer le *pourquoi* d'un choix non
+- Corps facultatif, après une ligne vide, pour expliquer le _pourquoi_ d'un choix non
   évident. C'est le seul endroit du projet où cette information survit.
 - Breaking change : `feat!:` / `fix!:`, ou un pied de message `BREAKING CHANGE: ...`.
 

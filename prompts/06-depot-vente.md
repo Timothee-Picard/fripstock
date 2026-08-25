@@ -11,7 +11,7 @@ Lis CLAUDE.md pour le contexte métier, en particulier la section "Dépôt-vente
    - `GET /clients-deposants/:id/releve` : calcule et renvoie un relevé — total vendu,
      part due au client, part déjà payée (`deposantPaye = true`) vs restant à payer.
      **La commission est la part de la boutique** : `partDeposant = prixVendu * (1 -
-     commissionAppliquee / 100)`. Lis `Produit.commissionAppliquee` (figée à la vente),
+commissionAppliquee / 100)`. Lis `Produit.commissionAppliquee` (figée à la vente),
      jamais `ContratDepot.commission` — sinon éditer un contrat réécrirait des relevés
      déjà réglés. Un produit compte comme vendu si son statut a `estVente = true`. C'est l'équivalent numérique du
      total "part pot client" qu'on trouve en bas du fichier Excel actuel du client.
@@ -35,9 +35,9 @@ Lis CLAUDE.md pour le contexte métier, en particulier la section "Dépôt-vente
    - fait passer en `EXPIRE` les contrats dont `dateFin` est dépassée — sans cette
      transition, rien ne sort jamais de `ACTIF` et l'enum ne sert à rien. `CLOS` reste
      une action manuelle du gérant.
-   Le job doit être scopé correctement malgré l'absence d'`entrepriseId` sur
-   `ContratDepot` : remonte l'entreprise via `client.entrepriseId` pour créer la
-   notification.
+     Le job doit être scopé correctement malgré l'absence d'`entrepriseId` sur
+     `ContratDepot` : remonte l'entreprise via `client.entrepriseId` pour créer la
+     notification.
 
 4. Module `notifications` : `GET /notifications` (liste des notifications de
    l'entreprise, triées par date, avec `isRead`), `PUT /notifications/:id/lu` (marque

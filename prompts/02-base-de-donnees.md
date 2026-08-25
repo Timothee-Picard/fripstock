@@ -73,8 +73,8 @@ Objectif : le schéma Prisma complet, la migration initiale, et un seed exploita
      Chaussures, Chemise) avec les attributs pertinents rattachés à chaque catégorie
      (Sac n'a pas Taille, par exemple), les six statuts de base avec exactement les flags
      du tableau de CLAUDE.md ("En stock" en `estDefaut=true`, "Vendu" en `estVente=true,
-     sortStock=true`, "Rendu au client" et "Retiré" en `bloqueVente=true,
-     sortStock=true`), un client déposant de démo, et
+sortStock=true`, "Rendu au client" et "Retiré" en `bloqueVente=true,
+sortStock=true`), un client déposant de démo, et
      3-4 produits d'exemple variés (achat-revente et dépôt-vente) pour pouvoir tester
      l'UI dès l'étape suivante.
    - Ajoute un script npm `db:seed` et branche-le dans le `package.json` Prisma

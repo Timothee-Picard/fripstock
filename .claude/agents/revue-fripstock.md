@@ -18,6 +18,7 @@ Quand on t'invoque :
 ## Checklist de revue
 
 **Scoping multi-tenant**
+
 - Toute requête Prisma sur une ressource métier (produits, boutiques, catégories,
   clients déposants...) filtre-t-elle bien par `entrepriseId` déduit du JWT, jamais
   d'un paramètre venant du client ?
@@ -32,11 +33,13 @@ Quand on t'invoque :
   central de `CLAUDE.md`, et non silencieusement exclus ou exposés à toute l'entreprise ?
 
 **Permissions**
+
 - Chaque route de mutation a-t-elle un `@RequirePermission(...)` avec la bonne clé
   (voir la liste dans `CLAUDE.md`) ?
 - Le bypass gérant est-il géré au niveau du guard, pas dupliqué route par route ?
 
 **Logique de statut**
+
 - Un produit dont le statut a `bloqueVente = true` peut-il encore être vendu ou voir
   son prix modifié par erreur ? C'est une règle stricte : vérifie qu'elle est
   appliquée au niveau service, pas seulement suggérée côté UI.
@@ -48,6 +51,7 @@ Quand on t'invoque :
 - Les ventes, le CA et le relevé déposant sont-ils bien définis par `estVente = true` ?
 
 **Dépôt-vente**
+
 - La commission utilisée dans un calcul est-elle `Produit.commissionAppliquee` (figée à la
   vente) et non `ContratDepot.commission` ? Lire celle du contrat réécrit rétroactivement
   des relevés déjà réglés.
@@ -56,6 +60,7 @@ Quand on t'invoque :
   visuels mais fausse tout l'argent.
 
 **Cohérence des conventions**
+
 - Modèles et champs Prisma en français, camelCase, avec `@@map`/`@map` en
   snake_case ?
 - Les DTOs valident-ils les champs reçus avec `class-validator` ?
@@ -63,6 +68,7 @@ Quand on t'invoque :
 ## Format du rapport
 
 Classe les observations en trois niveaux :
+
 - **Critique** (doit être corrigé avant de continuer) — fuite de données entre
   entreprises, permission manquante sur une route sensible, contournement possible du
   blocage de revente.

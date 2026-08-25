@@ -1,18 +1,16 @@
-import { connection } from "next/server";
+import { connection } from 'next/server';
 
 // URL interne au réseau docker : le fetch est fait côté serveur, il vise le
 // service `api` et non le port publié sur l'hôte.
-const API_URL = process.env.API_URL ?? "http://localhost:3001";
+const API_URL = process.env.API_URL ?? 'http://localhost:3001';
 
 type HealthResponse = { status: string };
 
-type HealthResult =
-  | { reachable: true; status: string }
-  | { reachable: false; erreur: string };
+type HealthResult = { reachable: true; status: string } | { reachable: false; erreur: string };
 
 async function getHealth(): Promise<HealthResult> {
   try {
-    const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
+    const res = await fetch(`${API_URL}/health`, { cache: 'no-store' });
     if (!res.ok) {
       return { reachable: false, erreur: `l'API a répondu ${res.status}` };
     }
@@ -21,7 +19,7 @@ async function getHealth(): Promise<HealthResult> {
   } catch (err) {
     return {
       reachable: false,
-      erreur: err instanceof Error ? err.message : "API injoignable",
+      erreur: err instanceof Error ? err.message : 'API injoignable',
     };
   }
 }
@@ -49,7 +47,7 @@ export default async function Home() {
           <span
             aria-hidden
             className={`size-2.5 shrink-0 rounded-full ${
-              health.reachable ? "bg-emerald-500" : "bg-red-500"
+              health.reachable ? 'bg-emerald-500' : 'bg-red-500'
             }`}
           />
           <p className="font-mono text-sm">

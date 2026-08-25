@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+set -e
+
+# 1. Aucun fichier d'environnement ne doit entrer dans l'historique.
+#    Le hook .claude/hooks/protect-files.sh ne couvre que les modifications
+#    faites par Claude Code ; celui-ci couvre aussi les tiennes.
+secrets=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
+if [ -n "$secrets" ]; then
+  echo "pre-commit: refus, fichier d'environnement dans le commit :"
+  echo "$secrets" | sed 's/^/  /'
+  echo "retire-le avec : git restore --staged <fichier>"
+  exit 1
+fi
+
+# 2. Formatage des fichiers indexés.
+#    On vérifie sans réécrire : reformater ici puis re-indexer embarquerait les
+#    modifications non indexées d'un fichier partiellement stagé.
+files=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|json|md|ya?ml|css)$' || true)
+[ -z "$files" ] && exit 0
+
+# shellcheck disable=SC2086
+if ! ./scripts/node-run.sh . npx --no -- prettier --check $files; then
+  echo
+  echo "pre-commit: fichiers mal formatés. Corrige avec :  make format"
+  echo "puis ré-indexe-les et recommite."
+  exit 1
+fi
