@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
 	install hooks format check check-format check-lint check-types check-db \
-	check-test check-build release
+	check-test check-build check-commits release
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -95,6 +95,10 @@ check-build: ## Vérifie que les deux apps compilent
 	@./scripts/node-run.sh apps/api npm run build
 	@echo "--> build web"
 	@./scripts/node-run.sh apps/web npm run build
+
+check-commits: ## Vérifie la convention sur les messages de commit (défaut : tout l'historique)
+	@echo "--> messages de commit"
+	@./scripts/check-commits.sh $(RANGE)
 
 # --- Release -----------------------------------------------------------------
 

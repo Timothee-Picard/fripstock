@@ -101,10 +101,8 @@ jobs:
       - run: npm ci
 
       # Rattrape les commits poussés avec --no-verify, que le hook local a
-      # laissés passer.
-      - name: commitlint sur la plage de la PR
+      # laissés passer. Même cible que `make check-commits` en local.
+      - name: Convention sur la plage de la PR
         run: |
-          npx commitlint \
-            --from "${{ github.event.pull_request.base.sha }}" \
-            --to "${{ github.event.pull_request.head.sha }}" \
-            --verbose
+          make check-commits \
+            RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
