@@ -7,7 +7,8 @@ import { exigerSession } from '@/lib/session';
 const NAVIGATION = [
   { href: '/dashboard', label: 'Tableau de bord', actif: true },
   { href: '/dashboard/produits', label: 'Produits', actif: false },
-  { href: '/dashboard/categories', label: 'Catégories', actif: false },
+  { href: '/dashboard/categories', label: 'Catégories', actif: true },
+  { href: '/dashboard/attributs', label: 'Attributs', actif: true },
   { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: false },
   { href: '/dashboard/boutiques', label: 'Boutiques', actif: true },
   { href: '/dashboard/utilisateurs', label: 'Utilisateurs', actif: true, gerant: true },

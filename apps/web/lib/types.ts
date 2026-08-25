@@ -66,3 +66,66 @@ export interface Employe {
     boutique: { nom: string };
   }[];
 }
+
+export type TypeAttribut = 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTISELECT' | 'BOOLEAN';
+
+export const LIBELLES_TYPES: Record<TypeAttribut, string> = {
+  TEXT: 'Texte libre',
+  NUMBER: 'Nombre',
+  SELECT: 'Choix unique',
+  MULTISELECT: 'Choix multiples',
+  BOOLEAN: 'Oui / non',
+};
+
+/** Seuls ces types portent une liste d'options. */
+export const TYPES_A_OPTIONS: TypeAttribut[] = ['SELECT', 'MULTISELECT'];
+
+export interface Categorie {
+  id: string;
+  nom: string;
+  parentId: string | null;
+  createdAt: string;
+}
+
+export interface CategorieArbre {
+  id: string;
+  nom: string;
+  parentId: string | null;
+  enfants: CategorieArbre[];
+}
+
+export interface AttributOption {
+  id: string;
+  valeur: string;
+  ordre: number;
+}
+
+export interface AttributDefinition {
+  id: string;
+  nom: string;
+  type: TypeAttribut;
+  clonedFromTemplateId: string | null;
+  options: AttributOption[];
+  categories: { categorieId: string }[];
+}
+
+export interface AttributTemplate {
+  id: string;
+  nom: string;
+  type: TypeAttribut;
+  options: { id: string; valeur: string; ordre: number }[];
+}
+
+/** Aplatit l'arbre en libellés indentés, pour les listes déroulantes. */
+export function aplatirArbre(
+  noeuds: CategorieArbre[],
+  profondeur = 0,
+): { id: string; libelle: string }[] {
+  return noeuds.flatMap((n) => [
+    {
+      id: n.id,
+      libelle: `${'\u00a0\u00a0'.repeat(profondeur)}${profondeur > 0 ? '└ ' : ''}${n.nom}`,
+    },
+    ...aplatirArbre(n.enfants, profondeur + 1),
+  ]);
+}

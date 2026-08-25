@@ -138,6 +138,37 @@ Il n'existe pas non plus de récupération par email — un employé qui oublie 
 passe doit être supprimé et réinvité par le gérant ; pour le gérant lui-même, il n'y a
 aucun recours.
 
+## Catalogue
+
+Catégories et attributs sont définis **au niveau Entreprise** et partagés par toutes ses
+boutiques — jamais par boutique. Les routes d'écriture n'ont donc pas de `boutiqueId` :
+le `PermissionsGuard` applique sa règle du stock central, et la permission
+(`categories.gerer`, `attributs.gerer`) est accordée si l'utilisateur la détient sur au
+moins une de ses boutiques. La lecture est ouverte à tout utilisateur de l'entreprise.
+
+Deux écrans : `/dashboard/categories` (arbre, avec sélecteur de parent) et
+`/dashboard/attributs`.
+
+**L'association attribut ↔ catégorie est directe, sans héritage.** Rattacher « Taille » à
+« Vêtements » ne la donne pas à « Robe ». C'est ce que décrit `CLAUDE.md` (« Sac peut ne
+pas avoir Taille, Robe l'aura ») et ce que fait le seed. Si l'héritage devient
+souhaitable, il ne concerne qu'une requête — mais il faudra d'abord trancher si une
+sous-catégorie peut retirer un attribut hérité.
+
+**Les options d'un attribut s'éditent en une seule opération.** `PUT /attributs/:id/options`
+reçoit la liste complète et ordonnée : les entrées sans `id` sont créées, celles qui en
+ont un sont renommées, les absentes sont supprimées, et l'ordre du tableau devient
+l'ordre affiché. Un seul appel atomique couvre ajout, renommage, réordonnancement et
+suppression — et c'est exactement ce que fait l'écran. Une option encore utilisée par un
+produit ne peut pas être retirée.
+
+**Le type d'un attribut n'est pas modifiable** après création : des valeurs produit
+s'appuient dessus, transformer un « choix unique » en « nombre » laisserait des valeurs
+orphelines et intraduisibles.
+
+Un attribut cloné depuis un modèle est **totalement indépendant** : le renommer ou
+changer ses options n'affecte ni le modèle global ni les autres entreprises.
+
 ## Contribuer
 
 ### Convention de commit

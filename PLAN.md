@@ -16,7 +16,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
 - [x] **Étape 3 — Auth & organisation**
       Inscription (Entreprise + gérant), login JWT, CRUD Boutiques, invitation
       employés + permissions par boutique, guards Nest, pages Next.js de base.
-- [ ] **Étape 4 — Catalogue**
+- [x] **Étape 4 — Catalogue**
       Catégories hiérarchiques, attributs dynamiques + options, association
       attributs/catégories, admin dans Next.js.
 - [ ] **Étape 5 — Produits & stock**

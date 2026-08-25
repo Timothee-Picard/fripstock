@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { AttributsModule } from './attributs/attributs.module';
 import { AuthModule } from './auth/auth.module';
 import { BoutiquesModule } from './boutiques/boutiques.module';
+import { CategoriesModule } from './categories/categories.module';
 import { GerantGuard } from './common/guards/gerant.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
@@ -17,6 +19,8 @@ import { UsersModule } from './users/users.module';
     HealthModule,
     AuthModule,
     BoutiquesModule,
+    CategoriesModule,
+    AttributsModule,
     UsersModule,
   ],
   providers: [
