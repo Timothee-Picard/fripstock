@@ -9,6 +9,7 @@
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
+import type { PermissionMap } from '../src/common/permissions';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { TypeAttribut, TypeVente } from '../src/generated/prisma/enums';
 
@@ -20,7 +21,18 @@ if (!DATABASE_URL) {
 const prisma = new PrismaClient({ adapter: new PrismaPg(DATABASE_URL) });
 
 const EMAIL_GERANT = 'gerant@fripstock.test';
-const MOT_DE_PASSE_GERANT = 'fripstock';
+const EMAIL_EMPLOYE = 'employe@fripstock.test';
+const MOT_DE_PASSE_DEMO = 'fripstock';
+
+/**
+ * Permissions volontairement partielles : l'employé de démonstration peut voir
+ * et créer des produits, rien d'autre. Tout le reste doit lui renvoyer un 403,
+ * c'est ce qui rend la restriction testable sans bricoler un compte à la main.
+ */
+const PERMISSIONS_EMPLOYE_DEMO: PermissionMap = {
+  'produits.voir': true,
+  'produits.creer': true,
+};
 
 /** Bibliothèque globale, partagée par toutes les entreprises, en lecture seule. */
 const TEMPLATES: { nom: string; type: TypeAttribut; options: string[] }[] = [
@@ -121,6 +133,14 @@ async function seedTemplates() {
 }
 
 async function main() {
+  // Ce seed crée des comptes aux identifiants publics et connus de tous. Il ne
+  // doit jamais s'exécuter ailleurs qu'en développement.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Le seed crée des comptes de démonstration : refus de tourner avec NODE_ENV=production.',
+    );
+  }
+
   console.log('Seed Fripstock');
 
   await seedTemplates();
@@ -135,7 +155,7 @@ async function main() {
     create: {
       entrepriseId: entreprise.id,
       email: EMAIL_GERANT,
-      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_GERANT, 10),
+      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
       prenom: 'Camille',
       nom: 'Durand',
       estGerant: true,
@@ -150,6 +170,30 @@ async function main() {
       entrepriseId: entreprise.id,
       nom: 'Boutique Centre-ville',
       adresse: '12 rue des Lilas, Lyon',
+    },
+  });
+
+  // --- Employé de démonstration, aux droits limités ----------------------
+  const employe = await prisma.user.upsert({
+    where: { email: EMAIL_EMPLOYE },
+    update: {},
+    create: {
+      entrepriseId: entreprise.id,
+      email: EMAIL_EMPLOYE,
+      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
+      prenom: 'Théo',
+      nom: 'Bernard',
+      estGerant: false,
+    },
+  });
+
+  await prisma.accesBoutique.upsert({
+    where: { userId_boutiqueId: { userId: employe.id, boutiqueId: boutique.id } },
+    update: { permissions: PERMISSIONS_EMPLOYE_DEMO },
+    create: {
+      userId: employe.id,
+      boutiqueId: boutique.id,
+      permissions: PERMISSIONS_EMPLOYE_DEMO,
     },
   });
 
@@ -376,9 +420,11 @@ async function main() {
   }
   console.log(`  ${produits.length} produits`);
 
-  console.log('\nConnexion de démonstration :');
-  console.log(`  email        ${EMAIL_GERANT}`);
-  console.log(`  mot de passe ${MOT_DE_PASSE_GERANT}`);
+  console.log('\nComptes de démonstration (développement uniquement) :');
+  console.log(`  gérant   ${EMAIL_GERANT}  / ${MOT_DE_PASSE_DEMO}`);
+  console.log(`  employé  ${EMAIL_EMPLOYE} / ${MOT_DE_PASSE_DEMO}`);
+  console.log(`           accès à « ${boutique.nom} », permissions :`);
+  console.log(`           ${Object.keys(PERMISSIONS_EMPLOYE_DEMO).join(', ')}`);
 }
 
 main()

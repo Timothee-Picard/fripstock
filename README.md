@@ -51,8 +51,25 @@ make migrate   # crée et applique les migrations
 make seed      # jeu de données de démonstration
 ```
 
-Le seed est idempotent et affiche les identifiants de connexion à la fin :
-`gerant@fripstock.test` / `fripstock`.
+Le seed est idempotent et crée deux comptes de démonstration, affichés à la fin :
+
+| Compte  | Identifiants                           | Accès                                                                 |
+| ------- | -------------------------------------- | --------------------------------------------------------------------- |
+| Gérant  | `gerant@fripstock.test` / `fripstock`  | Tous les droits sur toute l'entreprise                                |
+| Employé | `employe@fripstock.test` / `fripstock` | Boutique Centre-ville, `produits.voir` et `produits.creer` uniquement |
+
+Les permissions de l'employé sont volontairement partielles : tout le reste doit lui
+renvoyer un 403, ce qui rend la restriction testable sans bricoler un compte à la main.
+
+La page `/login` affiche deux boutons de connexion rapide pour ces comptes. Ils ne se
+contentent que de remplir le formulaire et de le soumettre — aucune route ni action
+serveur supplémentaire, donc aucune surface d'attaque en plus.
+
+**Ces comptes n'existent qu'en développement.** Le seed refuse de s'exécuter si
+`NODE_ENV=production`, et `next build` fixant toujours `NODE_ENV=production`, le bloc de
+connexion rapide est éliminé de tout build de production : zéro occurrence des
+identifiants dans `.next/static/`, ce que le navigateur télécharge. La seule trace
+restante est une source map côté serveur, jamais servie au client.
 
 | Cible                 | Effet                                             |
 | --------------------- | ------------------------------------------------- |
