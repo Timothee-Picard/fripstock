@@ -110,9 +110,16 @@ Les hooks se contournent avec `--no-verify` : ils sont là pour le retour rapide
 **la CI est le seul filet qui ne se contourne pas**. Les deux lancent les mêmes
 cibles `make`, jamais des commandes recopiées.
 
-Cette machine n'a pas Node : `scripts/node-run.sh` bascule automatiquement sur les
-conteneurs. Sur une machine équipée de Node — et sur la CI — les mêmes cibles
-s'exécutent directement, sans Docker.
+Les cibles passent par `scripts/node-run.sh`, qui exécute **toujours dans les
+conteneurs** dès que Docker est disponible — même si Node est installé sur la machine.
+Ce n'est pas un excès de prudence : les `node_modules` du dépôt sont installés par les
+images Alpine, et leurs binaires natifs (le swc de Next, par exemple) sont en musl,
+illisibles par la glibc de l'hôte. Les lancer localement échoue sur un
+`invalid ELF header`, et les dossiers de build montés (`.next`, `dist`) appartiennent
+à root.
+
+La CI, elle, installe ses dépendances nativement : elle pose `FRIPSTOCK_RUNNER=local`
+pour court-circuiter Docker et lancer les mêmes cibles directement.
 
 ### Publier une version
 

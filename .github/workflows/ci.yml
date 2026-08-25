@@ -37,6 +37,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock?schema=public
       SHADOW_DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock_shadow?schema=public
+      # Le runner installe ses node_modules nativement : les cibles make
+      # s'exécutent directement, sans passer par les conteneurs.
+      FRIPSTOCK_RUNNER: local
 
     steps:
       - uses: actions/checkout@v5
