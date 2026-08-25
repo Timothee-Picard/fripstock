@@ -66,3 +66,28 @@ export async function supprimerCategorie(
   revalidatePath('/dashboard/categories');
   return { succes: 'Catégorie supprimée.' };
 }
+
+/**
+ * Configure les attributs proposés pour une catégorie.
+ *
+ * C'est le sens naturel de lecture du catalogue — « une robe a une taille et
+ * une couleur » — et non l'inverse. La table est la même que côté attribut,
+ * seule la direction de l'écran change.
+ */
+export async function definirAttributs(
+  _etat: EtatCategorie,
+  donnees: FormData,
+): Promise<EtatCategorie> {
+  try {
+    await appelApi(`/categories/${String(donnees.get('id'))}/attributs`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        attributDefinitionIds: donnees.getAll('attributId').map(String),
+      }),
+    });
+  } catch (erreur) {
+    return message(erreur, 'Enregistrement impossible.');
+  }
+  revalidatePath('/dashboard/categories');
+  return { succes: 'Attributs enregistrés.' };
+}

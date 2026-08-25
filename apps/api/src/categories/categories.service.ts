@@ -7,6 +7,7 @@ import {
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreerCategorieDto } from './dto/creer-categorie.dto';
+import type { DefinirAttributsDto } from './dto/definir-attributs.dto';
 import type { ModifierCategorieDto } from './dto/modifier-categorie.dto';
 
 export interface CategorieArbre {
@@ -129,6 +130,40 @@ export class CategoriesService {
       include: { attribut: { include: { options: { orderBy: { ordre: 'asc' } } } } },
     });
     return liens.map((l) => l.attribut).sort((a, b) => a.nom.localeCompare(b.nom));
+  }
+
+  /**
+   * Remplace la liste des attributs proposés pour cette catégorie.
+   *
+   * Opération symétrique de `PUT /attributs/:id/categories` : même table, même
+   * effet, donc même permission exigée — sinon l'une deviendrait un moyen de
+   * contourner l'autre.
+   */
+  async definirAttributs(courant: UtilisateurCourant, id: string, dto: DefinirAttributsDto) {
+    await this.exigerCategorie(courant, id);
+
+    if (dto.attributDefinitionIds.length > 0) {
+      const valides = await this.prisma.attributDefinition.count({
+        where: { id: { in: dto.attributDefinitionIds }, entrepriseId: courant.entrepriseId },
+      });
+      if (valides !== dto.attributDefinitionIds.length) {
+        throw new BadRequestException("Un attribut cité n'appartient pas à cette entreprise.");
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.categorieAttribut.deleteMany({ where: { categorieId: id } });
+      if (dto.attributDefinitionIds.length > 0) {
+        await tx.categorieAttribut.createMany({
+          data: dto.attributDefinitionIds.map((attributDefinitionId) => ({
+            categorieId: id,
+            attributDefinitionId,
+          })),
+        });
+      }
+    });
+
+    return this.attributsDe(courant, id);
   }
 
   private async exigerCategorie(courant: UtilisateurCourant, id: string) {

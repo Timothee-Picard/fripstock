@@ -149,6 +149,21 @@ moins une de ses boutiques. La lecture est ouverte à tout utilisateur de l'entr
 Deux écrans : `/dashboard/categories` (arbre, avec sélecteur de parent) et
 `/dashboard/attributs`.
 
+**L'association se pilote depuis la catégorie**, sur `/dashboard/categories` : chaque
+catégorie déclare les attributs qui seront demandés à la création d'un produit. C'est le
+sens dans lequel on lit un catalogue — « une robe a une taille et une couleur » — et non
+l'inverse.
+
+Attention au contresens que ce nom peut induire : `CategorieAttribut` n'est **pas** une
+possession. Les valeurs appartiennent au produit (`ValeurAttribut`,
+`ProduitAttributOption`) ; cette table dit seulement quels attributs le formulaire
+produit propose, et lesquels l'API accepte, pour un produit de cette catégorie.
+
+L'API expose les deux directions — `PUT /categories/:id/attributs` (utilisée par l'écran)
+et `PUT /attributs/:id/categories` — sur la même table et avec la **même permission**
+`attributs.gerer` : deux chemins vers la même écriture ne peuvent pas coûter des droits
+différents, sinon l'un contourne l'autre.
+
 **L'association attribut ↔ catégorie est directe, sans héritage.** Rattacher « Taille » à
 « Vêtements » ne la donne pas à « Robe ». C'est ce que décrit `CLAUDE.md` (« Sac peut ne
 pas avoir Taille, Robe l'aura ») et ce que fait le seed. Si l'héritage devient

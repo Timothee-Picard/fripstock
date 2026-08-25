@@ -4,6 +4,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { CategoriesService } from './categories.service';
 import { CreerCategorieDto } from './dto/creer-categorie.dto';
+import { DefinirAttributsDto } from './dto/definir-attributs.dto';
 import { ModifierCategorieDto } from './dto/modifier-categorie.dto';
 
 /**
@@ -39,6 +40,24 @@ export class CategoriesController {
   @Get(':id/attributs')
   attributs(@Utilisateur() courant: UtilisateurCourant, @Param('id') id: string) {
     return this.categories.attributsDe(courant, id);
+  }
+
+  /**
+   * Configure quels attributs sont proposés pour cette catégorie. C'est bien
+   * une configuration du catalogue, pas une possession : les valeurs, elles,
+   * vivent sur le produit (ValeurAttribut).
+   *
+   * Exige `attributs.gerer` et non `categories.gerer` : c'est la même écriture
+   * que `PUT /attributs/:id/categories`, elle doit coûter la même permission.
+   */
+  @Put(':id/attributs')
+  @RequirePermission('attributs.gerer')
+  definirAttributs(
+    @Utilisateur() courant: UtilisateurCourant,
+    @Param('id') id: string,
+    @Body() dto: DefinirAttributsDto,
+  ) {
+    return this.categories.definirAttributs(courant, id, dto);
   }
 
   @Post()

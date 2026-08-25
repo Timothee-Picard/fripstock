@@ -97,22 +97,6 @@ export async function definirOptions(
   return { succes: 'Options enregistrées.' };
 }
 
-export async function definirCategories(
-  _etat: EtatAttribut,
-  donnees: FormData,
-): Promise<EtatAttribut> {
-  try {
-    await appelApi(`/attributs/${String(donnees.get('id'))}/categories`, {
-      method: 'PUT',
-      body: JSON.stringify({ categorieIds: donnees.getAll('categorieId').map(String) }),
-    });
-  } catch (erreur) {
-    return message(erreur, 'Enregistrement impossible.');
-  }
-  revalidatePath('/dashboard/attributs');
-  return { succes: 'Catégories enregistrées.' };
-}
-
 export async function supprimerAttribut(
   _etat: EtatAttribut,
   donnees: FormData,

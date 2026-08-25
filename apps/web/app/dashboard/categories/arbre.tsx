@@ -7,8 +7,9 @@ import {
   supprimerCategorie,
   type EtatCategorie,
 } from './actions';
+import { AttributsCategorie } from './attributs-categorie';
 import { Alerte, Bouton, Champ } from '@/components/champ';
-import { aplatirArbre, type CategorieArbre } from '@/lib/types';
+import { aplatirArbre, type AttributDefinition, type CategorieArbre } from '@/lib/types';
 
 const ETAT_INITIAL: EtatCategorie = {};
 
@@ -81,10 +82,12 @@ export function FormulaireCreation({ arbre }: { arbre: CategorieArbre[] }) {
 function LigneCategorie({
   noeud,
   arbre,
+  attributs,
   profondeur,
 }: {
   noeud: CategorieArbre;
   arbre: CategorieArbre[];
+  attributs: AttributDefinition[];
   profondeur: number;
 }) {
   const [edition, setEdition] = useState(false);
@@ -115,10 +118,18 @@ function LigneCategorie({
           </form>
         ) : (
           <>
-            <span className="flex-1 text-sm text-slate-900">
+            <span className="min-w-40 text-sm text-slate-900">
               {profondeur > 0 ? <span className="text-slate-500">└ </span> : null}
               {noeud.nom}
             </span>
+            <AttributsCategorie
+              categorieId={noeud.id}
+              categorieNom={noeud.nom}
+              attributs={attributs}
+              selectionnes={attributs
+                .filter((a) => a.categories.some((c) => c.categorieId === noeud.id))
+                .map((a) => a.id)}
+            />
             <Bouton type="button" variante="secondaire" onClick={() => setEdition(true)}>
               Renommer
             </Bouton>
@@ -155,6 +166,7 @@ function LigneCategorie({
               key={enfant.id}
               noeud={enfant}
               arbre={arbre}
+              attributs={attributs}
               profondeur={profondeur + 1}
             />
           ))}
@@ -164,7 +176,13 @@ function LigneCategorie({
   );
 }
 
-export function ArbreCategories({ arbre }: { arbre: CategorieArbre[] }) {
+export function ArbreCategories({
+  arbre,
+  attributs,
+}: {
+  arbre: CategorieArbre[];
+  attributs: AttributDefinition[];
+}) {
   if (arbre.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
@@ -175,7 +193,7 @@ export function ArbreCategories({ arbre }: { arbre: CategorieArbre[] }) {
   return (
     <ul className="rounded-lg border border-slate-200 bg-white px-4">
       {arbre.map((n) => (
-        <LigneCategorie key={n.id} noeud={n} arbre={arbre} profondeur={0} />
+        <LigneCategorie key={n.id} noeud={n} arbre={arbre} attributs={attributs} profondeur={0} />
       ))}
     </ul>
   );

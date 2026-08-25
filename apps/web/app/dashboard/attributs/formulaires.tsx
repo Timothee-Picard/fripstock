@@ -1,10 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import {
   clonerTemplate,
   creerAttribut,
-  definirCategories,
   definirOptions,
   renommerAttribut,
   supprimerAttribut,
@@ -20,6 +20,14 @@ import {
   type CategorieArbre,
   type TypeAttribut,
 } from '@/lib/types';
+
+/** Noms des catégories qui proposent cet attribut, pour un rappel en lecture seule. */
+function nommerCategories(arbre: CategorieArbre[], attribut: AttributDefinition): string[] {
+  const cochees = new Set(attribut.categories.map((c) => c.categorieId));
+  return aplatirArbre(arbre)
+    .filter((c) => cochees.has(c.id))
+    .map((c) => c.libelle.replace(/[\u00a0└ ]/g, ''));
+}
 
 const ETAT_INITIAL: EtatAttribut = {};
 
@@ -118,11 +126,11 @@ export function CarteAttribut({
 }) {
   const [etatNom, actionNom, nomEnCours] = useActionState(renommerAttribut, ETAT_INITIAL);
   const [etatOptions, actionOptions, optionsEnCours] = useActionState(definirOptions, ETAT_INITIAL);
-  const [etatCats, actionCats, catsEnCours] = useActionState(definirCategories, ETAT_INITIAL);
   const [etatSuppr, actionSuppr, supprEnCours] = useActionState(supprimerAttribut, ETAT_INITIAL);
 
-  const cochees = new Set(attribut.categories.map((c) => c.categorieId));
-  const categories = aplatirArbre(arbre);
+  // Les catégories concernées se choisissent depuis l'écran Catégories : on
+  // raisonne « une robe a une taille », pas « la taille appartient aux robes ».
+  const nomsCategories = arbre.length > 0 ? nommerCategories(arbre, attribut) : [];
 
   return (
     <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
@@ -157,6 +165,22 @@ export function CarteAttribut({
       {etatNom.erreur ? <Alerte>{etatNom.erreur}</Alerte> : null}
       {etatSuppr.erreur ? <Alerte>{etatSuppr.erreur}</Alerte> : null}
 
+      <p className="text-xs text-slate-600">
+        Proposé pour&nbsp;:{' '}
+        {nomsCategories.length === 0 ? (
+          <span className="italic">aucune catégorie</span>
+        ) : (
+          nomsCategories.map((n) => (
+            <span key={n} className="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">
+              {n}
+            </span>
+          ))
+        )}
+        <Link href="/dashboard/categories" className="ml-1 underline underline-offset-2">
+          modifier depuis les catégories
+        </Link>
+      </p>
+
       {TYPES_A_OPTIONS.includes(attribut.type) ? (
         <form action={actionOptions} className="space-y-2">
           <input type="hidden" name="id" value={attribut.id} />
@@ -181,36 +205,6 @@ export function CarteAttribut({
           </Bouton>
         </form>
       ) : null}
-
-      <form action={actionCats} className="space-y-2">
-        <input type="hidden" name="id" value={attribut.id} />
-        <span className="block text-sm font-medium text-slate-800">Catégories concernées</span>
-        {categories.length === 0 ? (
-          <p className="text-sm text-slate-600">Créez d&apos;abord une catégorie.</p>
-        ) : (
-          <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {categories.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  name="categorieId"
-                  value={c.id}
-                  defaultChecked={cochees.has(c.id)}
-                  className="size-4 rounded border-slate-400 accent-slate-900"
-                />
-                <span className="whitespace-pre">{c.libelle}</span>
-              </label>
-            ))}
-          </div>
-        )}
-        {etatCats.erreur ? <Alerte>{etatCats.erreur}</Alerte> : null}
-        {etatCats.succes ? <Alerte ton="info">{etatCats.succes}</Alerte> : null}
-        {categories.length > 0 ? (
-          <Bouton type="submit" variante="secondaire" disabled={catsEnCours}>
-            {catsEnCours ? '…' : 'Enregistrer les catégories'}
-          </Bouton>
-        ) : null}
-      </form>
     </section>
   );
 }
