@@ -10,7 +10,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
       Conventional commits (husky + commitlint), `make check` (format, lint, types,
       dérive Prisma, tests, build), CI GitHub Actions, `make release` pour les tags
       `vX.Y.Z`.
-- [ ] **Étape 2 — Base de données**
+- [x] **Étape 2 — Base de données**
       Schéma Prisma complet, migration initiale, seed (templates d'attributs, statuts
       de base, un jeu de données de démo).
 - [ ] **Étape 3 — Auth & organisation**

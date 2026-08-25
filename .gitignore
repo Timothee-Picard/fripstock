@@ -25,3 +25,6 @@ npm-debug.log*
 
 # Couverture de tests
 coverage/
+
+# Client Prisma généré (`prisma generate`) — reconstruit depuis le schéma
+apps/api/src/generated/

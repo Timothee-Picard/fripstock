@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
-	install hooks format check check-format check-lint check-types check-db \
+	install hooks format migrate seed studio check check-format check-lint check-types check-db \
 	check-test check-build check-commits release
 
 help: ## Affiche cette aide
@@ -16,12 +16,16 @@ up: ## Démarre toute la stack en arrière-plan (postgres, minio, api, web)
 down: ## Arrête la stack en conservant les volumes (données de la base gardées)
 	docker compose down
 
-build: ## Reconstruit les images api et web (après un changement de dépendances)
+build: ## Reconstruit les images et redémarre avec des node_modules à jour
 	docker compose build
+	@# --renew-anon-volumes est indispensable : sans lui, Compose reporte le
+	@# volume anonyme node_modules de l'ancien conteneur sur le nouveau, et les
+	@# dépendances fraîchement installées restent invisibles malgré le rebuild.
+	docker compose up -d --force-recreate --renew-anon-volumes
 
-rebuild: ## Reconstruit sans cache puis redémarre — à utiliser quand `build` ne suffit pas
+rebuild: ## Reconstruit sans cache puis redémarre — quand `build` ne suffit pas
 	docker compose build --no-cache
-	docker compose up -d
+	docker compose up -d --force-recreate --renew-anon-volumes
 
 logs: ## Suit les logs de tous les services (Ctrl-C pour sortir)
 	docker compose logs -f
@@ -37,6 +41,20 @@ sh-api: ## Ouvre un shell dans le conteneur api
 
 sh-web: ## Ouvre un shell dans le conteneur web
 	docker compose exec web sh
+
+# --- Base de données ---------------------------------------------------------
+
+migrate: ## Crée et applique les migrations Prisma (dans le conteneur api)
+	docker compose exec api npx prisma migrate dev
+
+migrate-deploy: ## Applique les migrations existantes sans en créer de nouvelle
+	docker compose exec api npx prisma migrate deploy
+
+seed: ## Injecte le jeu de données de démonstration
+	docker compose exec api npm run db:seed
+
+studio: ## Ouvre Prisma Studio sur http://localhost:5555
+	docker compose exec api npx prisma studio --port 5555 --hostname 0.0.0.0
 
 # --- Qualité -----------------------------------------------------------------
 # Toutes ces cibles passent par scripts/node-run.sh, qui utilise Node en local
@@ -54,8 +72,15 @@ hooks: ## Active les hooks git du dépôt (à relancer après un clone)
 	git config core.hooksPath .githooks
 	@echo "hooks git actifs : $$(git config core.hooksPath)"
 
-format: ## Reformate tout le dépôt avec Prettier
+format: ## Reformate tout le dépôt (Prettier + schéma Prisma)
 	./scripts/node-run.sh . npx --no -- prettier --write .
+	@# Le schéma Prisma a son propre formateur. Il passe par le conteneur api :
+	@# prisma.config.ts résout env('DATABASE_URL') au chargement, donc toute
+	@# commande Prisma lancée hors du conteneur échoue. Prisma réécrit le
+	@# fichier en place, le propriétaire côté hôte est préservé.
+	@if [ -f apps/api/prisma/schema.prisma ]; then \
+		./scripts/node-run.sh apps/api npx --no -- prisma format; \
+	fi
 
 check: check-format check-lint check-types check-db check-test check-build ## Lance toutes les vérifications (identique à la CI)
 	@echo "==> make check : tout est vert"

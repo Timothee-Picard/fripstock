@@ -15,8 +15,34 @@ jobs:
   check:
     name: Vérifications
     runs-on: ubuntu-latest
+
+    # `make check-db` rejoue les migrations dans une base miroir pour détecter
+    # une dérive du schéma : sans Postgres ici, cette vérification se
+    # contenterait de passer, ce qui est pire que de ne pas l'avoir.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: fripstock
+          POSTGRES_PASSWORD: fripstock
+          POSTGRES_DB: fripstock
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fripstock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock?schema=public
+      SHADOW_DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock_shadow?schema=public
+
     steps:
       - uses: actions/checkout@v5
+
+      - name: Créer la base miroir
+        run: PGPASSWORD=fripstock psql -h localhost -U fripstock -d fripstock -c 'CREATE DATABASE fripstock_shadow'
 
       - uses: actions/setup-node@v5
         with:

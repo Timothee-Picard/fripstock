@@ -42,6 +42,34 @@ Le code est monté en volume : une modification dans `apps/api` ou `apps/web` es
 rechargée à chaud, sans reconstruire l'image. Seul un changement de dépendances
 (`package.json`) impose un `make build`.
 
+## Base de données
+
+Le schéma Prisma vit dans `apps/api/prisma/schema.prisma`. Après un premier `make up` :
+
+```bash
+make migrate   # crée et applique les migrations
+make seed      # jeu de données de démonstration
+```
+
+Le seed est idempotent et affiche les identifiants de connexion à la fin :
+`gerant@fripstock.test` / `fripstock`.
+
+| Cible                 | Effet                                             |
+| --------------------- | ------------------------------------------------- |
+| `make migrate`        | Crée et applique une migration depuis le schéma   |
+| `make migrate-deploy` | Applique les migrations existantes, sans en créer |
+| `make seed`           | Réinjecte le jeu de démonstration                 |
+| `make studio`         | Prisma Studio sur http://localhost:5555           |
+
+`make check-db` rejoue les migrations dans une base miroir (`fripstock_shadow`, créée
+au premier démarrage de Postgres) et échoue si le schéma a dérivé — c'est-à-dire si
+quelqu'un a modifié `schema.prisma` sans générer la migration correspondante.
+
+Prisma 7 ne lit plus l'URL de connexion depuis le schéma : elle est dans
+`apps/api/prisma.config.ts`, et le client reçoit un adaptateur `@prisma/adapter-pg`.
+Le client généré (`apps/api/src/generated/prisma`) n'est pas versionné, il se
+reconstruit avec `npx prisma generate`.
+
 ## Contribuer
 
 ### Convention de commit

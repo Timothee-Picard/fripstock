@@ -12,3 +12,6 @@ apps/web/AGENTS.md
 # modification qui revient toute seule.
 apps/web/next-env.d.ts
 apps/api/dist/
+
+# Client Prisma généré
+apps/api/src/generated/

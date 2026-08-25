@@ -13,6 +13,8 @@ services:
       # se fait sur /var/lib/postgresql, pas sur .../data comme jusqu'en 17.
       # Monter l'ancien chemin fait échouer le démarrage.
       - postgres_data:/var/lib/postgresql
+      # Crée la base miroir au premier démarrage (voir make check-db).
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # `api` attend cette sonde : sans elle, Nest démarre avant que Postgres
       # accepte les connexions et les migrations de l'étape 2 échouent au hasard.
@@ -49,7 +51,12 @@ services:
         condition: service_healthy
     environment:
       API_PORT: 3001
+      # Coupe la bannière de mise à jour dans la sortie des cibles make.
+      PRISMA_HIDE_UPDATE_MESSAGE: 'true'
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      # Base jetable que Prisma crée et détruit pour rejouer les migrations —
+      # utilisée par `make check-db` pour détecter une dérive du schéma.
+      SHADOW_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}_shadow?schema=public
       JWT_SECRET: ${JWT_SECRET}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -58,6 +65,8 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET}
     ports:
       - '${API_PORT:-3001}:3001'
+      # Prisma Studio, exposé par `make studio`.
+      - '${STUDIO_PORT:-5555}:5555'
     volumes:
       # Le code de l'hôte est monté pour le hot reload, mais le volume anonyme
       # ci-dessous protège les node_modules installés dans l'image.
