@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Postgres 18+ : PGDATA est /var/lib/postgresql/<major>/docker et le montage
+      # se fait sur /var/lib/postgresql, pas sur .../data comme jusqu'en 17.
+      # Monter l'ancien chemin fait échouer le démarrage.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # `api` attend cette sonde : sans elle, Nest démarre avant que Postgres
+      # accepte les connexions et les migrations de l'étape 2 échouent au hasard.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      API_PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      # Le code de l'hôte est monté pour le hot reload, mais le volume anonyme
+      # ci-dessous protège les node_modules installés dans l'image.
+      - ./apps/api:/app
+      - /app/node_modules
+
+  web:
+    build: ./apps/web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # URL interne au réseau docker : le fetch de la page d'accueil est fait
+      # côté serveur, il ne passe pas par le port publié sur l'hôte.
+      API_URL: http://api:3001
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
+  minio_data:

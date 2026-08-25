@@ -1,0 +1,25 @@
+# Dépendances
+node_modules/
+
+# Builds
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Environnement — .env.example est versionné, .env ne l'est jamais
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Éditeurs / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Couverture de tests
+coverage/
