@@ -1,10 +1,18 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { normaliserEmail } from '../common/email';
 import { lirePermissions, PERMISSIONS, type Permission } from '../common/permissions';
 import type { AccesBoutiqueResume, UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { PrismaService } from '../prisma/prisma.service';
+import type { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
 import type { LoginDto } from './dto/login.dto';
+import type { ModifierProfilDto } from './dto/modifier-profil.dto';
 import type { RegisterDto } from './dto/register.dto';
 import type { ChargeJwt } from './jwt.strategy';
 
@@ -74,10 +82,8 @@ export class AuthService {
    * base. Aucune boutique n'est créée automatiquement : c'est une action à part.
    */
   async register(dto: RegisterDto) {
-    const existant = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-      select: { id: true },
-    });
+    const email = normaliserEmail(dto.email);
+    const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (existant) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
     }
@@ -96,7 +102,7 @@ export class AuthService {
       return tx.user.create({
         data: {
           entrepriseId: entreprise.id,
-          email: dto.email,
+          email,
           motDePasseHash,
           prenom: dto.prenom,
           nom: dto.nom,
@@ -109,7 +115,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const utilisateur = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const utilisateur = await this.prisma.user.findUnique({
+      where: { email: normaliserEmail(dto.email) },
+    });
 
     // Message identique dans les deux cas : distinguer "email inconnu" de
     // "mot de passe faux" permettrait d'énumérer les comptes existants.
@@ -183,6 +191,63 @@ export class AuthService {
       tousDroits: false,
       permissions: Object.keys(lirePermissions(a.permissions)) as Permission[],
     }));
+  }
+
+  /** Modification de son propre profil : prénom, nom, email. */
+  async modifierProfil(courant: UtilisateurCourant, dto: ModifierProfilDto) {
+    const utilisateur = await this.prisma.user.findFirstOrThrow({
+      where: { id: courant.userId, entrepriseId: courant.entrepriseId },
+    });
+
+    const email = normaliserEmail(dto.email);
+    const changeEmail = email !== utilisateur.email;
+
+    if (changeEmail) {
+      if (!dto.motDePasseActuel) {
+        throw new BadRequestException(
+          'Le mot de passe actuel est requis pour changer votre adresse email.',
+        );
+      }
+      const valide = await bcrypt.compare(dto.motDePasseActuel, utilisateur.motDePasseHash);
+      if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
+
+      const pris = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (pris) throw new ConflictException('Un compte existe déjà avec cet email.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: utilisateur.id },
+      data: { prenom: dto.prenom, nom: dto.nom, email },
+    });
+
+    return this.me(courant);
+  }
+
+  /**
+   * Changement de son propre mot de passe. L'ancien est exigé : une session
+   * détournée ne doit pas suffire à verrouiller le compte de son propriétaire.
+   */
+  async changerMotDePasse(courant: UtilisateurCourant, dto: ChangerMotDePasseDto) {
+    const utilisateur = await this.prisma.user.findFirstOrThrow({
+      where: { id: courant.userId, entrepriseId: courant.entrepriseId },
+    });
+
+    const valide = await bcrypt.compare(dto.motDePasseActuel, utilisateur.motDePasseHash);
+    if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
+
+    if (await bcrypt.compare(dto.nouveauMotDePasse, utilisateur.motDePasseHash)) {
+      throw new BadRequestException("Le nouveau mot de passe est identique à l'ancien.");
+    }
+
+    await this.prisma.user.update({
+      where: { id: utilisateur.id },
+      data: { motDePasseHash: await bcrypt.hash(dto.nouveauMotDePasse, COUT_BCRYPT) },
+    });
+
+    // Un jeton neuf est renvoyé pour que la session courante reste valide.
+    // Attention : les jetons déjà émis ailleurs, eux, restent valables jusqu'à
+    // leur expiration — le JWT est sans état, rien ne permet de les révoquer.
+    return this.emettreJeton(utilisateur.id, utilisateur.entrepriseId, utilisateur.estGerant);
   }
 
   private async emettreJeton(userId: string, entrepriseId: string, estGerant: boolean) {

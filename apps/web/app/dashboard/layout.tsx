@@ -11,6 +11,7 @@ const NAVIGATION = [
   { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: false },
   { href: '/dashboard/boutiques', label: 'Boutiques', actif: true },
   { href: '/dashboard/utilisateurs', label: 'Utilisateurs', actif: true, gerant: true },
+  { href: '/dashboard/profil', label: 'Mon profil', actif: true },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -49,14 +50,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-3">
           <SelecteurBoutique boutiques={session.boutiques} />
           <div className="ml-auto flex items-center gap-4 text-sm">
-            <span className="text-slate-600">
+            <Link
+              href="/dashboard/profil"
+              className="text-slate-700 underline-offset-2 transition hover:text-slate-900 hover:underline"
+            >
               {session.prenom} {session.nom}
               {session.estGerant ? (
                 <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
                   gérant
                 </span>
               ) : null}
-            </span>
+            </Link>
             <form action={deconnexion}>
               <button
                 type="submit"

@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { EmailNormalise } from '../../common/decorators/email-normalise.decorator';
+import { IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
@@ -6,7 +7,7 @@ export class RegisterDto {
   @MaxLength(120)
   nomEntreprise!: string;
 
-  @IsEmail()
+  @EmailNormalise()
   email!: string;
 
   @IsString()

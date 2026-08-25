@@ -1,7 +1,8 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { EmailNormalise } from '../../common/decorators/email-normalise.decorator';
+import { IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @IsEmail()
+  @EmailNormalise()
   email!: string;
 
   @IsString()

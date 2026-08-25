@@ -114,6 +114,30 @@ est accordée si l'employé la détient sur au moins une boutique.
 Aucune route n'exige encore de permission fine, les produits arrivant à l'étape 5 : le
 guard est donc couvert par ses propres tests (`permissions.guard.spec.ts`).
 
+### Son propre compte
+
+`/dashboard/profil` permet à chacun — gérant comme employé — de modifier son prénom, son
+nom, son email et son mot de passe. Les routes correspondantes (`PUT /auth/profil`,
+`PUT /auth/mot-de-passe`) ne prennent aucun identifiant dans l'URL : la cible est
+toujours l'utilisateur du jeton.
+
+Le mot de passe actuel est exigé pour changer le mot de passe, et pour changer l'email —
+sur une session détournée, pouvoir changer l'adresse de connexion suffirait à
+s'approprier le compte. Un simple renommage n'a pas cette conséquence et ne le demande
+pas.
+
+Les emails sont normalisés (minuscules, espaces retirés) **avant** validation, via
+`@EmailNormalise()`. Sans ça `Alice@Test.fr` et `alice@test.fr` seraient deux comptes
+distincts pour la contrainte d'unicité, et changer la casse de son propre email
+empêcherait de se reconnecter.
+
+**Limite connue** : le changement de mot de passe renvoie un jeton neuf pour que la
+session courante reste valide, mais les jetons déjà émis ailleurs restent valables
+jusqu'à leur expiration (7 jours). Le JWT est sans état, rien ne permet de les révoquer.
+Il n'existe pas non plus de récupération par email — un employé qui oublie son mot de
+passe doit être supprimé et réinvité par le gérant ; pour le gérant lui-même, il n'y a
+aucun recours.
+
 ## Contribuer
 
 ### Convention de commit

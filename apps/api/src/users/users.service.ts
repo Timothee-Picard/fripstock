@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { normaliserEmail } from '../common/email';
 import { randomBytes } from 'node:crypto';
 import { lirePermissions, type Permission, type PermissionMap } from '../common/permissions';
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
@@ -41,10 +42,8 @@ export class UsersService {
   }
 
   async inviter(courant: UtilisateurCourant, dto: InviterUserDto) {
-    const existant = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-      select: { id: true },
-    });
+    const email = normaliserEmail(dto.email);
+    const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (existant) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
     }
@@ -57,7 +56,7 @@ export class UsersService {
     const utilisateur = await this.prisma.user.create({
       data: {
         entrepriseId: courant.entrepriseId,
-        email: dto.email,
+        email,
         motDePasseHash: await bcrypt.hash(motDePasse, COUT_BCRYPT),
         prenom: dto.prenom,
         nom: dto.nom,

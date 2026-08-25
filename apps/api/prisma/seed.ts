@@ -149,9 +149,16 @@ async function main() {
   let entreprise = await prisma.entreprise.findFirst({ where: { nom: 'Friperie Démo' } });
   entreprise ??= await prisma.entreprise.create({ data: { nom: 'Friperie Démo' } });
 
+  // Les comptes de démonstration sont réinitialisés à chaque passage, mot de
+  // passe compris : ils servent à tester, y compris le changement de mot de
+  // passe, et `make seed` doit pouvoir les remettre dans un état connu.
   const gerant = await prisma.user.upsert({
     where: { email: EMAIL_GERANT },
-    update: {},
+    update: {
+      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
+      prenom: 'Camille',
+      nom: 'Durand',
+    },
     create: {
       entrepriseId: entreprise.id,
       email: EMAIL_GERANT,
@@ -176,7 +183,11 @@ async function main() {
   // --- Employé de démonstration, aux droits limités ----------------------
   const employe = await prisma.user.upsert({
     where: { email: EMAIL_EMPLOYE },
-    update: {},
+    update: {
+      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
+      prenom: 'Théo',
+      nom: 'Bernard',
+    },
     create: {
       entrepriseId: entreprise.id,
       email: EMAIL_EMPLOYE,
