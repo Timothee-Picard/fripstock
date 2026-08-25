@@ -13,7 +13,7 @@ export default function PageInscription() {
   return (
     <form action={action} className="space-y-4">
       <h2 className="text-lg font-medium text-slate-900">Créer une entreprise</h2>
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-600">
         Vous en serez le gérant, avec tous les droits sur toutes ses boutiques.
       </p>
 
@@ -39,7 +39,7 @@ export default function PageInscription() {
         {enCours ? 'Création…' : "Créer l'entreprise"}
       </Bouton>
 
-      <p className="text-center text-sm text-slate-500">
+      <p className="text-center text-sm text-slate-600">
         Déjà un compte ?{' '}
         <Link href="/login" className="font-medium text-slate-900 underline">
           Se connecter

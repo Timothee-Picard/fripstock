@@ -20,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-full flex-1 bg-slate-50">
       <aside className="hidden w-56 shrink-0 border-r border-slate-200 bg-white p-4 sm:block">
         <p className="px-2 text-lg font-semibold tracking-tight text-slate-900">Fripstock</p>
-        <p className="mb-6 px-2 text-xs text-slate-500">{session.entreprise.nom}</p>
+        <p className="mb-6 px-2 text-xs text-slate-600">{session.entreprise.nom}</p>
 
         <nav className="space-y-0.5">
           {NAVIGATION.filter((e) => !e.gerant || session.estGerant).map((entree) =>
@@ -36,7 +36,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <span
                 key={entree.href}
                 title="Disponible à une étape suivante"
-                className="block cursor-not-allowed rounded-md px-2 py-1.5 text-sm text-slate-300"
+                className="block cursor-not-allowed rounded-md px-2 py-1.5 text-sm text-slate-500"
               >
                 {entree.label}
               </span>
@@ -60,7 +60,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <form action={deconnexion}>
               <button
                 type="submit"
-                className="text-slate-500 underline transition hover:text-slate-900"
+                className="text-slate-600 underline transition hover:text-slate-900"
               >
                 Déconnexion
               </button>

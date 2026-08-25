@@ -1,20 +1,23 @@
 @import 'tailwindcss';
 
+/*
+ * Back-office interne, assumé en thème clair.
+ *
+ * Le squelette de create-next-app basculait --foreground avec
+ * prefers-color-scheme, mais toutes les surfaces de l'application sont codées
+ * en clair (bg-white, bg-slate-50). Sur un système en thème sombre, le texte
+ * des champs — qui hérite de body — devenait donc quasi blanc sur fond blanc,
+ * c'est-à-dire illisible. Une seule palette, explicite, supprime cette classe
+ * de bug.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc; /* slate-50  */
+  --foreground: #0f172a; /* slate-900 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

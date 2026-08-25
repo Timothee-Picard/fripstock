@@ -64,7 +64,7 @@ export default async function Home() {
         </p>
       </section>
 
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-600">
         <Link href="/dashboard" className="font-medium underline">
           Accéder à l&apos;application
         </Link>

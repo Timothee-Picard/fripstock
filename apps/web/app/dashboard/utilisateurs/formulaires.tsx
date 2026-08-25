@@ -71,7 +71,7 @@ export function FormulaireAcces({
       <input type="hidden" name="userId" value={employe.id} />
 
       {boutiques.length === 0 ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-600">
           Créez d&apos;abord une boutique pour pouvoir attribuer des permissions.
         </p>
       ) : (
@@ -91,7 +91,7 @@ export function FormulaireAcces({
                       type="checkbox"
                       name={`perm:${boutique.id}:${permission}`}
                       defaultChecked={cochees.has(permission)}
-                      className="rounded border-slate-300"
+                      className="size-4 rounded border-slate-400 text-slate-900 accent-slate-900"
                     />
                     {LIBELLES_PERMISSIONS[permission]}
                   </label>

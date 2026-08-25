@@ -11,7 +11,7 @@ export default async function PageBoutiques() {
     <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Boutiques</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           {session.estGerant
             ? 'Les points de vente de votre entreprise. Créer ou supprimer une boutique est réservé au gérant.'
             : 'Les boutiques auxquelles vous avez accès.'}
@@ -23,13 +23,13 @@ export default async function PageBoutiques() {
       {session.estGerant ? <FormulaireBoutique /> : null}
 
       {boutiques.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+        <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
           Aucune boutique pour l&apos;instant.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Adresse</th>
@@ -40,7 +40,7 @@ export default async function PageBoutiques() {
               {boutiques.map((b) => (
                 <tr key={b.id}>
                   <td className="px-4 py-2 font-medium text-slate-800">{b.nom}</td>
-                  <td className="px-4 py-2 text-slate-500">{b.adresse ?? '—'}</td>
+                  <td className="px-4 py-2 text-slate-600">{b.adresse ?? '—'}</td>
                   {session.estGerant ? (
                     <td className="px-4 py-2 text-right">
                       <BoutonSupprimer id={b.id} nom={b.nom} />

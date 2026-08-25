@@ -34,7 +34,7 @@ export function SelecteurBoutique({ boutiques }: { boutiques: AccesBoutique[] })
 
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="text-slate-500">Boutique</span>
+      <span className="text-slate-600">Boutique</span>
       <select
         ref={champ}
         defaultValue={boutiques[0]?.boutiqueId}
@@ -45,7 +45,7 @@ export function SelecteurBoutique({ boutiques }: { boutiques: AccesBoutique[] })
             // Idem : le choix ne survivra pas au rechargement.
           }
         }}
-        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+        className="rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900"
       >
         {boutiques.map((b) => (
           <option key={b.boutiqueId} value={b.boutiqueId}>

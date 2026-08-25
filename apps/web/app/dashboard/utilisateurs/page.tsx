@@ -27,7 +27,7 @@ export default async function PageUtilisateurs() {
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Utilisateurs</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-600">
           Chaque employé a accès aux boutiques que vous cochez, avec les permissions que vous lui
           donnez sur chacune.
         </p>
@@ -36,7 +36,7 @@ export default async function PageUtilisateurs() {
       <FormulaireInvitation />
 
       {equipe.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+        <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
           Aucun employé pour l&apos;instant.
         </p>
       ) : (
@@ -48,7 +48,7 @@ export default async function PageUtilisateurs() {
                   <p className="font-medium text-slate-900">
                     {employe.prenom} {employe.nom}
                   </p>
-                  <p className="text-sm text-slate-500">{employe.email}</p>
+                  <p className="text-sm text-slate-600">{employe.email}</p>
                 </div>
                 <BoutonSupprimerEmploye employe={employe} />
               </div>

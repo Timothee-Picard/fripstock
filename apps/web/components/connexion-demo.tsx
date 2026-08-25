@@ -33,7 +33,7 @@ export function ConnexionDemo({ formulaire }: { formulaire: RefObject<HTMLFormEl
 
   return (
     <div className="border-t border-dashed border-slate-200 pt-4">
-      <p className="mb-2 text-center text-xs uppercase tracking-wide text-slate-400">
+      <p className="mb-2 text-center text-xs uppercase tracking-wide text-slate-500">
         Comptes de démonstration — développement uniquement
       </p>
       <div className="grid grid-cols-2 gap-2">
@@ -45,11 +45,11 @@ export function ConnexionDemo({ formulaire }: { formulaire: RefObject<HTMLFormEl
             className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
           >
             <span className="block font-medium">{compte.role}</span>
-            <span className="block text-xs text-slate-400">{compte.detail}</span>
+            <span className="block text-xs text-slate-500">{compte.detail}</span>
           </button>
         ))}
       </div>
-      <p className="mt-2 text-center text-xs text-slate-400">
+      <p className="mt-2 text-center text-xs text-slate-500">
         Créés par <code className="font-mono">make seed</code>
       </p>
     </div>

@@ -32,7 +32,7 @@ export default function PageConnexion() {
           {enCours ? 'Connexion…' : 'Se connecter'}
         </Bouton>
 
-        <p className="text-center text-sm text-slate-500">
+        <p className="text-center text-sm text-slate-600">
           Pas encore de compte ?{' '}
           <Link href="/register" className="font-medium text-slate-900 underline">
             Créer une entreprise
