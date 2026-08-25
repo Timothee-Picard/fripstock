@@ -1,0 +1,63 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(docker compose *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(npx next *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(curl localhost:*)",
+      "Bash(curl http://localhost:*)",
+      "Bash(npx commitlint *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx tsc *)",
+      "Bash(npx husky *)",
+      "Bash(npx lint-staged *)",
+      "Bash(git tag)",
+      "Bash(git tag -l *)",
+      "Bash(git describe *)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(docker compose down -v)",
+      "Bash(npx prisma migrate reset *)",
+      "Bash(rm -rf *)",
+      "Bash(make release)",
+      "Bash(git push --follow-tags *)",
+      "Bash(git tag -d *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-files.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-after-edit.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
