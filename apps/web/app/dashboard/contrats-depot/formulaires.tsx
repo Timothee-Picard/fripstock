@@ -18,8 +18,10 @@ function dansNJours(n: number): string {
 export function FormulaireCreation({ clients }: { clients: ClientDeposant[] }) {
   const [etat, action, enCours] = useActionState(creerContrat, ETAT_INITIAL);
   const [clientId, setClientId] = useState('');
+  const [commission, setCommission] = useState('');
 
-  const client = clients.find((c) => c.id === clientId);
+  const part = Number(commission.replace(',', '.'));
+  const partDeposant = Number.isFinite(part) && commission !== '' ? 100 - part : null;
 
   if (clients.length === 0) {
     return (
@@ -40,27 +42,37 @@ export function FormulaireCreation({ clients }: { clients: ClientDeposant[] }) {
           <select
             name="clientId"
             value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              // La valeur du déposant n'est qu'un point de départ : on la
+              // recopie ici, puis c'est le contrat qui fait foi.
+              setCommission(clients.find((c) => c.id === e.target.value)?.commissionDefaut ?? '');
+            }}
             required
             className={CHAMP}
           >
             <option value="">— Choisir —</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.prenom ? `${c.prenom} ${c.nom}` : c.nom} — {c.commissionDefaut} %
+                {c.prenom ? `${c.prenom} ${c.nom}` : c.nom}
               </option>
             ))}
           </select>
         </label>
+        {/* Le déposant ne porte qu'une valeur par défaut, qui évite de la
+            retaper à chaque contrat : c'est bien ce contrat qui fait foi, et
+            c'est sa commission que le relevé fige à la vente (CLAUDE.md). */}
         <Champ
-          label="Commission (%)"
+          label="Commission de ce contrat (%)"
           name="commission"
           inputMode="decimal"
-          // Pré-remplie depuis le déposant, mais modifiable pour ce contrat
-          // précis (voir CLAUDE.md). La clé force le champ à se recharger.
-          key={clientId}
-          defaultValue={client?.commissionDefaut ?? ''}
-          aide="Part gardée par la boutique. Vide = celle du déposant."
+          value={commission}
+          onChange={(e) => setCommission(e.target.value)}
+          aide={
+            partDeposant === null
+              ? 'Part gardée par la boutique.'
+              : `Part gardée par la boutique — le déposant touchera ${partDeposant} %.`
+          }
         />
       </div>
 

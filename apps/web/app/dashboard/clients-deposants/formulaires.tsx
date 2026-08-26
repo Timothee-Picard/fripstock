@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { creerClient, modifierClient, supprimerClient, type EtatClient } from './actions';
 import { Alerte, Bouton, Champ } from '@/components/champ';
 import type { ClientDeposant } from '@/lib/types';
@@ -37,7 +37,7 @@ function Champs({ client }: { client?: ClientDeposant }) {
           name="commissionDefaut"
           inputMode="decimal"
           defaultValue={client?.commissionDefaut ?? ''}
-          aide="Part gardée par la boutique. 40 % ici = 60 % pour le déposant."
+          aide="Part gardée par la boutique — 40 % ici laisse 60 % au déposant. Simple valeur de départ : chaque contrat porte la sienne."
         />
       </div>
     </>
@@ -60,20 +60,53 @@ export function FormulaireCreation() {
   );
 }
 
-export function FormulaireModification({ client }: { client: ClientDeposant }) {
+/**
+ * Coordonnées du déposant, repliées par défaut.
+ *
+ * Le bouton vit dans l'en-tête, à côté de « Supprimer », et le formulaire
+ * s'ouvre sur sa propre ligne en dessous : il était auparavant en bas de page,
+ * sous le relevé et les contrats, donc introuvable.
+ *
+ * Le composant rend un fragment de deux éléments — la barre de boutons et le
+ * formulaire — pour que le second, en pleine largeur, passe à la ligne dans
+ * l'en-tête plutôt que de se tasser à côté du premier.
+ */
+export function ModificationClient({
+  client,
+  children,
+}: {
+  client: ClientDeposant;
+  /** Actions à poser à côté du bouton, typiquement la suppression. */
+  children?: React.ReactNode;
+}) {
   const [etat, action, enCours] = useActionState(modifierClient, ETAT_INITIAL);
+  const [ouvert, setOuvert] = useState(false);
 
   return (
-    <form action={action} className="space-y-3 rounded-lg border border-slate-200 bg-white p-5">
-      <input type="hidden" name="id" value={client.id} />
-      <h2 className="text-sm font-medium text-slate-900">Coordonnées</h2>
-      {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
-      {etat.succes ? <Alerte ton="info">{etat.succes}</Alerte> : null}
-      <Champs client={client} />
-      <Bouton type="submit" disabled={enCours}>
-        {enCours ? 'Enregistrement…' : 'Enregistrer'}
-      </Bouton>
-    </form>
+    <>
+      <div className="flex items-center gap-2">
+        <Bouton type="button" variante="secondaire" onClick={() => setOuvert(!ouvert)}>
+          {ouvert ? 'Fermer' : 'Modifier'}
+        </Bouton>
+        {children}
+      </div>
+
+      {ouvert ? (
+        <form
+          action={action}
+          className="w-full space-y-3 rounded-lg border border-slate-200 bg-white p-5"
+        >
+          <input type="hidden" name="id" value={client.id} />
+          <h2 className="text-sm font-medium text-slate-900">Coordonnées du déposant</h2>
+          {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
+          {etat.succes ? <Alerte ton="info">{etat.succes}</Alerte> : null}
+          <Champs client={client} />
+          <Bouton type="submit" disabled={enCours}>
+            {enCours ? 'Enregistrement…' : 'Enregistrer'}
+          </Bouton>
+        </form>
+      ) : null}
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BoutonSupprimerClient, FormulaireModification } from '../formulaires';
+import { BoutonSupprimerClient, ModificationClient } from '../formulaires';
 import { BadgeStatut } from '@/components/badge-statut';
 import { appelApi } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
@@ -50,7 +50,9 @@ export default async function PageClientDeposant({ params }: { params: Promise<{
             <p className="mt-1 font-mono text-xs text-slate-600">{client.iban}</p>
           ) : null}
         </div>
-        <BoutonSupprimerClient client={client} />
+        <ModificationClient client={client}>
+          <BoutonSupprimerClient client={client} />
+        </ModificationClient>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -165,8 +167,6 @@ export default async function PageClientDeposant({ params }: { params: Promise<{
           </ul>
         )}
       </section>
-
-      <FormulaireModification client={client} />
     </div>
   );
 }

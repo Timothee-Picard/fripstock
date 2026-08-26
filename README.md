@@ -280,6 +280,11 @@ clé d'objet est préfixée par l'entreprise, ce qui cloisonne aussi le stockage
 Deux écrans : `/dashboard/clients-deposants` (déposants et leur relevé) et
 `/dashboard/contrats-depot` (contrats, rattachement des produits).
 
+Le déposant porte une `commissionDefaut` qui n'est **qu'une valeur de départ** : elle
+pré-remplit le champ à la création d'un contrat, puis c'est le contrat qui fait foi — et
+c'est sa commission que la vente fige. Le formulaire l'écrit, et affiche en direct la part
+qui reviendra au déposant à mesure qu'on saisit le pourcentage.
+
 **Le sens de la commission est la chose à ne pas se tromper** : le pourcentage est la part
 que _garde la boutique_. `commission = 40` sur un article vendu 100 € donne 40 € à la
 boutique et 60 € au déposant. L'interface le rappelle partout où le champ apparaît, parce
