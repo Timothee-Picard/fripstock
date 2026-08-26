@@ -129,3 +129,107 @@ export function aplatirArbre(
     ...aplatirArbre(n.enfants, profondeur + 1),
   ]);
 }
+
+export type TypeVente = 'ACHAT_REVENTE' | 'DEPOT_VENTE';
+
+export const LIBELLES_TYPE_VENTE: Record<TypeVente, string> = {
+  ACHAT_REVENTE: 'Achat-revente',
+  DEPOT_VENTE: 'Dépôt-vente',
+};
+
+export interface Statut {
+  id: string;
+  nom: string;
+  couleur: string;
+  ordre: number;
+  estDefaut: boolean;
+  estVente: boolean;
+  bloqueVente: boolean;
+  sortStock: boolean;
+}
+
+export interface ProduitResume {
+  id: string;
+  reference: string | null;
+  nom: string;
+  photoUrl: string | null;
+  prixVente: string | null;
+  prixVendu: string | null;
+  quantite: number;
+  typeVente: TypeVente;
+  dateVente: string | null;
+  createdAt: string;
+  categorie: { id: string; nom: string };
+  boutique: { id: string; nom: string } | null;
+  statut: Statut;
+}
+
+export interface ValeurProduit {
+  attributDefinitionId: string;
+  valeurTexte: string | null;
+  valeurNombre: string | null;
+  valeurBooleenne: boolean | null;
+  attribut: { id: string; nom: string; type: TypeAttribut };
+}
+
+export interface OptionProduit {
+  option: {
+    id: string;
+    valeur: string;
+    attribut: { id: string; nom: string; type: TypeAttribut };
+  };
+}
+
+export interface Produit extends ProduitResume {
+  description: string | null;
+  commentaire: string | null;
+  prixAchat: string | null;
+  commissionAppliquee: string | null;
+  deposantPaye: boolean | null;
+  contratDepotId: string | null;
+  valeurs: ValeurProduit[];
+  options: OptionProduit[];
+  historique: {
+    id: string;
+    changedAt: string;
+    note: string | null;
+    statut: { id: string; nom: string; couleur: string };
+    auteur: { id: string; prenom: string; nom: string } | null;
+  }[];
+}
+
+export interface PageProduits {
+  produits: ProduitResume[];
+  total: number;
+  page: number;
+  parPage: number;
+  pages: number;
+}
+
+/** Regroupe les valeurs d'un produit en couples lisibles, options comprises. */
+export function attributsLisibles(produit: Produit): { nom: string; valeur: string }[] {
+  const parNom = new Map<string, string[]>();
+
+  for (const v of produit.valeurs) {
+    const brut =
+      v.valeurTexte ??
+      v.valeurNombre ??
+      (v.valeurBooleenne === null ? null : v.valeurBooleenne ? 'Oui' : 'Non');
+    if (brut !== null) parNom.set(v.attribut.nom, [String(brut)]);
+  }
+  for (const o of produit.options) {
+    const liste = parNom.get(o.option.attribut.nom) ?? [];
+    liste.push(o.option.valeur);
+    parNom.set(o.option.attribut.nom, liste);
+  }
+
+  return [...parNom.entries()]
+    .map(([nom, valeurs]) => ({ nom, valeur: valeurs.join(', ') }))
+    .sort((a, b) => a.nom.localeCompare(b.nom));
+}
+
+/** Prix formatés en euros, avec les décimales renvoyées par l'API. */
+export function euros(montant: string | null): string {
+  if (montant === null) return '—';
+  return `${Number(montant).toFixed(2).replace('.', ',')} €`;
+}

@@ -10,6 +10,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProduitsModule } from './produits/produits.module';
+import { StatutsModule } from './statuts/statuts.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -21,6 +24,9 @@ import { UsersModule } from './users/users.module';
     BoutiquesModule,
     CategoriesModule,
     AttributsModule,
+    StatutsModule,
+    UploadsModule,
+    ProduitsModule,
     UsersModule,
   ],
   providers: [

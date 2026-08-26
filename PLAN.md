@@ -19,7 +19,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
 - [x] **Étape 4 — Catalogue**
       Catégories hiérarchiques, attributs dynamiques + options, association
       attributs/catégories, admin dans Next.js.
-- [ ] **Étape 5 — Produits & stock**
+- [x] **Étape 5 — Produits & stock**
       CRUD produit, assignation à une boutique, upload photo (MinIO), valeurs
       d'attributs dynamiques, statuts personnalisables, changement de statut +
       historique, pages Next.js (liste, création, fiche).

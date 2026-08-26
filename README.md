@@ -184,6 +184,49 @@ orphelines et intraduisibles.
 Un attribut cloné depuis un modèle est **totalement indépendant** : le renommer ou
 changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
+## Produits
+
+Trois écrans : la liste filtrée (`/dashboard/produits`), la création
+(`/dashboard/produits/nouveau`) et la fiche (`/dashboard/produits/:id`). Les filtres vivent
+dans l'URL, donc la vue reste partageable et le retour arrière fonctionne.
+
+**Le formulaire s'adapte à la catégorie** : les champs d'attributs sont chargés depuis
+`GET /categories/:id/attributs` dès qu'une catégorie est choisie — on ne demande pas la
+taille d'un sac. L'API applique la même règle et refuse un attribut inapplicable :
+l'affichage n'est qu'un confort, la validation est côté service.
+
+**Toute la logique de vente repose sur les flags de `Statut`, jamais sur le libellé.** Un
+statut `estVente` exige un prix vendu et refuse le changement si le statut actuel porte
+`bloqueVente` ; un statut ordinaire refuse au contraire prix vendu et date de vente. Le
+gérant pouvant renommer ses statuts, un test vérifie que le blocage tient après
+renommage.
+
+Au passage à un statut de vente, la commission du contrat est **copiée** dans
+`Produit.commissionAppliquee`. Relevé, export et statistiques liront cette copie, jamais
+celle du contrat — sinon modifier un contrat réécrirait des relevés déjà réglés.
+
+### Statuts
+
+`/dashboard/statuts` n'existe pas encore, mais l'API est là. Le CRUD est réservé au
+gérant, sans permission fine. Les trois flags comportementaux (`estVente`, `bloqueVente`,
+`sortStock`) se fixent à la création et **ne sont plus modifiables** : des produits
+s'appuient dessus, les basculer sous eux réécrirait leur histoire métier.
+
+L'unicité de `estDefaut` est tenue par une route dédiée (`PUT /statuts/:id/par-defaut`)
+qui remet les autres à `false` dans une transaction — un index unique Prisma sur
+`[entrepriseId, estDefaut]` interdirait aussi deux `false`.
+
+### Photos
+
+Le bucket MinIO **n'est pas public**. Une balise `<img>` ne peut pas porter d'en-tête
+`Authorization`, donc le navigateur passe par `/api/photos/…` côté Next, qui lit le cookie
+httpOnly et rattache le jeton. Aucune URL de stockage n'est exposée, et une photo reste
+inaccessible sans session.
+
+Le type est vérifié sur les **premiers octets du fichier**, pas sur le `mimetype` déclaré
+par le navigateur : n'importe qui peut annoncer `image/png` en envoyant autre chose. La
+clé d'objet est préfixée par l'entreprise, ce qui cloisonne aussi le stockage.
+
 ## Contribuer
 
 ### Convention de commit

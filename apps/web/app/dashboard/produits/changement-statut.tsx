@@ -1,0 +1,84 @@
+'use client';
+
+import { useActionState, useState } from 'react';
+import { changerStatut, type EtatProduit } from './actions';
+import { Alerte } from '@/components/champ';
+import type { Statut } from '@/lib/types';
+
+const ETAT_INITIAL: EtatProduit = {};
+
+/**
+ * Changement rapide depuis la liste ou la fiche.
+ *
+ * Un statut de vente exige un prix vendu : le champ n'apparaît que si le
+ * statut choisi porte `estVente`. C'est le flag qui décide, jamais le libellé —
+ * le gérant peut renommer ses statuts.
+ */
+export function ChangementStatut({
+  produitId,
+  statutActuel,
+  statuts,
+  compact = false,
+}: {
+  produitId: string;
+  statutActuel: Statut;
+  statuts: Statut[];
+  compact?: boolean;
+}) {
+  const [etat, action, enCours] = useActionState(changerStatut, ETAT_INITIAL);
+  const [cibleId, setCibleId] = useState('');
+
+  const cible = statuts.find((s) => s.id === cibleId);
+  const bloque = statutActuel.bloqueVente;
+
+  // Un produit rendu ou retiré n'est plus vendable : l'API le refuse, on ne
+  // propose donc pas les statuts de vente.
+  const proposables = statuts.filter((s) => s.id !== statutActuel.id && !(bloque && s.estVente));
+
+  return (
+    <form action={action} className={compact ? 'flex flex-wrap items-center gap-2' : 'space-y-2'}>
+      <input type="hidden" name="id" value={produitId} />
+      <select
+        name="statutId"
+        value={cibleId}
+        onChange={(e) => setCibleId(e.target.value)}
+        required
+        className="rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900"
+      >
+        <option value="">Changer de statut…</option>
+        {proposables.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.nom}
+          </option>
+        ))}
+      </select>
+
+      {cible?.estVente ? (
+        <input
+          name="prixVendu"
+          type="text"
+          inputMode="decimal"
+          required
+          placeholder="Prix vendu"
+          className="w-28 rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500"
+        />
+      ) : null}
+
+      {cibleId ? (
+        <button
+          type="submit"
+          disabled={enCours}
+          className="rounded-md bg-slate-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-slate-700 disabled:bg-slate-400"
+        >
+          {enCours ? '…' : 'Appliquer'}
+        </button>
+      ) : null}
+
+      {etat.erreur ? (
+        <div className={compact ? 'w-full' : ''}>
+          <Alerte>{etat.erreur}</Alerte>
+        </div>
+      ) : null}
+    </form>
+  );
+}

@@ -6,7 +6,7 @@ import { exigerSession } from '@/lib/session';
 /** Les entrées grisées pointent vers des écrans à venir (voir PLAN.md). */
 const NAVIGATION = [
   { href: '/dashboard', label: 'Tableau de bord', actif: true },
-  { href: '/dashboard/produits', label: 'Produits', actif: false },
+  { href: '/dashboard/produits', label: 'Produits', actif: true },
   { href: '/dashboard/categories', label: 'Catégories', actif: true },
   { href: '/dashboard/attributs', label: 'Attributs', actif: true },
   { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: false },
