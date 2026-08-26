@@ -27,7 +27,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
       Clients déposants, contrats de dépôt, commission, blocage revente si rendu,
       suivi paiement déposant, job planifié d'alerte d'échéance de contrat, pages
       Next.js.
-- [ ] **Étape 7 — Stats & export CSV**
+- [x] **Étape 7 — Stats & export CSV**
       Dashboard (CA, meilleures ventes, taux de rendus), export CSV filtré du stock.
 
 ## Pourquoi cet ordre

@@ -21,6 +21,7 @@ import type { FiltrerProduitsDto } from './dto/filtrer-produits.dto';
 import type { ModifierProduitDto } from './dto/modifier-produit.dto';
 import type { ModifierVenteDto } from './dto/modifier-vente.dto';
 import type { ValeurAttributDto } from './dto/valeur-attribut.dto';
+import { dateFr, nombreFr, ouiNon, versCsv } from './export-csv';
 
 const PAR_PAGE_DEFAUT = 25;
 
@@ -76,8 +77,128 @@ export class ProduitsService {
   async lister(courant: UtilisateurCourant, filtres: FiltrerProduitsDto) {
     const page = filtres.page ?? 1;
     const parPage = filtres.parPage ?? PAR_PAGE_DEFAUT;
+    const where = await this.construireFiltre(courant, filtres);
 
-    const where: Prisma.ProduitWhereInput = {
+    const [total, produits] = await this.prisma.$transaction([
+      this.prisma.produit.count({ where }),
+      this.prisma.produit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * parPage,
+        take: parPage,
+        include: {
+          categorie: { select: { id: true, nom: true } },
+          boutique: { select: { id: true, nom: true } },
+          statut: true,
+        },
+      }),
+    ]);
+
+    return { produits, total, page, parPage, pages: Math.max(1, Math.ceil(total / parPage)) };
+  }
+
+  /**
+   * Export CSV du stock, avec **exactement les mêmes filtres** que la liste :
+   * on exporte ce qu'on voit à l'écran, sous-ensemble filtré ou stock complet.
+   *
+   * Colonnes fixes puis une colonne par attribut réellement présent dans le
+   * résultat — c'est ce qui rend au client la souplesse de son tableur, sans
+   * traîner une colonne « Taille » vide sur un export de sacs.
+   */
+  async exporter(courant: UtilisateurCourant, filtres: FiltrerProduitsDto): Promise<string> {
+    const produits = await this.prisma.produit.findMany({
+      where: await this.construireFiltre(courant, filtres),
+      orderBy: { createdAt: 'desc' },
+      include: {
+        categorie: { select: { nom: true } },
+        boutique: { select: { nom: true } },
+        statut: { select: { nom: true } },
+        contratDepot: { select: { client: { select: { nom: true, prenom: true } } } },
+        valeurs: { include: { attribut: { select: { nom: true } } } },
+        options: { include: { option: { include: { attribut: { select: { nom: true } } } } } },
+      },
+    });
+
+    // Valeurs d'attributs, regroupées par produit puis par nom d'attribut.
+    const attributsParProduit = new Map<string, Map<string, string[]>>();
+    const colonnesDynamiques = new Set<string>();
+
+    for (const produit of produits) {
+      const parNom = new Map<string, string[]>();
+      for (const v of produit.valeurs) {
+        const brut =
+          v.valeurTexte ??
+          v.valeurNombre?.toString() ??
+          (v.valeurBooleenne === null ? null : v.valeurBooleenne ? 'oui' : 'non');
+        if (brut !== null) parNom.set(v.attribut.nom, [brut]);
+      }
+      for (const o of produit.options) {
+        const nom = o.option.attribut.nom;
+        parNom.set(nom, [...(parNom.get(nom) ?? []), o.option.valeur]);
+      }
+      for (const nom of parNom.keys()) colonnesDynamiques.add(nom);
+      attributsParProduit.set(produit.id, parNom);
+    }
+
+    const dynamiques = [...colonnesDynamiques].sort((a, b) => a.localeCompare(b));
+
+    const entetes = [
+      'Référence',
+      'Catégorie',
+      'Boutique',
+      'Nom',
+      'Description',
+      'Commentaire',
+      'Statut',
+      'Type de vente',
+      "Prix d'achat",
+      'Prix de vente',
+      'Prix vendu',
+      'Date de vente',
+      'Déposant',
+      'Commission appliquée',
+      'Déposant payé',
+      ...dynamiques,
+    ];
+
+    const lignes = produits.map((p) => {
+      const attributs = attributsParProduit.get(p.id) ?? new Map<string, string[]>();
+      const deposant = p.contratDepot?.client
+        ? [p.contratDepot.client.prenom, p.contratDepot.client.nom].filter(Boolean).join(' ')
+        : '';
+      return [
+        p.reference ?? '',
+        p.categorie.nom,
+        p.boutique?.nom ?? 'Stock central',
+        p.nom,
+        p.description ?? '',
+        p.commentaire ?? '',
+        p.statut.nom,
+        p.typeVente === 'DEPOT_VENTE' ? 'Dépôt-vente' : 'Achat-revente',
+        nombreFr(p.prixAchat?.toString() ?? null),
+        nombreFr(p.prixVente?.toString() ?? null),
+        nombreFr(p.prixVendu?.toString() ?? null),
+        dateFr(p.dateVente),
+        deposant,
+        nombreFr(p.commissionAppliquee?.toString() ?? null),
+        ouiNon(p.deposantPaye),
+        ...dynamiques.map((nom) => attributs.get(nom)?.join(', ') ?? ''),
+      ];
+    });
+
+    return versCsv(entetes, lignes);
+  }
+
+  /**
+   * Filtre commun à la liste et à l'export : les deux doivent voir exactement
+   * le même sous-ensemble, sinon exporter « ce qu'on voit » devient un
+   * mensonge.
+   */
+  private async construireFiltre(
+    courant: UtilisateurCourant,
+    filtres: FiltrerProduitsDto,
+  ): Promise<Prisma.ProduitWhereInput> {
+    return {
       entrepriseId: courant.entrepriseId,
       ...(await this.restrictionBoutiques(courant, filtres)),
       ...(filtres.categorieId ? { categorieId: filtres.categorieId } : {}),
@@ -109,23 +230,6 @@ export class ProduitsService {
           }
         : {}),
     };
-
-    const [total, produits] = await this.prisma.$transaction([
-      this.prisma.produit.count({ where }),
-      this.prisma.produit.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * parPage,
-        take: parPage,
-        include: {
-          categorie: { select: { id: true, nom: true } },
-          boutique: { select: { id: true, nom: true } },
-          statut: true,
-        },
-      }),
-    ]);
-
-    return { produits, total, page, parPage, pages: Math.max(1, Math.ceil(total / parPage)) };
   }
 
   async detail(courant: UtilisateurCourant, id: string) {

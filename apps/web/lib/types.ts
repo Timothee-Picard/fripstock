@@ -337,3 +337,24 @@ export function joursAvant(date: string): number {
   const maintenant = new Date();
   return Math.ceil((fin.getTime() - maintenant.getTime()) / 86400000);
 }
+
+export interface TableauDeBord {
+  periode: { du: string; au: string };
+  ventes: { nombre: number; chiffreAffaires: number; marge: number; panierMoyen: number };
+  parJour: { jour: string; ca: number; nombre: number }[];
+  topCategories: { id: string; nom: string; ca: number; nombre: number }[];
+  topProduits: { id: string; nom: string; reference: string | null; ca: number }[];
+  stock: {
+    parStatut: {
+      id: string;
+      nom: string;
+      couleur: string;
+      sortStock: boolean;
+      nombre: number;
+      valeur: number;
+    }[];
+    actifs: number;
+    valeurActive: number;
+  };
+  retours: { depotSurPeriode: number; rendus: number; taux: number };
+}

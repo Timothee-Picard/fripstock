@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BoutonSupprimerProduit } from './[id]/actions-fiche';
+import { BoutonExport } from './bouton-export';
 import { IconeModifier, IconeVoir } from '@/components/icones';
 import { Filtres } from './filtres';
 import { BadgeStatut } from '@/components/badge-statut';
@@ -61,12 +62,15 @@ export default async function PageProduitsListe({
             {page.total} produit{page.total > 1 ? 's' : ''} — page {page.page} sur {page.pages}
           </p>
         </div>
-        <Link
-          href="/dashboard/produits/nouveau"
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-        >
-          Nouveau produit
-        </Link>
+        <div className="flex items-center gap-2">
+          <BoutonExport />
+          <Link
+            href="/dashboard/produits/nouveau"
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+          >
+            Nouveau produit
+          </Link>
+        </div>
       </div>
 
       <Filtres boutiques={boutiques} categories={categories} statuts={statuts} />

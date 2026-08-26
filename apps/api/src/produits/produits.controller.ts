@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { BoutiqueDepuisRessource } from '../common/decorators/boutique-source.decorator';
 import { Utilisateur } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -30,9 +31,27 @@ export class ProduitsController {
     return this.produits.lister(courant, filtres);
   }
 
-  // Les routes littérales à venir (/produits/export à l'étape 7) doivent être
-  // déclarées ICI, avant @Get(':id') : NestJS matche dans l'ordre et le
-  // paramètre avalerait tout le reste.
+  /**
+   * Export CSV du stock filtré.
+   *
+   * Déclarée AVANT @Get(':id') : NestJS matche dans l'ordre de déclaration, et
+   * le paramètre avalerait « export » s'il venait en premier.
+   */
+  @Get('export')
+  @RequirePermission('export.csv')
+  async exporter(
+    @Utilisateur() courant: UtilisateurCourant,
+    @Query() filtres: FiltrerProduitsDto,
+    @Res({ passthrough: true }) reponse: Response,
+  ) {
+    const csv = await this.produits.exporter(courant, filtres);
+    const nom = `stock-${new Date().toISOString().slice(0, 10)}.csv`;
+    reponse.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${nom}"`,
+    });
+    return csv;
+  }
 
   @Get(':id')
   @RequirePermission('produits.voir')

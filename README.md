@@ -317,6 +317,42 @@ lendemain pour vérifier qu'une alerte part serait absurde.
 **Limite connue** : les notifications appartiennent à l'entreprise, pas à un utilisateur.
 Marquer une alerte comme lue la masque pour tout le monde.
 
+## Statistiques et export
+
+`/dashboard` affiche le tableau de bord : chiffre d'affaires, marge boutique, panier moyen,
+stock actif et taux de retour, avec la courbe des ventes, la répartition du stock par
+statut et les meilleures ventes. La période vit dans l'URL, donc la vue est partageable.
+
+**Le CA est calculé sur `prixVendu`**, ce qui est réellement entré en caisse, jamais sur
+`prixVente` qui n'est que l'étiquette. La **marge boutique** est affichée à côté, et c'est
+la seule comparable entre les deux modes de vente : `prixVendu - prixAchat` en
+achat-revente, `prixVendu × commissionAppliquee / 100` en dépôt-vente, où l'essentiel du
+prix revient au déposant.
+
+Vendu, stock actif et retour se déterminent par les **flags de `Statut`** — `estVente`,
+`sortStock`, `bloqueVente` — jamais par le libellé : les chiffres restent justes après un
+renommage.
+
+### Export CSV
+
+`GET /produits/export` (permission `export.csv`) applique **exactement les mêmes filtres
+que la liste** — le service partage la même construction de filtre, sinon « exporter ce
+qu'on voit » deviendrait un mensonge. La pagination est ignorée : un export ne s'arrête pas
+à la page en cours.
+
+Séparateur `;` et UTF-8 **avec BOM**, sans quoi Excel en français ouvre « Matière » en
+« MatiÃ¨re » et tasse tout dans une colonne. Les décimales passent en virgule.
+
+Colonnes fixes, puis **une colonne par attribut réellement présent dans le résultat** :
+exporter des sacs ne traîne pas de colonne « Taille » vide.
+
+Les cellules commençant par `=`, `+`, `-` ou `@` sont préfixées d'une apostrophe :
+sans ça, une référence saisie `=1+1` s'exécuterait à l'ouverture, et `=HYPERLINK(...)` est
+un vecteur d'exfiltration connu.
+
+Le téléchargement passe par `/api/export` côté Next : un lien ne peut pas porter d'en-tête
+`Authorization`, et le jeton vit dans un cookie httpOnly.
+
 ## Contribuer
 
 ### Convention de commit
@@ -406,5 +442,6 @@ docs/KIT.md          documentation du kit de démarrage
 
 ## État d'avancement
 
-Étapes 0 et 1 terminées : le squelette tourne et les garde-fous sont en place. Aucun
-modèle de données ni authentification pour l'instant — voir `PLAN.md` pour la suite.
+Les huit étapes du `PLAN.md` sont terminées : le MVP couvre l'authentification et les
+permissions par boutique, le catalogue, les produits et leur cycle de vie, le dépôt-vente
+avec relevés et alertes d'échéance, les statistiques et l'export CSV.

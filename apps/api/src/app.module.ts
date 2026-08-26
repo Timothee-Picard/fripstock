@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProduitsModule } from './produits/produits.module';
+import { StatsModule } from './stats/stats.module';
 import { StatutsModule } from './statuts/statuts.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     ClientsDeposantsModule,
     ContratsDepotModule,
     NotificationsModule,
+    StatsModule,
     UsersModule,
   ],
   providers: [
