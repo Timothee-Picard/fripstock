@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import {
   detacherProduit,
   modifierContrat,
@@ -14,64 +14,104 @@ import { LIBELLES_STATUT_CONTRAT, type ContratDepot, type ProduitResume } from '
 const ETAT_INITIAL: EtatContrat = {};
 const CHAMP = 'w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900';
 
-export function FormulaireContrat({ contrat }: { contrat: ContratDepot }) {
+/**
+ * Conditions du contrat, repliées par défaut.
+ *
+ * Le bouton vit dans l'en-tête à côté de « Supprimer », et le formulaire
+ * s'ouvre sur sa propre ligne en dessous : il était auparavant en bas de page,
+ * sous le tableau des produits et le bloc de rattachement, donc introuvable.
+ *
+ * Le composant rend un fragment de deux éléments pour que le formulaire, en
+ * pleine largeur, passe à la ligne dans l'en-tête au lieu de se tasser.
+ */
+export function FormulaireContrat({
+  contrat,
+  children,
+}: {
+  contrat: ContratDepot;
+  /** Actions à poser à côté du bouton, typiquement la suppression. */
+  children?: React.ReactNode;
+}) {
   const [etat, action, enCours] = useActionState(modifierContrat, ETAT_INITIAL);
+  const [ouvert, setOuvert] = useState(false);
+
+  if (!ouvert) {
+    return (
+      <div className="flex items-center gap-2">
+        <Bouton type="button" variante="secondaire" onClick={() => setOuvert(true)}>
+          Modifier
+        </Bouton>
+        {children}
+      </div>
+    );
+  }
 
   return (
-    <form action={action} className="space-y-3 rounded-lg border border-slate-200 bg-white p-5">
-      <input type="hidden" name="id" value={contrat.id} />
-      <h2 className="text-sm font-medium text-slate-900">Conditions</h2>
-      {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
-      {etat.succes ? <Alerte ton="info">{etat.succes}</Alerte> : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Champ
-          label="Début"
-          name="dateDebut"
-          type="date"
-          defaultValue={contrat.dateDebut.slice(0, 10)}
-        />
-        <Champ
-          label="Fin"
-          name="dateFin"
-          type="date"
-          defaultValue={contrat.dateFin.slice(0, 10)}
-          aide="Repousser l'échéance réarme l'alerte."
-        />
-        <Champ
-          label="Commission (%)"
-          name="commission"
-          inputMode="decimal"
-          defaultValue={contrat.commission}
-          aide="Ne touche pas aux ventes déjà faites."
-        />
-        <Champ
-          label="Alerte (jours avant)"
-          name="notifyBeforeDays"
-          type="number"
-          min={0}
-          defaultValue={contrat.notifyBeforeDays}
-        />
+    <>
+      <div className="flex items-center gap-2">
+        <Bouton type="button" variante="secondaire" onClick={() => setOuvert(false)}>
+          Fermer
+        </Bouton>
+        {children}
       </div>
+      <form
+        action={action}
+        className="w-full space-y-3 rounded-lg border border-slate-200 bg-white p-5"
+      >
+        <input type="hidden" name="id" value={contrat.id} />
+        <h2 className="text-sm font-medium text-slate-900">Conditions</h2>
+        {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
+        {etat.succes ? <Alerte ton="info">{etat.succes}</Alerte> : null}
 
-      <label className="block max-w-xs">
-        <span className="mb-1 block text-sm font-medium text-slate-800">État</span>
-        <select name="statut" defaultValue={contrat.statut} className={CHAMP}>
-          {Object.entries(LIBELLES_STATUT_CONTRAT).map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          ))}
-        </select>
-        <span className="mt-1 block text-xs text-slate-600">
-          « Expiré » est posé automatiquement à l&apos;échéance ; « Clos » reste votre décision.
-        </span>
-      </label>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Champ
+            label="Début"
+            name="dateDebut"
+            type="date"
+            defaultValue={contrat.dateDebut.slice(0, 10)}
+          />
+          <Champ
+            label="Fin"
+            name="dateFin"
+            type="date"
+            defaultValue={contrat.dateFin.slice(0, 10)}
+            aide="Repousser l'échéance réarme l'alerte."
+          />
+          <Champ
+            label="Commission (%)"
+            name="commission"
+            inputMode="decimal"
+            defaultValue={contrat.commission}
+            aide="Ne touche pas aux ventes déjà faites."
+          />
+          <Champ
+            label="Alerte (jours avant)"
+            name="notifyBeforeDays"
+            type="number"
+            min={0}
+            defaultValue={contrat.notifyBeforeDays}
+          />
+        </div>
 
-      <Bouton type="submit" disabled={enCours}>
-        {enCours ? 'Enregistrement…' : 'Enregistrer'}
-      </Bouton>
-    </form>
+        <label className="block max-w-xs">
+          <span className="mb-1 block text-sm font-medium text-slate-800">État</span>
+          <select name="statut" defaultValue={contrat.statut} className={CHAMP}>
+            {Object.entries(LIBELLES_STATUT_CONTRAT).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-slate-600">
+            « Expiré » est posé automatiquement à l&apos;échéance ; « Clos » reste votre décision.
+          </span>
+        </label>
+
+        <Bouton type="submit" disabled={enCours}>
+          {enCours ? 'Enregistrement…' : 'Enregistrer'}
+        </Bouton>
+      </form>
+    </>
   );
 }
 

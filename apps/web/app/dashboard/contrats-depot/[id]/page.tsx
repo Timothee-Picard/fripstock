@@ -51,7 +51,9 @@ export default async function PageContratDepot({ params }: { params: Promise<{ i
             boutique · {LIBELLES_STATUT_CONTRAT[contrat.statut]}
           </p>
         </div>
-        <BoutonSupprimerContrat contrat={contrat} />
+        <FormulaireContrat contrat={contrat}>
+          <BoutonSupprimerContrat contrat={contrat} />
+        </FormulaireContrat>
       </div>
 
       {contrat.statut === 'ACTIF' && jours >= 0 && jours <= contrat.notifyBeforeDays ? (
@@ -125,7 +127,6 @@ export default async function PageContratDepot({ params }: { params: Promise<{ i
       </section>
 
       <Rattachement contratId={contrat.id} candidats={candidats} />
-      <FormulaireContrat contrat={contrat} />
     </div>
   );
 }

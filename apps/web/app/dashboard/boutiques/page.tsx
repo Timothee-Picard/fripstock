@@ -1,4 +1,4 @@
-import { BoutonSupprimer, FormulaireBoutique } from './formulaire';
+import { FormulaireBoutique, LigneBoutique } from './formulaire';
 import { appelApi } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import type { Boutique } from '@/lib/types';
@@ -37,17 +37,16 @@ export default async function PageBoutiques() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {boutiques.map((b) => (
-                <tr key={b.id}>
-                  <td className="px-4 py-2 font-medium text-slate-800">{b.nom}</td>
-                  <td className="px-4 py-2 text-slate-600">{b.adresse ?? '—'}</td>
-                  {session.estGerant ? (
-                    <td className="px-4 py-2 text-right">
-                      <BoutonSupprimer id={b.id} nom={b.nom} />
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
+              {boutiques.map((b) =>
+                session.estGerant ? (
+                  <LigneBoutique key={b.id} boutique={b} />
+                ) : (
+                  <tr key={b.id}>
+                    <td className="px-4 py-2 font-medium text-slate-800">{b.nom}</td>
+                    <td className="px-4 py-2 text-slate-600">{b.adresse ?? '—'}</td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
