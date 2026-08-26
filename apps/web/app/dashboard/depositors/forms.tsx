@@ -17,14 +17,14 @@ function Fields({ depositor }: { depositor?: Depositor }) {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Nom" name="name" defaultValue={depositor?.lastName ?? ''} required />
+        <Field label="Nom" name="lastName" defaultValue={depositor?.lastName ?? ''} required />
         <Field label="Prénom" name="firstName" defaultValue={depositor?.firstName ?? ''} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Email" name="email" type="email" defaultValue={depositor?.email ?? ''} />
-        <Field label="Téléphone" name="telephone" defaultValue={depositor?.phone ?? ''} />
+        <Field label="Téléphone" name="phone" defaultValue={depositor?.phone ?? ''} />
       </div>
-      <Field label="Adresse" name="adresse" defaultValue={depositor?.address ?? ''} />
+      <Field label="Adresse" name="address" defaultValue={depositor?.address ?? ''} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
           label="IBAN"
@@ -85,7 +85,7 @@ export function EditDepositor({
   return (
     <>
       <div className="flex items-center gap-2">
-        <Button type="button" variante="secondaire" onClick={() => setOpen(!open)}>
+        <Button type="button" variant="secondary" onClick={() => setOpen(!open)}>
           {open ? 'Fermer' : 'Modifier'}
         </Button>
         {children}
@@ -121,7 +121,7 @@ export function DeleteDepositorButton({ depositor }: { depositor: Depositor }) {
       }}
     >
       <input type="hidden" name="id" value={depositor.id} />
-      <Button type="submit" variante="danger" disabled={pending}>
+      <Button type="submit" variant="danger" disabled={pending}>
         {pending ? '…' : 'Supprimer'}
       </Button>
       {state.error ? <p className="mt-1 text-xs text-red-700">{state.error}</p> : null}

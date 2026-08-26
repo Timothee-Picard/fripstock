@@ -2,14 +2,14 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 
-const RACCOURCIS = [
+const SHORTCUTS = [
   { days: 7, label: '7 jours' },
   { days: 30, label: '30 jours' },
   { days: 90, label: '3 mois' },
   { days: 365, label: '1 an' },
 ] as const;
 
-function ilYA(days: number): string {
+function daysAgo(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
@@ -30,16 +30,16 @@ export function PeriodSelector() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {RACCOURCIS.map((r) => {
-        const target = ilYA(r.days);
-        const actif = from === target || (from === '' && r.days === 30);
+      {SHORTCUTS.map((r) => {
+        const target = daysAgo(r.days);
+        const active = from === target || (from === '' && r.days === 30);
         return (
           <button
             key={r.days}
             type="button"
             onClick={() => apply(target)}
             className={
-              actif
+              active
                 ? 'rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white'
                 : 'rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50'
             }
@@ -52,7 +52,7 @@ export function PeriodSelector() {
         <span>Depuis le</span>
         <input
           type="date"
-          value={from || ilYA(30)}
+          value={from || daysAgo(30)}
           onChange={(e) => apply(e.target.value)}
           className="rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900"
         />

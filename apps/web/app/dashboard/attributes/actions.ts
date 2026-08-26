@@ -8,8 +8,8 @@ export interface AttributeState {
   success?: string;
 }
 
-function message(error: unknown, defaut: string): AttributeState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): AttributeState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 /** Découpe une saisie « S, M, L » ou une option par ligne. */
@@ -21,7 +21,7 @@ function decouperOptions(brut: string): { value: string }[] {
     .map((value) => ({ value }));
 }
 
-export async function clonerTemplate(
+export async function cloneTemplate(
   _state: AttributeState,
   data: FormData,
 ): Promise<AttributeState> {
@@ -81,10 +81,7 @@ export async function renameAttribute(
  * Envoie la liste complète et ordonnée : l'API crée les nouvelles valeurs,
  * renomme celles qui ont un id, et supprime les absentes.
  */
-export async function definirOptions(
-  _state: AttributeState,
-  data: FormData,
-): Promise<AttributeState> {
+export async function setOptions(_state: AttributeState, data: FormData): Promise<AttributeState> {
   const options = decouperOptions(String(data.get('options') ?? ''));
   if (options.length === 0) return { error: 'Il faut conserver au moins une option.' };
 

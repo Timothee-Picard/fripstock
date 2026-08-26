@@ -8,8 +8,8 @@ export interface StatusState {
   success?: string;
 }
 
-function message(error: unknown, defaut: string): StatusState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): StatusState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 function refresh() {
@@ -41,7 +41,7 @@ export async function updateStatus(_state: StatusState, data: FormData): Promise
   return { success: 'Statut mis à jour.' };
 }
 
-export async function definirParDefaut(_state: StatusState, data: FormData): Promise<StatusState> {
+export async function setDefaultStatus(_state: StatusState, data: FormData): Promise<StatusState> {
   try {
     await apiFetch(`/statuses/${String(data.get('id'))}/default`, { method: 'PUT' });
   } catch (error) {

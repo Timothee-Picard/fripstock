@@ -38,7 +38,7 @@ export function ContractForm({
   if (!open) {
     return (
       <div className="flex items-center gap-2">
-        <Button type="button" variante="secondaire" onClick={() => setOpen(true)}>
+        <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
           Modifier
         </Button>
         {children}
@@ -49,7 +49,7 @@ export function ContractForm({
   return (
     <>
       <div className="flex items-center gap-2">
-        <Button type="button" variante="secondaire" onClick={() => setOpen(false)}>
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
           Fermer
         </Button>
         {children}
@@ -204,7 +204,7 @@ export function DeleteContractButton({ contract }: { contract: DepositContract }
       }}
     >
       <input type="hidden" name="id" value={contract.id} />
-      <Button type="submit" variante="danger" disabled={pending}>
+      <Button type="submit" variant="danger" disabled={pending}>
         {pending ? '…' : 'Supprimer'}
       </Button>
       {state.error ? <p className="mt-1 text-xs text-red-700">{state.error}</p> : null}

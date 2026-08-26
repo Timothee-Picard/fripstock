@@ -82,7 +82,7 @@ export function CategoryAttributes({
             <div className="mt-2">{<Alert tone="info">{state.success}</Alert>}</div>
           ) : null}
           <div className="mt-3">
-            <Button type="submit" variante="secondaire" disabled={pending}>
+            <Button type="submit" variant="secondary" disabled={pending}>
               {pending ? '…' : 'Enregistrer'}
             </Button>
           </div>

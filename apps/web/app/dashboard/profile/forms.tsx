@@ -22,7 +22,7 @@ export function ProfileForm({ session }: { session: Session }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Prénom" name="firstName" defaultValue={session.firstName} required />
-        <Field label="Nom" name="name" defaultValue={session.lastName} required />
+        <Field label="Nom" name="lastName" defaultValue={session.lastName} required />
       </div>
 
       <Field

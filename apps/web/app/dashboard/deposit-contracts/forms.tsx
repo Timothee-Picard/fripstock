@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { createContract, lancerEcheances, type ContractState } from './actions';
+import { createContract, runDeadlines, type ContractState } from './actions';
 import { Alert, Button, Field } from '@/components/field';
 import type { Depositor } from '@/lib/types';
 
@@ -106,11 +106,11 @@ export function CreateForm({ depositors }: { depositors: Depositor[] }) {
  * date d'échéance.
  */
 export function DeadlinesButton() {
-  const [state, action, pending] = useActionState(async () => lancerEcheances(), INITIAL_STATE);
+  const [state, action, pending] = useActionState(async () => runDeadlines(), INITIAL_STATE);
 
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">
-      <Button type="submit" variante="secondaire" disabled={pending}>
+      <Button type="submit" variant="secondary" disabled={pending}>
         {pending ? 'Vérification…' : 'Vérifier les échéances'}
       </Button>
       {state.success ? <span className="text-xs text-slate-600">{state.success}</span> : null}

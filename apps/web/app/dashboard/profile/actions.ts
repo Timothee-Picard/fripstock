@@ -17,7 +17,7 @@ export async function updateProfile(_state: ProfileState, data: FormData): Promi
       method: 'PUT',
       body: JSON.stringify({
         firstName: String(data.get('firstName') ?? '').trim(),
-        name: String(data.get('name') ?? '').trim(),
+        lastName: String(data.get('lastName') ?? '').trim(),
         email: String(data.get('email') ?? '').trim(),
         // Envoyé seulement s'il est rempli : l'API ne l'exige que si l'email
         // change réellement.

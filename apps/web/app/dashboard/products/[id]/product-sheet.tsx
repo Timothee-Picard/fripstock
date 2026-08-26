@@ -380,7 +380,7 @@ export function ProductSheet({
                 }
                 saisie={
                   <textarea
-                    name="commentaire"
+                    name="internalNote"
                     rows={3}
                     defaultValue={product.internalNote ?? ''}
                     className={FIELD}

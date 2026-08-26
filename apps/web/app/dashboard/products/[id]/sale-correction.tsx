@@ -72,7 +72,7 @@ export function SaleCorrection({ product }: { product: Product }) {
         <Button type="submit" disabled={pending}>
           {pending ? 'Enregistrement…' : 'Enregistrer'}
         </Button>
-        <Button type="button" variante="secondaire" onClick={() => setOpen(false)}>
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
           Fermer
         </Button>
       </div>

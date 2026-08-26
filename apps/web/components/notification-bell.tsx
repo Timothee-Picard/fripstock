@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { marquerLue } from '@/app/dashboard/notifications/actions';
+import { markRead } from '@/app/dashboard/notifications/actions';
 import type { Notifications } from '@/lib/types';
 
 /**
@@ -60,7 +60,7 @@ export function NotificationBell({ data }: { data: Notifications }) {
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
               <span className="text-sm font-medium text-slate-900">Alertes</span>
               {unread > 0 ? (
-                <form action={marquerLue}>
+                <form action={markRead}>
                   <button
                     type="submit"
                     className="text-xs text-slate-600 underline underline-offset-2 hover:text-slate-900"
@@ -93,7 +93,7 @@ export function NotificationBell({ data }: { data: Notifications }) {
                         </Link>
                       ) : null}
                       {!n.isRead ? (
-                        <form action={marquerLue} className="inline">
+                        <form action={markRead} className="inline">
                           <input type="hidden" name="id" value={n.id} />
                           <button type="submit" className="underline underline-offset-2">
                             Marquer comme lu

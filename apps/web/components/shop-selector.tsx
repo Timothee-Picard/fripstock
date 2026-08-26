@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { ShopAccess } from '@/lib/types';
 
-const KEY = 'fripstock.boutiqueActive';
+const KEY = 'fripstock.activeShop';
 
 /**
  * Sélecteur de boutique active. Le choix est purement local (préférence
@@ -21,9 +21,9 @@ export function ShopSelector({ shops }: { shops: ShopAccess[] }) {
 
   useEffect(() => {
     try {
-      const memoized = localStorage.getItem(KEY);
-      const valide = memoized && shops.some((b) => b.shopId === memoized);
-      if (valide && field.current) field.current.value = memoized;
+      const memorized = localStorage.getItem(KEY);
+      const valid = memorized && shops.some((b) => b.shopId === memorized);
+      if (valid && field.current) field.current.value = memorized;
     } catch {
       // Navigation privée ou stockage bloqué : on reste sur la première
       // boutique, ce n'est pas bloquant.

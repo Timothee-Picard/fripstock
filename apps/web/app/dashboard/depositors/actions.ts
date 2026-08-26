@@ -9,20 +9,20 @@ export interface DepositorState {
   success?: string;
 }
 
-function message(error: unknown, defaut: string): DepositorState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): DepositorState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 /** Champs communs à la création et à la modification. */
-function corps(data: FormData) {
+function body(data: FormData) {
   const text = (key: string) => String(data.get(key) ?? '').trim();
   const commission = text('defaultCommission').replace(',', '.');
   return {
-    name: text('name'),
+    lastName: text('lastName'),
     firstName: text('firstName') || undefined,
     email: text('email') || undefined,
-    phone: text('telephone') || undefined,
-    address: text('adresse') || undefined,
+    phone: text('phone') || undefined,
+    address: text('address') || undefined,
     // Les IBAN se notent souvent avec des espaces : on les retire avant l'API,
     // qui les refuserait.
     iban: text('iban').replace(/\s+/g, '').toUpperCase() || undefined,
@@ -34,9 +34,9 @@ export async function createDepositor(
   _state: DepositorState,
   data: FormData,
 ): Promise<DepositorState> {
-  if (!String(data.get('name') ?? '').trim()) return { error: 'Le nom est obligatoire.' };
+  if (!String(data.get('lastName') ?? '').trim()) return { error: 'Le nom est obligatoire.' };
   try {
-    await apiFetch('/depositors', { method: 'POST', body: JSON.stringify(corps(data)) });
+    await apiFetch('/depositors', { method: 'POST', body: JSON.stringify(body(data)) });
   } catch (error) {
     return message(error, 'Création impossible.');
   }
@@ -52,7 +52,7 @@ export async function updateDepositor(
   try {
     await apiFetch(`/depositors/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(corps(data)),
+      body: JSON.stringify(body(data)),
     });
   } catch (error) {
     return message(error, 'Modification impossible.');

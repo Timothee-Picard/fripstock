@@ -34,7 +34,7 @@ export function ShopAssignment({
           </option>
         ))}
       </select>
-      <Button type="submit" variante="secondaire" disabled={pending}>
+      <Button type="submit" variant="secondary" disabled={pending}>
         {pending ? '…' : 'Assigner'}
       </Button>
       {state.error ? <Alert>{state.error}</Alert> : null}
@@ -75,7 +75,7 @@ export function DeleteProductButton({
           {pending ? '…' : <DeleteIcon />}
         </button>
       ) : (
-        <Button type="submit" variante="danger" disabled={pending}>
+        <Button type="submit" variant="danger" disabled={pending}>
           {pending ? '…' : 'Supprimer'}
         </Button>
       )}

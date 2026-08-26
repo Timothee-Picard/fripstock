@@ -22,12 +22,12 @@ export function DepositorPayment({ product }: { product: Product }) {
   const encaisse = Number(product.soldPrice ?? 0);
   const commission = Number(product.appliedCommission ?? 0);
   const depositorShare = Math.round(encaisse * (1 - commission / 100) * 100) / 100;
-  const paye = product.depositorPaid === true;
+  const paid = product.depositorPaid === true;
 
   return (
     <form action={action} className="rounded-md border border-slate-200 bg-slate-50 p-4">
       <input type="hidden" name="id" value={product.id} />
-      <input type="hidden" name="paye" value={paye ? 'false' : 'true'} />
+      <input type="hidden" name="paid" value={paid ? 'false' : 'true'} />
 
       <h3 className="text-sm font-medium text-slate-900">Part du déposant</h3>
       <p className="mt-1 text-sm text-slate-700">
@@ -42,15 +42,15 @@ export function DepositorPayment({ product }: { product: Product }) {
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button type="submit" variante={paye ? 'secondaire' : 'principal'} disabled={pending}>
-          {pending ? '…' : paye ? 'Annuler le règlement' : 'Marquer comme réglé'}
+        <Button type="submit" variant={paid ? 'secondary' : 'primary'} disabled={pending}>
+          {pending ? '…' : paid ? 'Annuler le règlement' : 'Marquer comme réglé'}
         </Button>
         <span
           className={`rounded px-2 py-0.5 text-xs ${
-            paye ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'
+            paid ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'
           }`}
         >
-          {paye ? 'réglé' : 'à régler'}
+          {paid ? 'réglé' : 'à régler'}
         </span>
       </div>
     </form>

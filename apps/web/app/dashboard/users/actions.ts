@@ -10,7 +10,7 @@ export interface UserState {
   temporaryPassword?: string;
 }
 
-export async function inviterEmploye(_state: UserState, data: FormData): Promise<UserState> {
+export async function inviteEmployee(_state: UserState, data: FormData): Promise<UserState> {
   try {
     const created = await apiFetch<{
       temporaryPassword?: string;
@@ -21,7 +21,7 @@ export async function inviterEmploye(_state: UserState, data: FormData): Promise
       body: JSON.stringify({
         email: String(data.get('email') ?? '').trim(),
         firstName: String(data.get('firstName') ?? '').trim(),
-        name: String(data.get('name') ?? '').trim(),
+        lastName: String(data.get('lastName') ?? '').trim(),
       }),
     });
     revalidatePath('/dashboard/users');
@@ -39,7 +39,7 @@ export async function inviterEmploye(_state: UserState, data: FormData): Promise
  * On reconstruit la liste complète des accès, parce que l'API remplace
  * intégralement ceux de l'employé.
  */
-export async function enregistrerAcces(_state: UserState, data: FormData): Promise<UserState> {
+export async function saveAccess(_state: UserState, data: FormData): Promise<UserState> {
   const userId = String(data.get('userId') ?? '');
   const shopIds = data.getAll('shopId').map(String);
 

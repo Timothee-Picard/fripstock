@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api';
  * fourni. Signature d'action de formulaire simple — pas de useActionState ici,
  * le résultat se lit dans le badge du layout, rafraîchi juste après.
  */
-export async function marquerLue(data: FormData): Promise<void> {
+export async function markRead(data: FormData): Promise<void> {
   const id = String(data.get('id') ?? '');
   await apiFetch(id ? `/notifications/${id}/read` : '/notifications/read-all', { method: 'PUT' });
   revalidatePath('/dashboard', 'layout');

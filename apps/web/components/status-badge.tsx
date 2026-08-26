@@ -9,15 +9,15 @@ export function StatusBadge({ status }: { status: Pick<Status, 'name' | 'color'>
   return (
     <span
       className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: status.color, color: texteLisible(status.color) }}
+      style={{ backgroundColor: status.color, color: readableText(status.color) }}
     >
       {status.name}
     </span>
   );
 }
 
-function texteLisible(fond: string): string {
-  const hex = fond.replace('#', '');
+function readableText(background: string): string {
+  const hex = background.replace('#', '');
   if (hex.length !== 6) return '#ffffff';
   const [r, v, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);

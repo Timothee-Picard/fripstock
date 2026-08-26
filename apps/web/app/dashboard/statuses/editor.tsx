@@ -5,7 +5,7 @@ import '@xyflow/react/dist/style.css';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import { FlowEdge } from './flow-edge';
-import { definirParDefaut, updateStatus } from './actions';
+import { setDefaultStatus, updateStatus } from './actions';
 import { StatusNodeView } from './status-node';
 import { Alert } from '@/components/field';
 import type { Status } from '@/lib/types';
@@ -13,11 +13,11 @@ import type { Status } from '@/lib/types';
 const TYPES_NOEUDS = { status: StatusNodeView };
 const TYPES_ARETES = { flow: FlowEdge };
 
-function button(variante: 'principal' | 'secondaire' = 'secondaire') {
+function button(variant: 'primary' | 'secondary' = 'secondary') {
   const styles = {
-    principal: 'bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400',
-    secondaire: 'border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:text-slate-400',
-  }[variante];
+    primary: 'bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400',
+    secondary: 'border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:text-slate-400',
+  }[variant];
   return `rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed ${styles}`;
 }
 
@@ -98,7 +98,7 @@ export function StatusEditor({ statuses }: { statuses: Status[] }) {
             onParDefaut={() => {
               const d = new FormData();
               d.set('id', selection.id);
-              agir(d, definirParDefaut);
+              agir(d, setDefaultStatus);
             }}
           />
         ) : (
@@ -185,7 +185,7 @@ function StatusFields({
         type="button"
         disabled={!change || enAttente}
         onClick={() => onModifier(name.trim(), color)}
-        className={button('principal')}
+        className={button('primary')}
       >
         Appliquer
       </button>

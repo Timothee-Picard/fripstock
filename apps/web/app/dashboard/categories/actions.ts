@@ -8,8 +8,8 @@ export interface CategoryState {
   success?: string;
 }
 
-function message(error: unknown, defaut: string): CategoryState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): CategoryState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 export async function createCategory(

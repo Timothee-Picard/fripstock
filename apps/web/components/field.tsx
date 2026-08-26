@@ -16,17 +16,17 @@ export function Field({
 }
 
 export function Button({
-  variante = 'principal',
+  variant = 'primary',
   className = '',
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variante?: 'principal' | 'secondaire' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger';
 }) {
   const styles = {
-    principal: 'bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400',
-    secondaire: 'border border-slate-300 text-slate-700 hover:bg-slate-50',
+    primary: 'bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400',
+    secondary: 'border border-slate-300 text-slate-700 hover:bg-slate-50',
     danger: 'text-red-700 hover:bg-red-50 border border-red-200',
-  }[variante];
+  }[variant];
   return (
     <button
       {...props}

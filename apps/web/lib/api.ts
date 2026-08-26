@@ -17,9 +17,9 @@ export class ApiError extends Error {
   }
 }
 
-function errorMessage(corps: unknown, status: number): string {
-  if (typeof corps === 'object' && corps !== null && 'message' in corps) {
-    const m = (corps as { message: unknown }).message;
+function errorMessage(body: unknown, status: number): string {
+  if (typeof body === 'object' && body !== null && 'message' in body) {
+    const m = (body as { message: unknown }).message;
     // Nest renvoie un tableau quand plusieurs règles de validation échouent.
     if (Array.isArray(m)) return m.join(', ');
     if (typeof m === 'string') return m;
@@ -28,10 +28,10 @@ function errorMessage(corps: unknown, status: number): string {
 }
 
 /** Appel authentifié à l'API, côté serveur uniquement. */
-export async function apiFetch<T>(chemin: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = (await cookies()).get(COOKIE_NAME)?.value;
 
-  const response = await fetch(`${API_URL}${chemin}`, {
+  const response = await fetch(`${API_URL}${path}`, {
     ...options,
     cache: 'no-store',
     headers: {
@@ -42,20 +42,20 @@ export async function apiFetch<T>(chemin: string, options: RequestInit = {}): Pr
   });
 
   if (!response.ok) {
-    const corps: unknown = await response.json().catch(() => null);
-    throw new ApiError(response.status, errorMessage(corps, response.status));
+    const body: unknown = await response.json().catch(() => null);
+    throw new ApiError(response.status, errorMessage(body, response.status));
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
 /** Appel non authentifié — inscription et connexion. */
-export async function publicApiFetch<T>(chemin: string, corps: unknown): Promise<T> {
-  const response = await fetch(`${API_URL}${chemin}`, {
+export async function publicApiFetch<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(corps),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const error: unknown = await response.json().catch(() => null);
@@ -72,11 +72,11 @@ export async function publicApiFetch<T>(chemin: string, corps: unknown): Promise
  * `{ refus: true }` et l'écran affiche une explication.
  */
 export async function tolerantApiFetch<T>(
-  chemin: string,
+  path: string,
   options: RequestInit = {},
 ): Promise<{ data: T; denied?: false } | { data?: undefined; denied: true }> {
   try {
-    return { data: await apiFetch<T>(chemin, options) };
+    return { data: await apiFetch<T>(path, options) };
   } catch (error) {
     if (error instanceof ApiError && error.status === 403) return { denied: true };
     throw error;

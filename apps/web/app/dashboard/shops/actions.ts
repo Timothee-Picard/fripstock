@@ -17,7 +17,7 @@ export async function createShop(_state: ShopState, data: FormData): Promise<Sho
       method: 'POST',
       body: JSON.stringify({
         name,
-        address: String(data.get('adresse') ?? '').trim() || undefined,
+        address: String(data.get('address') ?? '').trim() || undefined,
       }),
     });
   } catch (error) {
@@ -37,7 +37,7 @@ export async function updateShop(_state: ShopState, data: FormData): Promise<Sho
       method: 'PUT',
       body: JSON.stringify({
         name,
-        address: String(data.get('adresse') ?? '').trim(),
+        address: String(data.get('address') ?? '').trim(),
       }),
     });
   } catch (error) {

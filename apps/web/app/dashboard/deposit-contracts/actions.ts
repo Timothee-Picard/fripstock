@@ -9,8 +9,8 @@ export interface ContractState {
   success?: string;
 }
 
-function message(error: unknown, defaut: string): ContractState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): ContractState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 function refresh(id?: string) {
@@ -130,7 +130,7 @@ export async function deleteContract(
 }
 
 /** Lance la passe d'échéances à la main, sans attendre le lendemain. */
-export async function lancerEcheances(): Promise<ContractState> {
+export async function runDeadlines(): Promise<ContractState> {
   try {
     const r = await apiFetch<{ notified: number; expired: number }>(
       '/deposit-contracts/deadlines',

@@ -17,7 +17,7 @@ export function ShopForm() {
       {state.error ? <Alert>{state.error}</Alert> : null}
       {state.success ? <Alert tone="info">{state.success}</Alert> : null}
       <Field label="Nom" name="name" required />
-      <Field label="Adresse" name="adresse" hint="Facultative" />
+      <Field label="Adresse" name="address" hint="Facultative" />
       <Button type="submit" disabled={pending}>
         {pending ? 'Création…' : 'Créer la boutique'}
       </Button>
@@ -46,12 +46,12 @@ export function ShopRow({ shop }: { shop: Shop }) {
               <Field label="Nom" name="name" defaultValue={shop.name} required />
             </div>
             <div className="min-w-48 flex-1">
-              <Field label="Adresse" name="adresse" defaultValue={shop.address ?? ''} />
+              <Field label="Adresse" name="address" defaultValue={shop.address ?? ''} />
             </div>
             <Button type="submit" disabled={pending}>
               {pending ? '…' : 'Enregistrer'}
             </Button>
-            <Button type="button" variante="secondaire" onClick={() => setEdition(false)}>
+            <Button type="button" variant="secondary" onClick={() => setEdition(false)}>
               Annuler
             </Button>
             {state.error ? (

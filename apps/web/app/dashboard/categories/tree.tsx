@@ -11,11 +11,11 @@ const INITIAL_STATE: CategoryState = {};
 function ParentSelector({
   tree,
   exclureId,
-  defaut,
+  fallback,
 }: {
   tree: CategoryTree[];
   exclureId?: string;
-  defaut?: string | null;
+  fallback?: string | null;
 }) {
   // On retire la catégorie éditée et sa descendance : l'API refuserait le
   // cycle, autant ne pas le proposer.
@@ -39,7 +39,7 @@ function ParentSelector({
       <span className="mb-1 block text-sm font-medium text-slate-800">Catégorie parente</span>
       <select
         name="parentId"
-        defaultValue={defaut ?? ''}
+        defaultValue={fallback ?? ''}
         className="w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900"
       >
         <option value="">— Racine —</option>
@@ -102,12 +102,12 @@ function CategoryRow({
               <Field label="Nom" name="name" defaultValue={node.name} required />
             </div>
             <div className="min-w-48 flex-1">
-              <ParentSelector tree={tree} exclureId={node.id} defaut={node.parentId} />
+              <ParentSelector tree={tree} exclureId={node.id} fallback={node.parentId} />
             </div>
             <Button type="submit" disabled={editEnCours}>
               {editEnCours ? '…' : 'Enregistrer'}
             </Button>
-            <Button type="button" variante="secondaire" onClick={() => setEdition(false)}>
+            <Button type="button" variant="secondary" onClick={() => setEdition(false)}>
               Annuler
             </Button>
           </form>
@@ -125,7 +125,7 @@ function CategoryRow({
                 .filter((a) => a.categories.some((c) => c.categoryId === node.id))
                 .map((a) => a.id)}
             />
-            <Button type="button" variante="secondaire" onClick={() => setEdition(true)}>
+            <Button type="button" variant="secondary" onClick={() => setEdition(true)}>
               Renommer
             </Button>
             <form
@@ -135,7 +135,7 @@ function CategoryRow({
               }}
             >
               <input type="hidden" name="id" value={node.id} />
-              <Button type="submit" variante="danger" disabled={supprEnCours}>
+              <Button type="submit" variant="danger" disabled={supprEnCours}>
                 {supprEnCours ? '…' : 'Supprimer'}
               </Button>
             </form>

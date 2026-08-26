@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import {
-  clonerTemplate,
+  cloneTemplate,
   createAttribute,
-  definirOptions,
+  setOptions,
   renameAttribute,
   deleteAttribute,
   type AttributeState,
@@ -32,7 +32,7 @@ function nameCategories(tree: CategoryTree[], attribute: AttributeDefinition): s
 const INITIAL_STATE: AttributeState = {};
 
 export function DepuisModele({ templates }: { templates: AttributeTemplate[] }) {
-  const [state, action, pending] = useActionState(clonerTemplate, INITIAL_STATE);
+  const [state, action, pending] = useActionState(cloneTemplate, INITIAL_STATE);
 
   if (templates.length === 0) return null;
 
@@ -52,7 +52,7 @@ export function DepuisModele({ templates }: { templates: AttributeTemplate[] }) 
           <form key={t.id} action={action}>
             <input type="hidden" name="templateId" value={t.id} />
             <input type="hidden" name="name" value={t.name} />
-            <Button type="submit" variante="secondaire" disabled={pending}>
+            <Button type="submit" variant="secondary" disabled={pending}>
               {t.name}
               <span className="ml-2 text-xs text-slate-600">
                 {TYPE_LABELS[t.type]}
@@ -127,10 +127,7 @@ export function AttributeCard({
   tree: CategoryTree[];
 }) {
   const [etatNom, actionNom, nomEnCours] = useActionState(renameAttribute, INITIAL_STATE);
-  const [etatOptions, actionOptions, optionsEnCours] = useActionState(
-    definirOptions,
-    INITIAL_STATE,
-  );
+  const [etatOptions, actionOptions, optionsEnCours] = useActionState(setOptions, INITIAL_STATE);
   const [etatSuppr, actionSuppr, supprEnCours] = useActionState(deleteAttribute, INITIAL_STATE);
 
   // Les catégories concernées se choisissent depuis l'écran Catégories : on
@@ -145,7 +142,7 @@ export function AttributeCard({
           <div className="min-w-48">
             <Field label="Nom" name="name" defaultValue={attribute.name} required />
           </div>
-          <Button type="submit" variante="secondaire" disabled={nomEnCours}>
+          <Button type="submit" variant="secondary" disabled={nomEnCours}>
             {nomEnCours ? '…' : 'Renommer'}
           </Button>
           <span className="pb-2 text-xs text-slate-600">
@@ -161,7 +158,7 @@ export function AttributeCard({
           }}
         >
           <input type="hidden" name="id" value={attribute.id} />
-          <Button type="submit" variante="danger" disabled={supprEnCours}>
+          <Button type="submit" variant="danger" disabled={supprEnCours}>
             {supprEnCours ? '…' : 'Supprimer'}
           </Button>
         </form>
@@ -205,7 +202,7 @@ export function AttributeCard({
           </label>
           {etatOptions.error ? <Alert>{etatOptions.error}</Alert> : null}
           {etatOptions.success ? <Alert tone="info">{etatOptions.success}</Alert> : null}
-          <Button type="submit" variante="secondaire" disabled={optionsEnCours}>
+          <Button type="submit" variant="secondary" disabled={optionsEnCours}>
             {optionsEnCours ? '…' : 'Enregistrer les options'}
           </Button>
         </form>

@@ -1,14 +1,14 @@
 'use client';
 
 import { useActionState } from 'react';
-import { enregistrerAcces, inviterEmploye, deleteEmployee, type UserState } from './actions';
+import { saveAccess, inviteEmployee, deleteEmployee, type UserState } from './actions';
 import { Alert, Button, Field } from '@/components/field';
 import { PERMISSION_LABELS, PERMISSIONS, type Shop, type Employee } from '@/lib/types';
 
 const INITIAL_STATE: UserState = {};
 
 export function InviteForm() {
-  const [state, action, pending] = useActionState(inviterEmploye, INITIAL_STATE);
+  const [state, action, pending] = useActionState(inviteEmployee, INITIAL_STATE);
 
   return (
     <form action={action} className="space-y-3 rounded-lg border border-slate-200 bg-white p-5">
@@ -31,7 +31,7 @@ export function InviteForm() {
       ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Prénom" name="firstName" required />
-        <Field label="Nom" name="name" required />
+        <Field label="Nom" name="lastName" required />
         <Field label="Email" name="email" type="email" required />
       </div>
       <Button type="submit" disabled={pending}>
@@ -42,7 +42,7 @@ export function InviteForm() {
 }
 
 export function AccessForm({ employee, shops }: { employee: Employee; shops: Shop[] }) {
-  const [state, action, pending] = useActionState(enregistrerAcces, INITIAL_STATE);
+  const [state, action, pending] = useActionState(saveAccess, INITIAL_STATE);
 
   const actuelles = new Map(
     employee.accesses.map((a) => [
@@ -114,7 +114,7 @@ export function DeleteEmployeeButton({ employee }: { employee: Employee }) {
       }}
     >
       <input type="hidden" name="userId" value={employee.id} />
-      <Button type="submit" variante="danger" disabled={pending}>
+      <Button type="submit" variant="danger" disabled={pending}>
         {pending ? '…' : 'Supprimer'}
       </Button>
       {state.error ? <p className="mt-1 text-xs text-red-700">{state.error}</p> : null}

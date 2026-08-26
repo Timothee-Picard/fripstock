@@ -17,8 +17,8 @@ export interface ProductState {
   token?: string;
 }
 
-function message(error: unknown, defaut: string): ProductState {
-  return { error: error instanceof ApiError ? error.message : defaut };
+function message(error: unknown, fallback: string): ProductState {
+  return { error: error instanceof ApiError ? error.message : fallback };
 }
 
 /** Les valeurs d'attributs arrivent sous la forme `attr:<id>`. */
@@ -68,7 +68,7 @@ export async function createProduct(_state: ProductState, data: FormData): Promi
         shopId: shopId || null,
         reference: String(data.get('reference') ?? '').trim() || undefined,
         description: String(data.get('description') ?? '').trim() || undefined,
-        internalNote: String(data.get('commentaire') ?? '').trim() || undefined,
+        internalNote: String(data.get('internalNote') ?? '').trim() || undefined,
         photoUrl: String(data.get('photoUrl') ?? '').trim() || undefined,
         purchasePrice: numberOrNothing(data, 'purchasePrice'),
         salePrice: numberOrNothing(data, 'salePrice'),
@@ -158,7 +158,7 @@ export async function updateProduct(_state: ProductState, data: FormData): Promi
         shopId: shopId || null,
         reference: String(data.get('reference') ?? '').trim(),
         description: String(data.get('description') ?? '').trim(),
-        internalNote: String(data.get('commentaire') ?? '').trim(),
+        internalNote: String(data.get('internalNote') ?? '').trim(),
         photoUrl: String(data.get('photoUrl') ?? '').trim(),
         purchasePrice: saleType === 'RESALE' ? numberOrNothing(data, 'purchasePrice') : undefined,
         salePrice: numberOrNothing(data, 'salePrice'),
@@ -214,7 +214,7 @@ export async function toggleDepositorPayment(
   try {
     await apiFetch(`/products/${id}/depositor-payment`, {
       method: 'PUT',
-      body: JSON.stringify({ paye: data.get('paye') === 'true' }),
+      body: JSON.stringify({ paid: data.get('paid') === 'true' }),
     });
   } catch (error) {
     return message(error, 'Enregistrement impossible.');

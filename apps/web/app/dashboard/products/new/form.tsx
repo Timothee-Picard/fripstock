@@ -58,7 +58,7 @@ export function ProductForm({ tree, shops }: { tree: CategoryTree[]; shops: Shop
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-800">Commentaire interne</span>
-          <textarea name="commentaire" rows={2} className={css} />
+          <textarea name="internalNote" rows={2} className={css} />
         </label>
 
         <PhotoField />

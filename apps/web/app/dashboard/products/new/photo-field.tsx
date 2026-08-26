@@ -23,9 +23,9 @@ export function PhotoField({
     setError('');
     setEnCours(true);
     try {
-      const corps = new FormData();
-      corps.append('fichier', file);
-      const response = await fetch('/api/photos', { method: 'POST', body: corps });
+      const body = new FormData();
+      body.append('fichier', file);
+      const response = await fetch('/api/photos', { method: 'POST', body: body });
       const data = (await response.json()) as { key?: string; message?: string };
       if (!response.ok || !data.key) {
         setError(data.message ?? 'Envoi impossible.');

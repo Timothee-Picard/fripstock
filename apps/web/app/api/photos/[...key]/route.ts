@@ -11,7 +11,7 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3001';
  * cookie httpOnly et rattache le jeton côté serveur. Aucune URL de stockage
  * n'est exposée, et une photo reste inaccessible sans session.
  */
-export async function GET(_requete: Request, { params }: { params: Promise<{ key: string[] }> }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const { key } = await params;
   const token = (await cookies()).get(COOKIE_NAME)?.value;
   if (!token) return new Response('Non authentifié', { status: 401 });
