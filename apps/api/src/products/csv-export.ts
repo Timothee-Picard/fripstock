@@ -10,9 +10,9 @@
  * `unknown` laisserait un objet finir en « [object Object] » dans un fichier
  * censé être lu par un humain.
  */
-export type Cellule = string | number | boolean | null | undefined;
+export type Cell = string | number | boolean | null | undefined;
 
-const SEPARATEUR = ';';
+const SEPARATOR = ';';
 const BOM = '﻿';
 
 /**
@@ -22,20 +22,18 @@ const BOM = '﻿';
  * référence produit saisie `=1+1` serait sinon exécutée à l'ouverture du
  * fichier, et `=HYPERLINK(...)` est un vecteur d'exfiltration connu.
  */
-function cellule(value: Cellule): string {
+function cell(value: Cell): string {
   if (value === null || value === undefined) return '';
   let text = typeof value === 'string' ? value : String(value);
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  if (text.includes('"') || text.includes(SEPARATEUR) || /[\r\n]/.test(text)) {
+  if (text.includes('"') || text.includes(SEPARATOR) || /[\r\n]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
 }
 
-export function versCsv(headers: string[], lines: Cellule[][]): string {
-  const content = [headers, ...lines]
-    .map((line) => line.map(cellule).join(SEPARATEUR))
-    .join('\r\n');
+export function toCsv(headers: string[], lines: Cell[][]): string {
+  const content = [headers, ...lines].map((line) => line.map(cell).join(SEPARATOR)).join('\r\n');
   return BOM + content + '\r\n';
 }
 
@@ -49,7 +47,7 @@ export function dateFr(value: Date | null): string {
   return value ? value.toLocaleDateString('fr-FR') : '';
 }
 
-export function ouiNon(value: boolean | null): string {
+export function yesNo(value: boolean | null): string {
   if (value === null || value === undefined) return '';
   return value ? 'oui' : 'non';
 }

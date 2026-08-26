@@ -12,7 +12,7 @@ import { UploadsService } from '../uploads/uploads.service';
 import {
   normalizeValue,
   type ApplicableAttribute,
-  type NormalisedValue,
+  type NormalizedValue,
 } from './attributes.validation';
 import type { AssignShopDto } from './dto/assign-shop.dto';
 import type { ChangeStatusDto } from './dto/change-status.dto';
@@ -21,7 +21,7 @@ import type { FilterProductsDto } from './dto/filter-products.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import type { UpdateSaleDto } from './dto/update-sale.dto';
 import type { ValueAttributeDto } from './dto/attribute-value.dto';
-import { dateFr, frNumber, ouiNon, versCsv } from './csv-export';
+import { dateFr, frNumber, yesNo, toCsv } from './csv-export';
 
 const PAR_PAGE_DEFAUT = 25;
 
@@ -187,12 +187,12 @@ export class ProductsService {
         dateFr(p.soldAt),
         depositor,
         frNumber(p.appliedCommission?.toString() ?? null),
-        ouiNon(p.depositorPaid),
+        yesNo(p.depositorPaid),
         ...dynamicHeaders.map((name) => attributes.get(name)?.join(', ') ?? ''),
       ];
     });
 
-    return versCsv(headers, lines);
+    return toCsv(headers, lines);
   }
 
   /**
@@ -389,22 +389,22 @@ export class ProductsService {
    */
   async changeStatus(currentUser: CurrentUser, id: string, dto: ChangeStatusDto) {
     const product = await this.loadForWrite(currentUser, id);
-    const actuel = await this.prisma.status.findUniqueOrThrow({ where: { id: product.statusId } });
+    const current = await this.prisma.status.findUniqueOrThrow({ where: { id: product.statusId } });
     const target = await this.requireStatus(currentUser, dto.statusId);
 
     // Le flux de l'entreprise, s'il est défini, dit quelles transitions sont
     // permises. Les règles de flags s'appliquent par-dessus.
-    await this.statuses.checkTransition(currentUser.companyId, actuel.id, target.id);
+    await this.statuses.checkTransition(currentUser.companyId, current.id, target.id);
 
     // Un produit rendu ou retiré ne redevient jamais vendable.
-    if (actuel.blocksSale && target.isSale) {
+    if (current.blocksSale && target.isSale) {
       throw new ForbiddenException(
-        `Ce produit est « ${actuel.name} » : il ne peut plus être vendu.`,
+        `Ce produit est « ${current.name} » : il ne peut plus être vendu.`,
       );
     }
-    if (actuel.blocksSale && dto.soldPrice !== undefined) {
+    if (current.blocksSale && dto.soldPrice !== undefined) {
       throw new ForbiddenException(
-        `Ce produit est « ${actuel.name} » : son prix vendu ne peut plus être modifié.`,
+        `Ce produit est « ${current.name} » : son prix vendu ne peut plus être modifié.`,
       );
     }
 
@@ -526,7 +526,7 @@ export class ProductsService {
     const product = await this.loadForWrite(currentUser, id);
     await this.prisma.product.delete({ where: { id } });
     if (product.photoUrl) await this.uploads.delete(product.photoUrl);
-    return { supprime: true };
+    return { deleted: true };
   }
 
   // --- Helpers -------------------------------------------------------------
@@ -628,29 +628,29 @@ export class ProductsService {
     currentUser: CurrentUser,
     categoryId: string,
     values: ValueAttributeDto[],
-  ): Promise<NormalisedValue[]> {
+  ): Promise<NormalizedValue[]> {
     if (values.length === 0) return [];
 
-    const liens = await this.prisma.categoryAttribute.findMany({
+    const links = await this.prisma.categoryAttribute.findMany({
       where: { categoryId, attribute: { companyId: currentUser.companyId } },
       include: { attribute: { include: { options: { orderBy: { position: 'asc' } } } } },
     });
-    const applicables = new Map<string, ApplicableAttribute>(
-      liens.map((l) => [l.attribute.id, l.attribute]),
+    const applicable = new Map<string, ApplicableAttribute>(
+      links.map((l) => [l.attribute.id, l.attribute]),
     );
 
-    const vus = new Set<string>();
+    const seen = new Set<string>();
     return values.map((v) => {
-      const attribute = applicables.get(v.attributeDefinitionId);
+      const attribute = applicable.get(v.attributeDefinitionId);
       if (!attribute) {
         throw new BadRequestException(
           "Un attribut fourni ne s'applique pas à la catégorie choisie.",
         );
       }
-      if (vus.has(attribute.id)) {
+      if (seen.has(attribute.id)) {
         throw new BadRequestException(`« ${attribute.name} » est renseigné deux fois.`);
       }
-      vus.add(attribute.id);
+      seen.add(attribute.id);
       return normalizeValue(attribute, v.value);
     });
   }
@@ -684,7 +684,7 @@ export class ProductsService {
   private async ecrireValues(
     tx: Prisma.TransactionClient,
     productId: string,
-    values: NormalisedValue[],
+    values: NormalizedValue[],
   ) {
     for (const v of values) {
       if (v.optionIds.length > 0) {

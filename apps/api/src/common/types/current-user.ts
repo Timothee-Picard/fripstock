@@ -16,4 +16,4 @@ export interface ShopAccessSummary {
   permissions: Permission[];
 }
 
-export type PermissionsParShop = Map<string, PermissionMap>;
+export type PermissionsByShop = Map<string, PermissionMap>;

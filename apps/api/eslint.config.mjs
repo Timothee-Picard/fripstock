@@ -38,4 +38,17 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'warn',
     },
   },
+  // Les doubles de test de Jest sont typés `any` par construction : inspecter
+  // `mock.calls[0][0]` est le geste normal d'une assertion, pas un trou de
+  // typage dans le code de production.
+  {
+    files: ['**/*.spec.ts', 'src/test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
 );

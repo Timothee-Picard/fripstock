@@ -3,7 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { CurrentUser } from '../common/types/current-user';
 
-export interface ChargeJwt {
+export interface JwtPayload {
   sub: string;
   companyId: string;
   isManager: boolean;
@@ -28,14 +28,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * en base à chaque requête : les guards qui en ont besoin le font eux-mêmes,
    * avec le scoping qui va bien.
    */
-  validate(charge: ChargeJwt): CurrentUser {
-    if (!charge.sub || !charge.companyId) {
+  validate(payload: JwtPayload): CurrentUser {
+    if (!payload.sub || !payload.companyId) {
       throw new UnauthorizedException('Jeton invalide.');
     }
     return {
-      userId: charge.sub,
-      companyId: charge.companyId,
-      isManager: charge.isManager === true,
+      userId: payload.sub,
+      companyId: payload.companyId,
+      isManager: payload.isManager === true,
     };
   }
 }

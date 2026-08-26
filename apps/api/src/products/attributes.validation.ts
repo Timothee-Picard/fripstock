@@ -9,7 +9,7 @@ export interface ApplicableAttribute {
 }
 
 /** Ce qu'il faut écrire en base pour une valeur d'attribut validée. */
-export interface NormalisedValue {
+export interface NormalizedValue {
   attributeDefinitionId: string;
   textValue?: string | null;
   numberValue?: number | null;
@@ -24,10 +24,10 @@ export interface NormalisedValue {
  * Le DTO ne peut pas s'en charger : la forme attendue dépend du type de
  * l'attribut, qu'on ne connaît qu'après l'avoir chargé.
  */
-export function normalizeValue(attribute: ApplicableAttribute, value: unknown): NormalisedValue {
-  const base: NormalisedValue = { attributeDefinitionId: attribute.id, optionIds: [] };
-  const deny = (attendu: string): never => {
-    throw new BadRequestException(`« ${attribute.name} » attend ${attendu}.`);
+export function normalizeValue(attribute: ApplicableAttribute, value: unknown): NormalizedValue {
+  const base: NormalizedValue = { attributeDefinitionId: attribute.id, optionIds: [] };
+  const deny = (expected: string): never => {
+    throw new BadRequestException(`« ${attribute.name} » attend ${expected}.`);
   };
 
   switch (attribute.type) {
@@ -38,6 +38,11 @@ export function normalizeValue(attribute: ApplicableAttribute, value: unknown): 
     }
 
     case 'NUMBER': {
+      // Une chaîne vide vaut 0 pour `Number` : sans ce cas, un champ laissé
+      // vide s'enregistrerait comme un zéro, ce qui n'est pas la même chose.
+      if (typeof value === 'string' && value.trim() === '') {
+        return { ...base, numberValue: null };
+      }
       const count = typeof value === 'string' ? Number(value) : value;
       if (typeof count !== 'number' || Number.isNaN(count)) deny('un nombre');
       return { ...base, numberValue: count as number };

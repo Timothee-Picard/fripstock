@@ -1,6 +1,6 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { SHOP_SOURCE_KEY, type SourceShop } from '../decorators/shop-source.decorator';
+import { SHOP_SOURCE_KEY, type ShopSource } from '../decorators/shop-source.decorator';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import type { Permission } from '../permissions';
 import type { CurrentUser } from '../types/current-user';
@@ -29,9 +29,9 @@ describe('PermissionsGuard', () => {
   };
   const GERANT: CurrentUser = { ...EMPLOYEE, isManager: true };
 
-  function contexte(requete: Record<string, unknown>): ExecutionContext {
+  function contexte(request: Record<string, unknown>): ExecutionContext {
     return {
-      switchToHttp: () => ({ getRequest: () => requete }),
+      switchToHttp: () => ({ getRequest: () => request }),
       getHandler: () => undefined,
       getClass: () => undefined,
     } as unknown as ExecutionContext;
@@ -39,7 +39,7 @@ describe('PermissionsGuard', () => {
 
   function mount(options: {
     permission?: Permission;
-    source?: SourceShop;
+    source?: ShopSource;
     accesTrouve?: { permissions: unknown } | null;
     compteStockCentral?: number;
   }) {

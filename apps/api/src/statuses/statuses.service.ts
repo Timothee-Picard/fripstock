@@ -78,11 +78,11 @@ export class StatusesService {
     });
     if (total === 0) return;
 
-    const autorisee = await this.prisma.statusTransition.findFirst({
+    const allowed = await this.prisma.statusTransition.findFirst({
       where: { sourceId, targetId, source: { companyId } },
       select: { id: true },
     });
-    if (!autorisee) {
+    if (!allowed) {
       const [source, target] = await Promise.all([
         this.prisma.status.findUnique({ where: { id: sourceId }, select: { name: true } }),
         this.prisma.status.findUnique({ where: { id: targetId }, select: { name: true } }),
@@ -113,10 +113,10 @@ export class StatusesService {
   }
 
   private async rejectDuplicateName(currentUser: CurrentUser, name: string) {
-    const existant = await this.prisma.status.findFirst({
+    const existing = await this.prisma.status.findFirst({
       where: { companyId: currentUser.companyId, name },
       select: { id: true },
     });
-    if (existant) throw new ConflictException(`Un statut « ${name} » existe déjà.`);
+    if (existing) throw new ConflictException(`Un statut « ${name} » existe déjà.`);
   }
 }

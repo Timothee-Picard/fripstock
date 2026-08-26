@@ -1,7 +1,7 @@
 import { SetMetadata } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 
-export const SHOP_SOURCE_KEY = 'sourceShop';
+export const SHOP_SOURCE_KEY = 'shopSource';
 
 export type ShopResolver = (
   prisma: PrismaService,
@@ -9,7 +9,7 @@ export type ShopResolver = (
   companyId: string,
 ) => Promise<string | null | undefined>;
 
-export interface SourceShop {
+export interface ShopSource {
   /** Nom du paramètre de route qui porte l'identifiant de la ressource. */
   param: string;
   resolver: ShopResolver;
@@ -26,4 +26,4 @@ export interface SourceShop {
  * devient un moyen de sonder les ressources d'une autre entreprise.
  */
 export const ShopFromResource = (param: string, resolver: ShopResolver) =>
-  SetMetadata(SHOP_SOURCE_KEY, { param, resolver } satisfies SourceShop);
+  SetMetadata(SHOP_SOURCE_KEY, { param, resolver } satisfies ShopSource);

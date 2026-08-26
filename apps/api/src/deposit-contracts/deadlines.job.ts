@@ -17,9 +17,9 @@ export class DeadlinesJob {
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
   async daily(): Promise<void> {
     const result = await this.run();
-    if (result.notifies > 0 || result.expires > 0) {
+    if (result.notified > 0 || result.expired > 0) {
       this.logger.log(
-        `Échéances : ${result.notifies} alerte(s), ${result.expires} contrat(s) expiré(s).`,
+        `Échéances : ${result.notified} alerte(s), ${result.expired} contrat(s) expiré(s).`,
       );
     }
   }
@@ -28,20 +28,20 @@ export class DeadlinesJob {
    * Exposé pour être déclenché à la main (voir POST /deposit-contracts/deadlines,
    * réservé au gérant) : attendre 24 h pour vérifier une alerte serait absurde.
    */
-  async run(maintenant = new Date()): Promise<{ notifies: number; expires: number }> {
-    const actifs = await this.prisma.depositContract.findMany({
+  async run(now = new Date()): Promise<{ notified: number; expired: number }> {
+    const active = await this.prisma.depositContract.findMany({
       where: { status: 'ACTIVE' },
       include: { depositor: { select: { companyId: true, lastName: true, firstName: true } } },
     });
 
-    let notifies = 0;
-    let expires = 0;
+    let notified = 0;
+    let expired = 0;
 
-    for (const contract of actifs) {
-      const seuil = new Date(contract.endDate);
-      seuil.setDate(seuil.getDate() - contract.notifyBeforeDays);
+    for (const contract of active) {
+      const threshold = new Date(contract.endDate);
+      threshold.setDate(threshold.getDate() - contract.notifyBeforeDays);
 
-      if (contract.notifiedAt === null && maintenant >= seuil) {
+      if (contract.notifiedAt === null && now >= threshold) {
         const name = [contract.depositor.firstName, contract.depositor.lastName]
           .filter(Boolean)
           .join(' ');
@@ -50,7 +50,7 @@ export class DeadlinesJob {
             data: {
               // DepositContract n'a pas de companyId : on remonte par le déposant.
               companyId: contract.depositor.companyId,
-              type: 'CONTRAT_ECHEANCE',
+              type: 'CONTRACT_DEADLINE',
               depositContractId: contract.id,
               message: `Le contrat de dépôt de ${name} arrive à échéance le ${contract.endDate.toLocaleDateString('fr-FR')}.`,
             },
@@ -59,21 +59,21 @@ export class DeadlinesJob {
           // l'échéance.
           this.prisma.depositContract.update({
             where: { id: contract.id },
-            data: { notifiedAt: maintenant },
+            data: { notifiedAt: now },
           }),
         ]);
-        notifies += 1;
+        notified += 1;
       }
 
-      if (maintenant > contract.endDate) {
+      if (now > contract.endDate) {
         await this.prisma.depositContract.update({
           where: { id: contract.id },
           data: { status: 'EXPIRED' },
         });
-        expires += 1;
+        expired += 1;
       }
     }
 
-    return { notifies, expires };
+    return { notified, expired };
   }
 }

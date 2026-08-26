@@ -15,7 +15,7 @@ import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { RegisterDto } from './dto/register.dto';
-import type { ChargeJwt } from './jwt.strategy';
+import type { JwtPayload } from './jwt.strategy';
 
 const BCRYPT_COST = 10;
 
@@ -32,8 +32,8 @@ export class AuthService {
    */
   async register(dto: RegisterDto) {
     const email = normalizeEmail(dto.email);
-    const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
-    if (existant) {
+    const existing = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (existing) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
     }
 
@@ -215,9 +215,9 @@ export class AuthService {
   }
 
   private async issueToken(userId: string, companyId: string, isManager: boolean) {
-    const charge: ChargeJwt = { sub: userId, companyId, isManager };
+    const payload: JwtPayload = { sub: userId, companyId, isManager };
     return {
-      accessToken: await this.jwt.signAsync(charge),
+      accessToken: await this.jwt.signAsync(payload),
       user: { id: userId, companyId, isManager },
     };
   }

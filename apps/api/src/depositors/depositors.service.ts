@@ -59,7 +59,7 @@ export class DepositorsService {
       );
     }
     await this.prisma.depositor.delete({ where: { id } });
-    return { supprime: true };
+    return { deleted: true };
   }
 
   /** Produits déposés par ce déposant, tous contrats confondus. */

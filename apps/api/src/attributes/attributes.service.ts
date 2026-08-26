@@ -126,7 +126,7 @@ export class AttributesService {
     }
 
     await this.prisma.attributeDefinition.delete({ where: { id } });
-    return { supprime: true };
+    return { deleted: true };
   }
 
   /**
@@ -204,10 +204,10 @@ export class AttributesService {
     await this.requireAttribute(currentUser, id);
 
     if (dto.categoryIds.length > 0) {
-      const valides = await this.prisma.category.count({
+      const valid = await this.prisma.category.count({
         where: { id: { in: dto.categoryIds }, companyId: currentUser.companyId },
       });
-      if (valides !== dto.categoryIds.length) {
+      if (valid !== dto.categoryIds.length) {
         throw new BadRequestException("Une catégorie citée n'appartient pas à cette entreprise.");
       }
     }
@@ -237,11 +237,11 @@ export class AttributesService {
 
   /** Le schéma impose déjà l'unicité (companyId, nom) : on l'anticipe pour un message clair. */
   private async rejectDuplicateName(currentUser: CurrentUser, name: string) {
-    const existant = await this.prisma.attributeDefinition.findFirst({
+    const existing = await this.prisma.attributeDefinition.findFirst({
       where: { companyId: currentUser.companyId, name },
       select: { id: true },
     });
-    if (existant) {
+    if (existing) {
       throw new ConflictException(`Un attribut « ${name} » existe déjà dans cette entreprise.`);
     }
   }

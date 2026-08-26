@@ -35,19 +35,19 @@ export class CategoriesService {
    * requête récursive, et n récursions coûteraient bien plus cher.
    */
   async tree(currentUser: CurrentUser): Promise<CategoryTree[]> {
-    const plates = await this.list(currentUser);
+    const flat = await this.list(currentUser);
 
-    const parId = new Map<string, CategoryTree>(
-      plates.map((c) => [c.id, { id: c.id, name: c.name, parentId: c.parentId, children: [] }]),
+    const byId = new Map<string, CategoryTree>(
+      flat.map((c) => [c.id, { id: c.id, name: c.name, parentId: c.parentId, children: [] }]),
     );
 
-    const racines: CategoryTree[] = [];
-    for (const noeud of parId.values()) {
-      const parent = noeud.parentId ? parId.get(noeud.parentId) : undefined;
-      if (parent) parent.children.push(noeud);
-      else racines.push(noeud);
+    const roots: CategoryTree[] = [];
+    for (const node of byId.values()) {
+      const parent = node.parentId ? byId.get(node.parentId) : undefined;
+      if (parent) parent.children.push(node);
+      else roots.push(node);
     }
-    return racines;
+    return roots;
   }
 
   async detail(currentUser: CurrentUser, id: string) {
@@ -112,7 +112,7 @@ export class CategoriesService {
     }
 
     await this.prisma.category.delete({ where: { id } });
-    return { supprime: true };
+    return { deleted: true };
   }
 
   /**
@@ -125,11 +125,11 @@ export class CategoriesService {
    */
   async attributesOf(currentUser: CurrentUser, id: string) {
     await this.requireCategory(currentUser, id);
-    const liens = await this.prisma.categoryAttribute.findMany({
+    const links = await this.prisma.categoryAttribute.findMany({
       where: { categoryId: id },
       include: { attribute: { include: { options: { orderBy: { position: 'asc' } } } } },
     });
-    return liens.map((l) => l.attribute).sort((a, b) => a.name.localeCompare(b.name));
+    return links.map((l) => l.attribute).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
@@ -143,10 +143,10 @@ export class CategoriesService {
     await this.requireCategory(currentUser, id);
 
     if (dto.attributeDefinitionIds.length > 0) {
-      const valides = await this.prisma.attributeDefinition.count({
+      const valid = await this.prisma.attributeDefinition.count({
         where: { id: { in: dto.attributeDefinitionIds }, companyId: currentUser.companyId },
       });
-      if (valides !== dto.attributeDefinitionIds.length) {
+      if (valid !== dto.attributeDefinitionIds.length) {
         throw new BadRequestException("Un attribut cité n'appartient pas à cette entreprise.");
       }
     }
@@ -180,11 +180,11 @@ export class CategoriesService {
    * l'arbre se détacherait en boucle, invisible depuis la racine.
    */
   private async rejectCycle(currentUser: CurrentUser, id: string, newParentId: string) {
-    const plates = await this.prisma.category.findMany({
+    const flat = await this.prisma.category.findMany({
       where: { companyId: currentUser.companyId },
       select: { id: true, parentId: true },
     });
-    const parents = new Map(plates.map((c) => [c.id, c.parentId]));
+    const parents = new Map(flat.map((c) => [c.id, c.parentId]));
 
     let cursor: string | null = newParentId;
     while (cursor) {

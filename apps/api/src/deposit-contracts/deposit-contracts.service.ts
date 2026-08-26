@@ -108,11 +108,11 @@ export class DepositContractsService {
     const products = await this.prisma.product.count({ where: { depositContractId: id } });
     if (products > 0) {
       throw new ConflictException(
-        `Ce contrat porte ${products} produit(s). Détachez-les avant de le delete.`,
+        `Ce contrat porte ${products} produit(s). Détachez-les avant de le supprimer.`,
       );
     }
     await this.prisma.depositContract.delete({ where: { id } });
-    return { supprime: true };
+    return { deleted: true };
   }
 
   /**
@@ -132,10 +132,10 @@ export class DepositContractsService {
       throw new BadRequestException("Un produit cité n'appartient pas à votre entreprise.");
     }
 
-    const vendus = products.filter((p) => p.status.isSale);
-    if (vendus.length > 0) {
+    const sold = products.filter((p) => p.status.isSale);
+    if (sold.length > 0) {
       throw new ConflictException(
-        `Déjà vendu(s), ces produits ne peuvent plus changer de contract : ${vendus
+        `Déjà vendu(s), ces produits ne peuvent plus changer de contrat : ${sold
           .map((p) => p.name)
           .join(', ')}.`,
       );

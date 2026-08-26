@@ -15,8 +15,8 @@ export class ManagerGuard implements CanActivate {
     ]);
     if (!managerRequired) return true;
 
-    const requete = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
-    if (!requete.user?.isManager) {
+    const request = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
+    if (!request.user?.isManager) {
       throw new ForbiddenException("Action réservée au gérant de l'entreprise.");
     }
     return true;

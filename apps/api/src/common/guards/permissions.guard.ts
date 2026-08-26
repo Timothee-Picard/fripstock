@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { SHOP_SOURCE_KEY, type SourceShop } from '../decorators/shop-source.decorator';
+import { SHOP_SOURCE_KEY, type ShopSource } from '../decorators/shop-source.decorator';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import { readPermissions, type Permission } from '../permissions';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -39,14 +39,14 @@ export class PermissionsGuard implements CanActivate {
     ]);
     if (!permission) return true;
 
-    const requete = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
-    const user = requete.user;
+    const request = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
+    const user = request.user;
     if (!user) throw new ForbiddenException('Authentification requise.');
 
     // Le gérant a tous les droits sur toutes les boutiques de son entreprise.
     if (user.isManager) return true;
 
-    const shopId = await this.findShop(context, requete, user);
+    const shopId = await this.findShop(context, request, user);
 
     if (shopId === null) {
       // Cas 3 : stock central.
@@ -81,17 +81,17 @@ export class PermissionsGuard implements CanActivate {
   /** Renvoie l'identifiant de boutique visé, ou `null` pour le stock central. */
   private async findShop(
     context: ExecutionContext,
-    requete: Request,
+    request: Request,
     user: CurrentUser,
   ): Promise<string | null> {
-    const source = this.reflector.getAllAndOverride<SourceShop | undefined>(SHOP_SOURCE_KEY, [
+    const source = this.reflector.getAllAndOverride<ShopSource | undefined>(SHOP_SOURCE_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
     // Cas 2 : la boutique se déduit d'une ressource ciblée par l'URL.
     if (source) {
-      const params = requete.params as Record<string, string | undefined>;
+      const params = request.params as Record<string, string | undefined>;
       const id = params[source.param];
       if (!id) return null;
       const trouve = await source.resolver(this.prisma, id, user.companyId);
@@ -99,9 +99,9 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Cas 1 : shopId explicite.
-    const params = requete.params as Record<string, unknown>;
-    const body = (requete.body ?? {}) as Record<string, unknown>;
-    const query = requete.query as Record<string, unknown>;
+    const params = request.params as Record<string, unknown>;
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const query = request.query as Record<string, unknown>;
     for (const source of [params, body, query]) {
       const value = source['shopId'];
       if (typeof value === 'string' && value.length > 0) return value;

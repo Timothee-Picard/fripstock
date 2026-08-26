@@ -43,8 +43,8 @@ export class UsersService {
 
   async invite(currentUser: CurrentUser, dto: InviteUserDto) {
     const email = normalizeEmail(dto.email);
-    const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
-    if (existant) {
+    const existing = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (existing) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
     }
 
@@ -82,10 +82,10 @@ export class UsersService {
 
     // Les boutiques citées doivent appartenir à l'entreprise du gérant : sinon
     // on donnerait accès à la boutique d'une autre entreprise.
-    const valides = await this.prisma.shop.count({
+    const valid = await this.prisma.shop.count({
       where: { id: { in: shopIds }, companyId: currentUser.companyId },
     });
-    if (valides !== shopIds.length) {
+    if (valid !== shopIds.length) {
       throw new BadRequestException("Une boutique citée n'appartient pas à cette entreprise.");
     }
 
@@ -108,7 +108,7 @@ export class UsersService {
   async delete(currentUser: CurrentUser, userId: string) {
     const target = await this.findEmployee(currentUser, userId);
     await this.prisma.user.delete({ where: { id: target.id } });
-    return { supprime: true };
+    return { deleted: true };
   }
 
   /**
