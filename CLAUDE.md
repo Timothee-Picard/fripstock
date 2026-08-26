@@ -77,8 +77,11 @@ Entreprise (le compte parent, un gérant)
 
 ## Statuts — customisables mais avec comportement métier
 
-- Les statuts (`Statut`) sont définis par entreprise et **personnalisables par le gérant**
-  (créer, renommer, réordonner, changer la couleur). Statuts de base à seeder à la création
+- Les statuts (`Statut`) sont définis par entreprise. Le gérant en ajuste le **libellé, la
+  couleur et le choix de celui par défaut** — mais ne peut ni en créer ni en supprimer :
+  le flux (`TransitionStatut`) les référence, un statut ajouté n'aurait aucune flèche et
+  resterait inatteignable. C'est précisément pour ça que le comportement tient à des flags
+  et non aux noms. Statuts de base à seeder à la création
   d'une entreprise : "En stock", "En rayon", "Réservé", "Vendu", "Rendu au client",
   "Retiré".
 - Trois flags booléens sur `Statut`, non désactivables par l'UI mais définis à la création
@@ -105,6 +108,11 @@ Entreprise (le compte parent, un gérant)
   | Rendu au client | ✗          | ✓             | ✓           |
   | Retiré          | ✗          | ✓             | ✓           |
 
+- Un **flux** (`TransitionStatut`) dit quels passages sont autorisés d'un statut à l'autre.
+  Il est posé à la création de l'entreprise et n'est pas modifiable ; l'écran des statuts
+  l'affiche en lecture seule. Les règles de flags s'appliquent **par-dessus** le flux,
+  jamais à sa place. Repli : tant qu'aucune transition n'existe, tous les passages sont
+  permis — un graphe vide bloquerait tout le stock.
 - Chaque changement de statut est tracé dans `HistoriqueStatut` (produit, statut, qui,
   quand, note optionnelle).
 - Quand un produit passe à un statut avec `bloqueVente = true` (ex: "Rendu au client"),

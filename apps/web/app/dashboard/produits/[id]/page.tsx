@@ -50,7 +50,15 @@ export default async function PageFicheProduit({ params }: { params: Promise<{ i
             <span>{produit.categorie.nom}</span>
           </p>
         </div>
-        <BoutonSupprimerProduit produitId={produit.id} nom={produit.nom} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/dashboard/produits/${produit.id}/modifier`}
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Modifier
+          </Link>
+          <BoutonSupprimerProduit produitId={produit.id} nom={produit.nom} />
+        </div>
       </div>
 
       {produit.statut.bloqueVente ? (

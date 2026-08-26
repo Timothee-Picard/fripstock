@@ -32,7 +32,14 @@ export function ChangementStatut({
   compact?: boolean;
 }) {
   const [etat, action, enCours] = useActionState(changerStatut, ETAT_INITIAL);
-  const [cibleId, setCibleId] = useState('');
+  // Le choix est mémorisé avec le marqueur de succès en cours au moment où il a
+  // été fait. Dès qu'un nouveau succès arrive, les deux divergent et le
+  // sélecteur repart vide — sinon le statut choisi resterait affiché après la
+  // vente, avec son champ de prix, comme s'il restait quelque chose à valider.
+  const [choix, setChoix] = useState({ id: '', apres: '' });
+  const jeton = etat.jeton ?? '';
+  const cibleId = choix.apres === jeton ? choix.id : '';
+  const setCibleId = (id: string) => setChoix({ id, apres: jeton });
 
   const cible = statuts.find((s) => s.id === cibleId);
   const bloque = statutActuel.bloqueVente;

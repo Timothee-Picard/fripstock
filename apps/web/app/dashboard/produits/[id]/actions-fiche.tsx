@@ -42,7 +42,16 @@ export function AssignationBoutique({
   );
 }
 
-export function BoutonSupprimerProduit({ produitId, nom }: { produitId: string; nom: string }) {
+export function BoutonSupprimerProduit({
+  produitId,
+  nom,
+  discret = false,
+}: {
+  produitId: string;
+  nom: string;
+  /** Rendu en lien plutôt qu'en bouton, pour tenir dans une ligne de tableau. */
+  discret?: boolean;
+}) {
   const [etat, action, enCours] = useActionState(supprimerProduit, ETAT_INITIAL);
 
   return (
@@ -51,11 +60,22 @@ export function BoutonSupprimerProduit({ produitId, nom }: { produitId: string; 
       onSubmit={(e) => {
         if (!confirm(`Supprimer « ${nom} » ? Cette action est définitive.`)) e.preventDefault();
       }}
+      className={discret ? 'inline' : undefined}
     >
       <input type="hidden" name="id" value={produitId} />
-      <Bouton type="submit" variante="danger" disabled={enCours}>
-        {enCours ? '…' : 'Supprimer'}
-      </Bouton>
+      {discret ? (
+        <button
+          type="submit"
+          disabled={enCours}
+          className="text-sm text-red-700 underline underline-offset-2 transition hover:text-red-900 disabled:text-slate-400"
+        >
+          {enCours ? '…' : 'Supprimer'}
+        </button>
+      ) : (
+        <Bouton type="submit" variante="danger" disabled={enCours}>
+          {enCours ? '…' : 'Supprimer'}
+        </Bouton>
+      )}
       {etat.erreur ? <p className="mt-1 text-xs text-red-700">{etat.erreur}</p> : null}
     </form>
   );

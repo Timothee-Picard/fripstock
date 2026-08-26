@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BoutonSupprimerProduit } from './[id]/actions-fiche';
 import { ChangementStatut } from './changement-statut';
 import { Filtres } from './filtres';
 import { BadgeStatut } from '@/components/badge-statut';
@@ -85,7 +86,7 @@ export default async function PageProduitsListe({
                 <th className="px-3 py-2 font-medium">Boutique</th>
                 <th className="px-3 py-2 font-medium">Prix</th>
                 <th className="px-3 py-2 font-medium">Statut</th>
-                <th className="px-3 py-2 font-medium">Action rapide</th>
+                <th className="px-3 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -139,14 +140,37 @@ export default async function PageProduitsListe({
                     <BadgeStatut statut={p.statut} />
                   </td>
                   <td className="px-3 py-2">
-                    <ChangementStatut
-                      produitId={p.id}
-                      statutActuel={p.statut}
-                      statuts={statuts}
-                      prixVente={p.prixVente}
-                      prixVendu={p.prixVendu}
-                      compact
-                    />
+                    <div className="flex flex-col items-start gap-1.5">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Link
+                          href={`/dashboard/produits/${p.id}`}
+                          className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
+                        >
+                          Voir
+                        </Link>
+                        <span className="text-slate-300" aria-hidden>
+                          |
+                        </span>
+                        <Link
+                          href={`/dashboard/produits/${p.id}/modifier`}
+                          className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
+                        >
+                          Modifier
+                        </Link>
+                        <span className="text-slate-300" aria-hidden>
+                          |
+                        </span>
+                        <BoutonSupprimerProduit produitId={p.id} nom={p.nom} discret />
+                      </div>
+                      <ChangementStatut
+                        produitId={p.id}
+                        statutActuel={p.statut}
+                        statuts={statuts}
+                        prixVente={p.prixVente}
+                        prixVendu={p.prixVendu}
+                        compact
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

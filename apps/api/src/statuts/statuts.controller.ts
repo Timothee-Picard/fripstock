@@ -1,16 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { Utilisateur } from '../common/decorators/current-user.decorator';
 import { GerantUniquement } from '../common/decorators/gerant.decorator';
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
-import { CreerStatutDto } from './dto/creer-statut.dto';
-import { EnregistrerFluxDto } from './dto/enregistrer-flux.dto';
 import { ModifierStatutDto } from './dto/modifier-statut.dto';
 import { StatutsService } from './statuts.service';
 
 /**
- * Les statuts sont personnalisables **par le gérant** (voir CLAUDE.md) : pas de
- * clé de permission fine ici, même traitement que les boutiques. La lecture
- * reste ouverte, tout le monde a besoin de la liste pour afficher un produit.
+ * Les six statuts de base et leur flux sont posés à la création de l'entreprise
+ * et ne sont ni créés ni supprimés ensuite : le flux les référence, un statut
+ * ajouté n'aurait aucune flèche et resterait inatteignable.
+ *
+ * Le gérant garde le libellé, la couleur et le choix du statut par défaut —
+ * c'est justement pour ça que le comportement tient à des flags et non aux
+ * noms. Pas de permission fine ici, même traitement que les boutiques ; la
+ * lecture reste ouverte, tout le monde a besoin de la liste.
  */
 @Controller('statuts')
 export class StatutsController {
@@ -19,22 +22,6 @@ export class StatutsController {
   @Get()
   lister(@Utilisateur() courant: UtilisateurCourant) {
     return this.statuts.lister(courant);
-  }
-
-  /**
-   * Enregistre le schéma du flux — positions et flèches — en un seul appel.
-   * Route littérale déclarée avant @Put(':id') pour ne pas être avalée.
-   */
-  @Put('flux')
-  @GerantUniquement()
-  enregistrerFlux(@Utilisateur() courant: UtilisateurCourant, @Body() dto: EnregistrerFluxDto) {
-    return this.statuts.enregistrerFlux(courant, dto);
-  }
-
-  @Post()
-  @GerantUniquement()
-  creer(@Utilisateur() courant: UtilisateurCourant, @Body() dto: CreerStatutDto) {
-    return this.statuts.creer(courant, dto);
   }
 
   @Put(':id')
@@ -51,11 +38,5 @@ export class StatutsController {
   @GerantUniquement()
   definirParDefaut(@Utilisateur() courant: UtilisateurCourant, @Param('id') id: string) {
     return this.statuts.definirParDefaut(courant, id);
-  }
-
-  @Delete(':id')
-  @GerantUniquement()
-  supprimer(@Utilisateur() courant: UtilisateurCourant, @Param('id') id: string) {
-    return this.statuts.supprimer(courant, id);
   }
 }

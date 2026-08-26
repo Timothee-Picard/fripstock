@@ -11,7 +11,14 @@ import type { AttributDefinition } from '@/lib/types';
  * même règle et refuse un attribut inapplicable, l'affichage n'est qu'un
  * confort.
  */
-export function AttributsDynamiques({ categorieId }: { categorieId: string }) {
+export function AttributsDynamiques({
+  categorieId,
+  valeurs = {},
+}: {
+  categorieId: string;
+  /** Valeurs déjà saisies, par identifiant d'attribut (édition d'un produit). */
+  valeurs?: Record<string, string[]>;
+}) {
   // On mémorise la catégorie chargée avec ses attributs : comparer les deux en
   // rendu suffit à savoir si l'affichage est à jour, sans poser d'état
   // synchrone dans l'effet — ce qui déclencherait un rendu en cascade.
@@ -63,14 +70,30 @@ export function AttributsDynamiques({ categorieId }: { categorieId: string }) {
         <label key={a.id} className="block">
           <span className="mb-1 block text-sm font-medium text-slate-800">{a.nom}</span>
 
-          {a.type === 'TEXT' ? <input name={`attr:${a.id}`} className={classe} /> : null}
+          {a.type === 'TEXT' ? (
+            <input
+              name={`attr:${a.id}`}
+              defaultValue={valeurs[a.id]?.[0] ?? ''}
+              className={classe}
+            />
+          ) : null}
 
           {a.type === 'NUMBER' ? (
-            <input name={`attr:${a.id}`} type="number" step="any" className={classe} />
+            <input
+              name={`attr:${a.id}`}
+              type="number"
+              step="any"
+              defaultValue={valeurs[a.id]?.[0] ?? ''}
+              className={classe}
+            />
           ) : null}
 
           {a.type === 'BOOLEAN' ? (
-            <select name={`attr:${a.id}`} defaultValue="" className={classe}>
+            <select
+              name={`attr:${a.id}`}
+              defaultValue={valeurs[a.id]?.[0] ?? ''}
+              className={classe}
+            >
               <option value="">—</option>
               <option value="true">Oui</option>
               <option value="false">Non</option>
@@ -78,7 +101,11 @@ export function AttributsDynamiques({ categorieId }: { categorieId: string }) {
           ) : null}
 
           {a.type === 'SELECT' ? (
-            <select name={`attr:${a.id}`} defaultValue="" className={classe}>
+            <select
+              name={`attr:${a.id}`}
+              defaultValue={valeurs[a.id]?.[0] ?? ''}
+              className={classe}
+            >
               <option value="">—</option>
               {a.options.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -96,6 +123,7 @@ export function AttributsDynamiques({ categorieId }: { categorieId: string }) {
                     type="checkbox"
                     name={`attr:${a.id}`}
                     value={o.id}
+                    defaultChecked={valeurs[a.id]?.includes(o.id)}
                     className="size-4 rounded border-slate-400 accent-slate-900"
                   />
                   {o.valeur}

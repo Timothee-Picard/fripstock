@@ -186,8 +186,10 @@ changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
 ## Produits
 
-Trois écrans : la liste filtrée (`/dashboard/produits`), la création
-(`/dashboard/produits/nouveau`) et la fiche (`/dashboard/produits/:id`). Les filtres vivent
+Quatre écrans : la liste filtrée (`/dashboard/produits`), la création
+(`/dashboard/produits/nouveau`), la fiche (`/dashboard/produits/:id`) et sa modification
+(`.../modifier`). Chaque ligne de la liste porte ses actions — voir, modifier, supprimer —
+le changement de statut venant en dessous, plus discret. Les filtres vivent
 dans l'URL, donc la vue reste partageable et le retour arrière fonctionne.
 
 **Le formulaire s'adapte à la catégorie** : les champs d'attributs sont chargés depuis
@@ -214,26 +216,25 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 `/dashboard/statuts` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
 Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule.
 
-**L'écran est un canevas plein écran** (`@xyflow/react`) avec une barre d'outils
-contextuelle : on sélectionne un statut pour le renommer, le recolorer, le désigner par
-défaut ou le supprimer ; on sélectionne une flèche pour la retirer. Ajouter un statut se
-fait par le bouton de la barre.
+**L'écran affiche le cycle de vie** sur un schéma plein écran (`@xyflow/react`), en
+**lecture seule**. On clique un statut pour changer son libellé, sa couleur, ou en faire
+celui attribué par défaut — rien d'autre.
 
-On déplace les statuts au glisser-déposer, et on tire un trait du point droit de l'un vers
-le point gauche d'un autre pour autoriser ce passage. **Maj + glisser** sélectionne
-plusieurs éléments, **Ctrl + clic** en ajoute un.
+Ni création ni suppression de statut : le flux les référence, un statut ajouté n'aurait
+aucune flèche et resterait inatteignable, sans que rien ne le signale. Le libellé, lui,
+reste libre : c'est exactement pourquoi le comportement tient à des flags.
 
-Les flèches de retour — « Vendu » qui revient « En rayon », par exemple — passent **sous**
-les statuts plutôt qu'à travers. Le détour n'est pas fixe : il descend sous le plus bas des
-statuts effectivement situés dans le couloir parcouru, sinon la flèche traverserait celui
-du dessous.
+Les flèches de retour — « Vendu » qui revient « En rayon » — passent **sous** les statuts
+plutôt qu'à travers. Le détour n'est pas fixe : il descend sous le plus bas des statuts
+effectivement situés dans le couloir parcouru, sinon la flèche traverserait celui du
+dessous.
 
-Une nouvelle entreprise reçoit **un flux de départ déjà tracé** (15 transitions) et des
-positions cohérentes : le parcours normal de gauche à droite, les sorties en dessous. Le
-schéma ne s'ouvre donc jamais vide.
+Une entreprise reçoit son flux à la création : 15 transitions et des positions cohérentes,
+le parcours normal de gauche à droite, les sorties en dessous.
 
-Le repli reste permissif si le gérant efface tout : **tant qu'aucune flèche n'est tracée,
-tous les passages redeviennent permis**. Imposer un graphe vide bloquerait le stock de toutes les
+Le repli permissif reste dans le code — **sans aucune transition, tous les passages sont
+permis** — parce qu'une entreprise créée avant cette table n'en a pas, et qu'un graphe vide
+bloquerait tout son stock. Imposer un graphe vide bloquerait le stock de toutes les
 entreprises existantes, et un gérant qui oublie une flèche coincerait la sienne. Dès la
 première flèche enregistrée, seuls les chemins tracés sont acceptés — et un statut sans
 flèche sortante devient un point d'arrivée.

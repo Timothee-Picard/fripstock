@@ -7,8 +7,8 @@ import { useState } from 'react';
  * produit est ensuite créé en JSON, sans multipart. La clé pointe sur un objet
  * MinIO privé, jamais sur une URL publique.
  */
-export function ChampPhoto() {
-  const [cle, setCle] = useState('');
+export function ChampPhoto({ cleInitiale = '' }: { cleInitiale?: string }) {
+  const [cle, setCle] = useState(cleInitiale);
   const [erreur, setErreur] = useState('');
   const [enCours, setEnCours] = useState(false);
 

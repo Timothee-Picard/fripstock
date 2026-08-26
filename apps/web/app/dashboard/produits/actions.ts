@@ -1,12 +1,20 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { appelApi, ErreurApi } from '@/lib/api';
 
 export interface EtatProduit {
   erreur?: string;
   succes?: string;
+  /**
+   * Marqueur unique par succès. Il permet à un formulaire de savoir qu'une
+   * nouvelle réussite est arrivée — le libellé de succès, lui, est identique
+   * d'une fois sur l'autre — et donc de dériver sa remise à zéro plutôt que de
+   * la poser dans un effet.
+   */
+  jeton?: string;
 }
 
 function message(erreur: unknown, defaut: string): EtatProduit {
@@ -100,7 +108,7 @@ export async function changerStatut(_etat: EtatProduit, donnees: FormData): Prom
 
   revalidatePath('/dashboard/produits');
   revalidatePath(`/dashboard/produits/${id}`);
-  return { succes: 'Statut mis à jour.' };
+  return { succes: 'Statut mis à jour.', jeton: randomUUID() };
 }
 
 export async function assignerBoutique(
@@ -135,4 +143,42 @@ export async function supprimerProduit(
   }
   revalidatePath('/dashboard/produits');
   redirect('/dashboard/produits');
+}
+
+/**
+ * Modification d'un produit existant.
+ *
+ * Les attributs sont renvoyés en entier : l'API les revalide contre la
+ * catégorie finale, qui a pu changer et rendre certains inapplicables.
+ */
+export async function modifierProduit(_etat: EtatProduit, donnees: FormData): Promise<EtatProduit> {
+  const id = String(donnees.get('id'));
+  const boutiqueId = String(donnees.get('boutiqueId') ?? '');
+  const typeVente = String(donnees.get('typeVente') ?? 'ACHAT_REVENTE');
+
+  try {
+    await appelApi(`/produits/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        nom: String(donnees.get('nom') ?? '').trim(),
+        categorieId: String(donnees.get('categorieId') ?? ''),
+        typeVente,
+        boutiqueId: boutiqueId || null,
+        reference: String(donnees.get('reference') ?? '').trim(),
+        description: String(donnees.get('description') ?? '').trim(),
+        commentaire: String(donnees.get('commentaire') ?? '').trim(),
+        photoUrl: String(donnees.get('photoUrl') ?? '').trim(),
+        prixAchat: typeVente === 'ACHAT_REVENTE' ? nombreOuRien(donnees, 'prixAchat') : undefined,
+        prixVente: nombreOuRien(donnees, 'prixVente'),
+        quantite: nombreOuRien(donnees, 'quantite'),
+        attributs: lireAttributs(donnees),
+      }),
+    });
+  } catch (erreur) {
+    return message(erreur, 'Modification impossible.');
+  }
+
+  revalidatePath('/dashboard/produits');
+  revalidatePath(`/dashboard/produits/${id}`);
+  redirect(`/dashboard/produits/${id}`);
 }
