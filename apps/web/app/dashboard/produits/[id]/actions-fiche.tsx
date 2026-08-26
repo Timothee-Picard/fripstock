@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { assignerBoutique, supprimerProduit, type EtatProduit } from '../actions';
 import { Alerte, Bouton } from '@/components/champ';
+import { IconeSupprimer } from '@/components/icones';
 import type { Boutique } from '@/lib/types';
 
 const ETAT_INITIAL: EtatProduit = {};
@@ -67,9 +68,11 @@ export function BoutonSupprimerProduit({
         <button
           type="submit"
           disabled={enCours}
-          className="text-sm text-red-700 underline underline-offset-2 transition hover:text-red-900 disabled:text-slate-400"
+          title="Supprimer"
+          aria-label={`Supprimer ${nom}`}
+          className="rounded p-1.5 text-slate-600 transition hover:bg-red-50 hover:text-red-700 disabled:text-slate-400"
         >
-          {enCours ? '…' : 'Supprimer'}
+          {enCours ? '…' : <IconeSupprimer />}
         </button>
       ) : (
         <Bouton type="submit" variante="danger" disabled={enCours}>

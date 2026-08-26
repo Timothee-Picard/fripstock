@@ -8,6 +8,7 @@ import { ChangerStatutDto } from './dto/changer-statut.dto';
 import { CreerProduitDto } from './dto/creer-produit.dto';
 import { FiltrerProduitsDto } from './dto/filtrer-produits.dto';
 import { ModifierProduitDto } from './dto/modifier-produit.dto';
+import { ModifierVenteDto } from './dto/modifier-vente.dto';
 import { boutiqueDuProduit, ProduitsService } from './produits.service';
 
 /**
@@ -65,6 +66,18 @@ export class ProduitsController {
     @Body() dto: AssignerBoutiqueDto,
   ) {
     return this.produits.assignerBoutique(courant, id, dto);
+  }
+
+  /** Corrige une vente déjà enregistrée : prix encaissé, date, commission. */
+  @Put(':id/vente')
+  @RequirePermission('produits.modifier')
+  @BoutiqueDepuisRessource('id', boutiqueDuProduit)
+  modifierVente(
+    @Utilisateur() courant: UtilisateurCourant,
+    @Param('id') id: string,
+    @Body() dto: ModifierVenteDto,
+  ) {
+    return this.produits.modifierVente(courant, id, dto);
   }
 
   @Put(':id/statut')

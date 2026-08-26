@@ -50,9 +50,34 @@ export function FormulaireModification({
   const classe =
     'w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900';
 
+  // Les mêmes boutons en haut et en bas : le formulaire est long, et en haut
+  // ils tombent à l'endroit exact où la fiche affiche « Modifier ».
+  const actions = (
+    <div className="flex items-center gap-3">
+      <Bouton type="submit" disabled={enCours}>
+        {enCours ? 'Enregistrement…' : 'Enregistrer'}
+      </Bouton>
+      <Link
+        href={`/dashboard/produits/${produit.id}`}
+        className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+      >
+        Annuler
+      </Link>
+    </div>
+  );
+
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="id" value={produit.id} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <p className="text-sm text-slate-600">
+          Le prix encaissé et le statut se modifient depuis la fiche, pour que l&apos;historique
+          reste juste.
+        </p>
+        {actions}
+      </div>
+
       {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
 
       <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
@@ -166,24 +191,9 @@ export function FormulaireModification({
             defaultValue={produit.quantite}
           />
         </div>
-
-        <p className="text-xs text-slate-600">
-          Le prix encaissé et le statut ne se modifient pas ici : ils passent par le changement de
-          statut, qui trace l&apos;historique.
-        </p>
       </section>
 
-      <div className="flex items-center gap-3">
-        <Bouton type="submit" disabled={enCours}>
-          {enCours ? 'Enregistrement…' : 'Enregistrer'}
-        </Bouton>
-        <Link
-          href={`/dashboard/produits/${produit.id}`}
-          className="text-sm text-slate-600 underline"
-        >
-          Annuler
-        </Link>
-      </div>
+      {actions}
     </form>
   );
 }

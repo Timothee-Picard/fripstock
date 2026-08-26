@@ -17,10 +17,12 @@ export default async function PageModifierProduit({ params }: { params: Promise<
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <Link href={`/dashboard/produits/${id}`} className="text-sm text-slate-600 underline">
-          ← {produit.nom}
+        {/* Retour à la liste et non à la fiche : c'est de là qu'on vient, et
+            l'aller-retour fiche → modification → fiche piégeait la navigation. */}
+        <Link href="/dashboard/produits" className="text-sm text-slate-600 underline">
+          ← Produits
         </Link>
-        <h1 className="mt-1 text-xl font-semibold text-slate-900">Modifier le produit</h1>
+        <h1 className="mt-1 text-xl font-semibold text-slate-900">Modifier « {produit.nom} »</h1>
       </div>
       <FormulaireModification produit={produit} arbre={arbre} boutiques={boutiques} />
     </div>

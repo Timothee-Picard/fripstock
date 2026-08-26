@@ -188,8 +188,16 @@ changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
 Quatre écrans : la liste filtrée (`/dashboard/produits`), la création
 (`/dashboard/produits/nouveau`), la fiche (`/dashboard/produits/:id`) et sa modification
-(`.../modifier`). Chaque ligne de la liste porte ses actions — voir, modifier, supprimer —
-le changement de statut venant en dessous, plus discret. Les filtres vivent
+(`.../modifier`). Chaque ligne de la liste porte trois icônes — voir, modifier, supprimer —
+avec libellé en infobulle et pour les lecteurs d'écran. Le changement de statut se fait
+depuis la fiche, où l'on voit ce qu'on change.
+
+**Corriger une vente déjà enregistrée** (prix encaissé, date, commission) se fait depuis la
+fiche, par `PUT /produits/:id/vente`. C'est volontairement distinct du changement de
+statut : on rectifie une saisie, on ne fait pas franchir une étape au produit, et
+l'historique ne bouge pas. Un produit dont le statut n'est plus un statut de vente — rendu
+au client, retiré — n'est pas corrigeable, conformément à la règle `bloqueVente` de
+`CLAUDE.md`. La commission n'apparaît qu'en dépôt-vente. Les filtres vivent
 dans l'URL, donc la vue reste partageable et le retour arrière fonctionne.
 
 **Le formulaire s'adapte à la catégorie** : les champs d'attributs sont chargés depuis

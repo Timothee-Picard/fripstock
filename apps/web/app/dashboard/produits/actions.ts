@@ -182,3 +182,33 @@ export async function modifierProduit(_etat: EtatProduit, donnees: FormData): Pr
   revalidatePath(`/dashboard/produits/${id}`);
   redirect(`/dashboard/produits/${id}`);
 }
+
+/**
+ * Corrige une vente déjà enregistrée : prix encaissé, date, commission.
+ *
+ * Distinct du changement de statut, qui trace l'historique : ici on rectifie
+ * une saisie, on ne fait pas franchir une étape au produit.
+ */
+export async function modifierVente(_etat: EtatProduit, donnees: FormData): Promise<EtatProduit> {
+  const id = String(donnees.get('id'));
+  const commission = nombreOuRien(donnees, 'commissionAppliquee');
+
+  try {
+    await appelApi(`/produits/${id}/vente`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        prixVendu: nombreOuRien(donnees, 'prixVendu'),
+        dateVente: String(donnees.get('dateVente') ?? '')
+          ? new Date(String(donnees.get('dateVente'))).toISOString()
+          : undefined,
+        ...(commission !== undefined ? { commissionAppliquee: commission } : {}),
+      }),
+    });
+  } catch (erreur) {
+    return message(erreur, 'Correction impossible.');
+  }
+
+  revalidatePath('/dashboard/produits');
+  revalidatePath(`/dashboard/produits/${id}`);
+  return { succes: 'Vente corrigée.', jeton: randomUUID() };
+}

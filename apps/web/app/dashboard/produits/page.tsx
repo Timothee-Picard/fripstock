@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { BoutonSupprimerProduit } from './[id]/actions-fiche';
-import { ChangementStatut } from './changement-statut';
+import { IconeModifier, IconeVoir } from '@/components/icones';
 import { Filtres } from './filtres';
 import { BadgeStatut } from '@/components/badge-statut';
 import { appelApi } from '@/lib/api';
@@ -140,36 +140,26 @@ export default async function PageProduitsListe({
                     <BadgeStatut statut={p.statut} />
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex flex-col items-start gap-1.5">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Link
-                          href={`/dashboard/produits/${p.id}`}
-                          className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
-                        >
-                          Voir
-                        </Link>
-                        <span className="text-slate-300" aria-hidden>
-                          |
-                        </span>
-                        <Link
-                          href={`/dashboard/produits/${p.id}/modifier`}
-                          className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
-                        >
-                          Modifier
-                        </Link>
-                        <span className="text-slate-300" aria-hidden>
-                          |
-                        </span>
-                        <BoutonSupprimerProduit produitId={p.id} nom={p.nom} discret />
-                      </div>
-                      <ChangementStatut
-                        produitId={p.id}
-                        statutActuel={p.statut}
-                        statuts={statuts}
-                        prixVente={p.prixVente}
-                        prixVendu={p.prixVendu}
-                        compact
-                      />
+                    {/* Icônes seules, mais chacune porte son libellé pour les
+                        lecteurs d'écran et en infobulle. */}
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/dashboard/produits/${p.id}`}
+                        title="Voir la fiche"
+                        aria-label={`Voir ${p.nom}`}
+                        className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        <IconeVoir />
+                      </Link>
+                      <Link
+                        href={`/dashboard/produits/${p.id}/modifier`}
+                        title="Modifier"
+                        aria-label={`Modifier ${p.nom}`}
+                        className="rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        <IconeModifier />
+                      </Link>
+                      <BoutonSupprimerProduit produitId={p.id} nom={p.nom} discret />
                     </div>
                   </td>
                 </tr>

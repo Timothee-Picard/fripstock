@@ -19,6 +19,7 @@ import type { ChangerStatutDto } from './dto/changer-statut.dto';
 import type { CreerProduitDto } from './dto/creer-produit.dto';
 import type { FiltrerProduitsDto } from './dto/filtrer-produits.dto';
 import type { ModifierProduitDto } from './dto/modifier-produit.dto';
+import type { ModifierVenteDto } from './dto/modifier-vente.dto';
 import type { ValeurAttributDto } from './dto/valeur-attribut.dto';
 
 const PAR_PAGE_DEFAUT = 25;
@@ -335,6 +336,47 @@ export class ProduitsService {
         },
       }),
     ]);
+
+    return this.detail(courant, id);
+  }
+
+  /**
+   * Corrige les données de vente d'un produit déjà vendu : prix encaissé, date,
+   * et commission appliquée en dépôt-vente.
+   *
+   * Un produit dont le statut porte `bloqueVente` en est exclu — c'est la règle
+   * de CLAUDE.md : rendu au client, son prix vendu ne se modifie plus.
+   */
+  async modifierVente(courant: UtilisateurCourant, id: string, dto: ModifierVenteDto) {
+    const produit = await this.chargerPourEcriture(courant, id);
+    const statut = await this.prisma.statut.findUniqueOrThrow({
+      where: { id: produit.statutId },
+    });
+
+    if (!statut.estVente) {
+      throw new BadRequestException(
+        `« ${statut.nom} » n'est pas un statut de vente : il n'y a pas de vente à corriger.`,
+      );
+    }
+    if (statut.bloqueVente) {
+      throw new ForbiddenException(
+        `Ce produit est « ${statut.nom} » : ses données de vente ne peuvent plus être modifiées.`,
+      );
+    }
+    if (dto.commissionAppliquee !== undefined && produit.typeVente !== 'DEPOT_VENTE') {
+      throw new BadRequestException("La commission ne s'applique qu'aux produits en dépôt-vente.");
+    }
+
+    await this.prisma.produit.update({
+      where: { id },
+      data: {
+        ...(dto.prixVendu !== undefined ? { prixVendu: dto.prixVendu } : {}),
+        ...(dto.dateVente !== undefined ? { dateVente: new Date(dto.dateVente) } : {}),
+        ...(dto.commissionAppliquee !== undefined
+          ? { commissionAppliquee: dto.commissionAppliquee }
+          : {}),
+      },
+    });
 
     return this.detail(courant, id);
   }

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AssignationBoutique, BoutonSupprimerProduit } from './actions-fiche';
+import { CorrectionVente } from './correction-vente';
 import { ChangementStatut } from '../changement-statut';
 import { BadgeStatut } from '@/components/badge-statut';
 import { appelApi } from '@/lib/api';
@@ -104,6 +105,9 @@ export default async function PageFicheProduit({ params }: { params: Promise<{ i
               ) : null}
               <Ligne libelle="Quantité">{produit.quantite}</Ligne>
             </dl>
+            <div className="mt-3">
+              <CorrectionVente produit={produit} />
+            </div>
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-5">
