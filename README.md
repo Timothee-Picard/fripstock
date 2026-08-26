@@ -207,8 +207,8 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 
 ### Statuts
 
-`/dashboard/statuts` n'existe pas encore, mais l'API est là. Le CRUD est réservé au
-gérant, sans permission fine. Les trois flags comportementaux (`estVente`, `bloqueVente`,
+`/dashboard/statuts` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
+Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule. Les trois flags comportementaux (`estVente`, `bloqueVente`,
 `sortStock`) se fixent à la création et **ne sont plus modifiables** : des produits
 s'appuient dessus, les basculer sous eux réécrirait leur histoire métier.
 
