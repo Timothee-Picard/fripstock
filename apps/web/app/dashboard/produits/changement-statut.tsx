@@ -18,11 +18,17 @@ export function ChangementStatut({
   produitId,
   statutActuel,
   statuts,
+  prixVente,
+  prixVendu,
   compact = false,
 }: {
   produitId: string;
   statutActuel: Statut;
   statuts: Statut[];
+  /** Prix affiché sur l'étiquette. */
+  prixVente: string | null;
+  /** Prix déjà encaissé, si le produit a déjà été vendu. */
+  prixVendu: string | null;
   compact?: boolean;
 }) {
   const [etat, action, enCours] = useActionState(changerStatut, ETAT_INITIAL);
@@ -71,14 +77,21 @@ export function ChangementStatut({
       </select>
 
       {cible?.estVente ? (
-        <input
-          name="prixVendu"
-          type="text"
-          inputMode="decimal"
-          required
-          placeholder="Prix vendu"
-          className="w-28 rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500"
-        />
+        <label className="flex items-center gap-1.5 text-sm text-slate-700">
+          <span className="whitespace-nowrap">Encaissé</span>
+          <input
+            name="prixVendu"
+            type="text"
+            inputMode="decimal"
+            required
+            // Pré-rempli avec le prix déjà encaissé, sinon celui de l'étiquette :
+            // dans la plupart des ventes il n'y a rien à corriger, seulement à
+            // confirmer. On ne le retape que si le prix a été négocié.
+            defaultValue={prixVendu ?? prixVente ?? ''}
+            className="w-24 rounded-md border border-slate-400 bg-white px-2 py-1 text-sm text-slate-900"
+          />
+          <span>€</span>
+        </label>
       ) : null}
 
       {cibleId ? (

@@ -201,6 +201,10 @@ statut `estVente` exige un prix vendu et refuse le changement si le statut actue
 gérant pouvant renommer ses statuts, un test vérifie que le blocage tient après
 renommage.
 
+Le champ « encaissé » est **pré-rempli** avec le prix déjà encaissé, sinon celui de
+l'étiquette : dans la plupart des ventes il n'y a rien à corriger, seulement à confirmer.
+On ne le retape que si le prix a été négocié.
+
 Au passage à un statut de vente, la commission du contrat est **copiée** dans
 `Produit.commissionAppliquee`. Relevé, export et statistiques liront cette copie, jamais
 celle du contrat — sinon modifier un contrat réécrirait des relevés déjà réglés.
@@ -216,7 +220,13 @@ défaut ou le supprimer ; on sélectionne une flèche pour la retirer. Ajouter u
 fait par le bouton de la barre.
 
 On déplace les statuts au glisser-déposer, et on tire un trait du point droit de l'un vers
-le point gauche d'un autre pour autoriser ce passage.
+le point gauche d'un autre pour autoriser ce passage. **Maj + glisser** sélectionne
+plusieurs éléments, **Ctrl + clic** en ajoute un.
+
+Les flèches de retour — « Vendu » qui revient « En rayon », par exemple — passent **sous**
+les statuts plutôt qu'à travers. Le détour n'est pas fixe : il descend sous le plus bas des
+statuts effectivement situés dans le couloir parcouru, sinon la flèche traverserait celui
+du dessous.
 
 Une nouvelle entreprise reçoit **un flux de départ déjà tracé** (15 transitions) et des
 positions cohérentes : le parcours normal de gauche à droite, les sorties en dessous. Le

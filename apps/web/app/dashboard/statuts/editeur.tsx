@@ -22,11 +22,13 @@ import {
   modifierStatut,
   supprimerStatut,
 } from './actions';
+import { AreteFlux } from './arete-flux';
 import { NoeudStatutVue, type NoeudStatut } from './noeud-statut';
 import { Alerte } from '@/components/champ';
 import type { Statut } from '@/lib/types';
 
 const TYPES_NOEUDS = { statut: NoeudStatutVue };
+const TYPES_ARETES = { flux: AreteFlux };
 const COLONNE = 260;
 const LIGNE = 130;
 
@@ -88,6 +90,7 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
             id: `${s.id}->${cibleId}`,
             source: s.id,
             target: cibleId,
+            type: 'flux',
             markerEnd: { type: MarkerType.ArrowClosed },
           }))
         : [],
@@ -116,9 +119,13 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
     });
   }, [signature, statuts, setNoeuds]);
 
-  const selectionNoeud = noeuds.find((n) => n.selected);
-  const selectionArete = aretes.find((a) => a.selected);
-  const statutSelectionne = selectionNoeud?.data.statut;
+  const noeudsSelectionnes = noeuds.filter((n) => n.selected);
+  const aretesSelectionnees = aretes.filter((a) => a.selected);
+  const selectionArete = aretesSelectionnees.length === 1 ? aretesSelectionnees[0] : undefined;
+  // L'édition d'un statut porte sur un seul à la fois : renommer trois statuts
+  // d'un coup n'aurait pas de sens.
+  const statutSelectionne =
+    noeudsSelectionnes.length === 1 ? noeudsSelectionnes[0].data.statut : undefined;
 
   const nomsParId = useMemo(() => new Map(statuts.map((s) => [s.id, s.nom])), [statuts]);
 
@@ -175,10 +182,15 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
     });
   }
 
+  function supprimerAretesSelectionnees() {
+    const aRetirer = new Set(aretesSelectionnees.map((a) => a.id));
+    setAretes((p) => p.filter((a) => !aRetirer.has(a.id)));
+    setModifie(true);
+  }
+
   function supprimerSelection() {
-    if (selectionArete) {
-      setAretes((p) => p.filter((a) => a.id !== selectionArete.id));
-      setModifie(true);
+    if (aretesSelectionnees.length > 0) {
+      supprimerAretesSelectionnees();
       return;
     }
     if (!statutSelectionne) return;
@@ -202,7 +214,20 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
 
         <span className="h-6 w-px bg-slate-200" aria-hidden />
 
-        {selectionArete ? (
+        {aretesSelectionnees.length > 1 ? (
+          <>
+            <span className="text-sm text-slate-700">
+              <strong>{aretesSelectionnees.length}</strong> flèches sélectionnées
+            </span>
+            <button
+              type="button"
+              onClick={supprimerAretesSelectionnees}
+              className={bouton('danger')}
+            >
+              Supprimer les flèches
+            </button>
+          </>
+        ) : selectionArete ? (
           <>
             <span className="text-sm text-slate-700">
               Flèche <strong>{nomsParId.get(selectionArete.source)}</strong> →{' '}
@@ -212,6 +237,11 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
               Supprimer la flèche
             </button>
           </>
+        ) : noeudsSelectionnes.length > 1 ? (
+          <span className="text-sm text-slate-700">
+            <strong>{noeudsSelectionnes.length}</strong> statuts sélectionnés — déplacez-les
+            ensemble. La modification se fait un statut à la fois.
+          </span>
         ) : statutSelectionne ? (
           <ChampsStatut
             statut={statutSelectionne}
@@ -232,7 +262,8 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
           />
         ) : (
           <span className="text-sm text-slate-600">
-            Cliquez sur un statut ou une flèche pour le modifier.
+            Cliquez sur un statut ou une flèche pour le modifier. Maj + glisser sélectionne
+            plusieurs éléments.
           </span>
         )}
 
@@ -289,7 +320,13 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
           }}
           onConnect={connecter}
           nodeTypes={TYPES_NOEUDS}
+          edgeTypes={TYPES_ARETES}
           deleteKeyCode={['Delete', 'Backspace']}
+          // Maj + glisser trace un rectangle de sélection ; Ctrl/Cmd + clic
+          // ajoute un élément. Le glisser simple continue de déplacer la vue.
+          selectionKeyCode="Shift"
+          multiSelectionKeyCode={['Meta', 'Control']}
+          selectionOnDrag={false}
           fitView
         >
           <Background />
@@ -300,9 +337,10 @@ export function EditeurStatuts({ statuts }: { statuts: Statut[] }) {
 
       <p className="text-xs text-slate-600">
         Tirez un trait du point droit d&apos;un statut vers le point gauche d&apos;un autre pour
-        autoriser ce passage. Sélectionnez une flèche puis Suppr — ou le bouton — pour la retirer.
-        Les règles de comportement s&apos;appliquent en plus du flux : elles ne se contournent pas
-        en traçant une flèche.
+        autoriser ce passage. Sélectionnez une flèche puis Suppr — ou le bouton — pour la retirer.{' '}
+        <strong>Maj + glisser</strong> sélectionne plusieurs éléments, <strong>Ctrl + clic</strong>{' '}
+        en ajoute un. Les règles de comportement s&apos;appliquent en plus du flux : elles ne se
+        contournent pas en traçant une flèche.
       </p>
     </div>
   );

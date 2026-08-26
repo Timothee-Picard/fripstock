@@ -143,6 +143,8 @@ export default async function PageProduitsListe({
                       produitId={p.id}
                       statutActuel={p.statut}
                       statuts={statuts}
+                      prixVente={p.prixVente}
+                      prixVendu={p.prixVendu}
                       compact
                     />
                   </td>

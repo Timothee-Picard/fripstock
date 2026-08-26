@@ -142,6 +142,8 @@ export default async function PageFicheProduit({ params }: { params: Promise<{ i
           produitId={produit.id}
           statutActuel={produit.statut}
           statuts={statuts}
+          prixVente={produit.prixVente}
+          prixVendu={produit.prixVendu}
           compact
         />
         <AssignationBoutique
