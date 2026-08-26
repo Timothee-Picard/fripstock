@@ -188,7 +188,13 @@ changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
 Quatre écrans : la liste filtrée (`/dashboard/produits`), la création
 (`/dashboard/produits/nouveau`), la fiche (`/dashboard/produits/:id`) et sa modification
-(`.../modifier`). Chaque ligne de la liste porte trois icônes — voir, modifier, supprimer —
+(`.../modifier`).
+
+**Consultation et modification sont le même composant**, avec un mode. Le libellé, la
+place et l'espacement de chaque donnée ne bougent pas d'un écran à l'autre : seul le
+contenu devient saisissable. C'est la seule façon de garantir que les deux se ressemblent
+— les tenir alignés à la main dérive au premier changement. Les deux occupent toute la
+largeur disponible. Chaque ligne de la liste porte trois icônes — voir, modifier, supprimer —
 avec libellé en infobulle et pour les lecteurs d'écran. Le changement de statut se fait
 depuis la fiche, où l'on voit ce qu'on change.
 

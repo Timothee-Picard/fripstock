@@ -35,7 +35,7 @@ export function FormulaireProduit({
       {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
 
       <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-medium text-slate-900">Identité</h2>
+        <h2 className="text-sm font-medium text-slate-900">Le produit</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <Champ label="Nom" name="nom" required />
           <Champ label="Référence" name="reference" aide="Votre système actuel, ex : BTR6" />

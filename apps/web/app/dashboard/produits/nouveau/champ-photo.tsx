@@ -7,7 +7,14 @@ import { useState } from 'react';
  * produit est ensuite créé en JSON, sans multipart. La clé pointe sur un objet
  * MinIO privé, jamais sur une URL publique.
  */
-export function ChampPhoto({ cleInitiale = '' }: { cleInitiale?: string }) {
+export function ChampPhoto({
+  cleInitiale = '',
+  sansLibelle = false,
+}: {
+  cleInitiale?: string;
+  /** La carte qui l'entoure porte déjà le titre « Photo ». */
+  sansLibelle?: boolean;
+}) {
   const [cle, setCle] = useState(cleInitiale);
   const [erreur, setErreur] = useState('');
   const [enCours, setEnCours] = useState(false);
@@ -34,7 +41,9 @@ export function ChampPhoto({ cleInitiale = '' }: { cleInitiale?: string }) {
 
   return (
     <div>
-      <span className="mb-1 block text-sm font-medium text-slate-800">Photo</span>
+      {sansLibelle ? null : (
+        <span className="mb-1 block text-sm font-medium text-slate-800">Photo</span>
+      )}
       <input type="hidden" name="photoUrl" value={cle} />
       <input
         type="file"
