@@ -381,6 +381,33 @@ export class ProduitsService {
     return this.detail(courant, id);
   }
 
+  /**
+   * Bascule le règlement du déposant.
+   *
+   * Placé ici et non dans les contrats : c'est un champ du produit, et le guard
+   * y retrouve déjà la boutique par la ressource. Paiement en espèces, donc
+   * rien de plus qu'un drapeau coché à la main (voir CLAUDE.md).
+   */
+  async basculerPaiementDeposant(courant: UtilisateurCourant, id: string, paye: boolean) {
+    const produit = await this.chargerPourEcriture(courant, id);
+    if (produit.typeVente !== 'DEPOT_VENTE') {
+      throw new BadRequestException("Ce produit n'est pas en dépôt-vente.");
+    }
+
+    const statut = await this.prisma.statut.findUniqueOrThrow({
+      where: { id: produit.statutId },
+      select: { estVente: true, nom: true },
+    });
+    if (!statut.estVente) {
+      throw new BadRequestException(
+        `« ${statut.nom} » n'est pas un statut de vente : il n'y a rien à reverser au déposant.`,
+      );
+    }
+
+    await this.prisma.produit.update({ where: { id }, data: { deposantPaye: paye } });
+    return this.detail(courant, id);
+  }
+
   async supprimer(courant: UtilisateurCourant, id: string) {
     const produit = await this.chargerPourEcriture(courant, id);
     await this.prisma.produit.delete({ where: { id } });

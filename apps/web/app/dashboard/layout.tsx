@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { deconnexion } from '../(auth)/actions';
+import { ClocheNotifications } from '@/components/cloche-notifications';
 import { SelecteurBoutique } from '@/components/selecteur-boutique';
+import { appelApi } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
+import type { Notifications } from '@/lib/types';
 
 /** Les entrées grisées pointent vers des écrans à venir (voir PLAN.md). */
 const NAVIGATION = [
@@ -10,7 +13,8 @@ const NAVIGATION = [
   { href: '/dashboard/categories', label: 'Catégories', actif: true },
   { href: '/dashboard/attributs', label: 'Attributs', actif: true },
   { href: '/dashboard/statuts', label: 'Statuts', actif: true },
-  { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: false },
+  { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: true },
+  { href: '/dashboard/contrats-depot', label: 'Contrats de dépôt', actif: true },
   { href: '/dashboard/boutiques', label: 'Boutiques', actif: true },
   { href: '/dashboard/utilisateurs', label: 'Utilisateurs', actif: true, gerant: true },
   { href: '/dashboard/profil', label: 'Mon profil', actif: true },
@@ -18,6 +22,7 @@ const NAVIGATION = [
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await exigerSession();
+  const notifications = await appelApi<Notifications>('/notifications');
 
   return (
     <div className="flex min-h-full flex-1 bg-slate-50">
@@ -52,6 +57,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-3">
           <SelecteurBoutique boutiques={session.boutiques} />
           <div className="ml-auto flex items-center gap-4 text-sm">
+            <ClocheNotifications donnees={notifications} />
             <Link
               href="/dashboard/profil"
               className="text-slate-700 underline-offset-2 transition hover:text-slate-900 hover:underline"

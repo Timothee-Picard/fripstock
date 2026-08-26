@@ -212,3 +212,23 @@ export async function modifierVente(_etat: EtatProduit, donnees: FormData): Prom
   revalidatePath(`/dashboard/produits/${id}`);
   return { succes: 'Vente corrigée.', jeton: randomUUID() };
 }
+
+/** Marque la part du déposant comme réglée, ou revient dessus. */
+export async function basculerPaiementDeposant(
+  _etat: EtatProduit,
+  donnees: FormData,
+): Promise<EtatProduit> {
+  const id = String(donnees.get('id'));
+  try {
+    await appelApi(`/produits/${id}/paiement-deposant`, {
+      method: 'PUT',
+      body: JSON.stringify({ paye: donnees.get('paye') === 'true' }),
+    });
+  } catch (erreur) {
+    return message(erreur, 'Enregistrement impossible.');
+  }
+  revalidatePath(`/dashboard/produits/${id}`);
+  // Le relevé du déposant en dépend directement.
+  revalidatePath('/dashboard/clients-deposants', 'layout');
+  return { succes: 'Règlement mis à jour.', jeton: randomUUID() };
+}

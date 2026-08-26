@@ -7,6 +7,7 @@ import { AttributsDynamiques } from '../nouveau/attributs-dynamiques';
 import { ChampPhoto } from '../nouveau/champ-photo';
 import { AssignationBoutique, BoutonSupprimerProduit } from './actions-fiche';
 import { CorrectionVente } from './correction-vente';
+import { PaiementDeposant } from './paiement-deposant';
 import { ChangementStatut } from '../changement-statut';
 import { BadgeStatut } from '@/components/badge-statut';
 import { Alerte, Bouton } from '@/components/champ';
@@ -338,8 +339,9 @@ export function FicheProduit({
             ) : null}
           </dl>
           {!modifier ? (
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
               <CorrectionVente produit={produit} />
+              <PaiementDeposant produit={produit} />
             </div>
           ) : null}
         </Carte>

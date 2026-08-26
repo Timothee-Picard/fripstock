@@ -1,14 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { AttributsModule } from './attributs/attributs.module';
 import { AuthModule } from './auth/auth.module';
 import { BoutiquesModule } from './boutiques/boutiques.module';
+import { ClientsDeposantsModule } from './clients-deposants/clients-deposants.module';
+import { ContratsDepotModule } from './contrats-depot/contrats-depot.module';
 import { CategoriesModule } from './categories/categories.module';
 import { GerantGuard } from './common/guards/gerant.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthModule } from './health/health.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProduitsModule } from './produits/produits.module';
 import { StatutsModule } from './statuts/statuts.module';
@@ -18,6 +22,7 @@ import { UsersModule } from './users/users.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -27,6 +32,9 @@ import { UsersModule } from './users/users.module';
     StatutsModule,
     UploadsModule,
     ProduitsModule,
+    ClientsDeposantsModule,
+    ContratsDepotModule,
+    NotificationsModule,
     UsersModule,
   ],
   providers: [

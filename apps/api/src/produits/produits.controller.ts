@@ -9,6 +9,7 @@ import { CreerProduitDto } from './dto/creer-produit.dto';
 import { FiltrerProduitsDto } from './dto/filtrer-produits.dto';
 import { ModifierProduitDto } from './dto/modifier-produit.dto';
 import { ModifierVenteDto } from './dto/modifier-vente.dto';
+import { PaiementDeposantDto } from './dto/paiement-deposant.dto';
 import { boutiqueDuProduit, ProduitsService } from './produits.service';
 
 /**
@@ -78,6 +79,18 @@ export class ProduitsController {
     @Body() dto: ModifierVenteDto,
   ) {
     return this.produits.modifierVente(courant, id, dto);
+  }
+
+  /** Marque la part du déposant comme réglée, ou revient dessus. */
+  @Put(':id/paiement-deposant')
+  @RequirePermission('depots.gerer')
+  @BoutiqueDepuisRessource('id', boutiqueDuProduit)
+  paiementDeposant(
+    @Utilisateur() courant: UtilisateurCourant,
+    @Param('id') id: string,
+    @Body() dto: PaiementDeposantDto,
+  ) {
+    return this.produits.basculerPaiementDeposant(courant, id, dto.paye);
   }
 
   @Put(':id/statut')

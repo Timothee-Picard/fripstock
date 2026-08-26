@@ -239,3 +239,101 @@ export function euros(montant: string | null): string {
   if (montant === null) return '—';
   return `${Number(montant).toFixed(2).replace('.', ',')} €`;
 }
+
+export type StatutContrat = 'ACTIF' | 'EXPIRE' | 'CLOS';
+
+export const LIBELLES_STATUT_CONTRAT: Record<StatutContrat, string> = {
+  ACTIF: 'Actif',
+  EXPIRE: 'Expiré',
+  CLOS: 'Clos',
+};
+
+export interface ClientDeposant {
+  id: string;
+  nom: string;
+  prenom: string | null;
+  email: string | null;
+  telephone: string | null;
+  adresse: string | null;
+  iban: string | null;
+  commissionDefaut: string;
+  createdAt: string;
+  _count?: { contrats: number };
+}
+
+export interface ContratDepot {
+  id: string;
+  clientId: string;
+  dateDebut: string;
+  dateFin: string;
+  commission: string;
+  notifyBeforeDays: number;
+  statut: StatutContrat;
+  notifieLe: string | null;
+  client: { id: string; nom: string; prenom: string | null; commissionDefaut: string };
+  _count: { produits: number };
+  produits?: ProduitResume[];
+}
+
+export interface LigneReleve {
+  produitId: string;
+  reference: string | null;
+  nom: string;
+  dateVente: string | null;
+  statut: { id: string; nom: string; couleur: string };
+  prixVendu: number;
+  commission: number;
+  partBoutique: number;
+  partDeposant: number;
+  deposantPaye: boolean;
+}
+
+export interface Releve {
+  client: {
+    id: string;
+    nom: string;
+    prenom: string | null;
+    iban: string | null;
+    commissionDefaut: string;
+  };
+  lignes: LigneReleve[];
+  totaux: {
+    produitsVendus: number;
+    totalVendu: number;
+    partBoutique: number;
+    partDeposant: number;
+    dejaPaye: number;
+    restantDu: number;
+  };
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  contratDepotId: string | null;
+  contratDepot: {
+    id: string;
+    dateFin: string;
+    client: { id: string; nom: string; prenom: string | null };
+  } | null;
+}
+
+export interface Notifications {
+  notifications: Notification[];
+  nonLues: number;
+}
+
+/** Montant en euros, à partir d'un nombre déjà arrondi par l'API. */
+export function eurosNombre(montant: number): string {
+  return `${montant.toFixed(2).replace('.', ',')} €`;
+}
+
+/** Nombre de jours restants avant une échéance — négatif si dépassée. */
+export function joursAvant(date: string): number {
+  const fin = new Date(date);
+  const maintenant = new Date();
+  return Math.ceil((fin.getTime() - maintenant.getTime()) / 86400000);
+}

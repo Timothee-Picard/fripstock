@@ -124,8 +124,9 @@ export function FormulaireProduit({
 
         {typeVente === 'DEPOT_VENTE' ? (
           <Alerte ton="info">
-            Le dépôt-vente exige un contrat de dépôt, que l&apos;étape 6 apportera. La création
-            échouera tant que ce module n&apos;existe pas.
+            Un article en dépôt-vente doit être rattaché à un contrat. Créez-le ici en
+            achat-revente, puis rattachez-le depuis le contrat du déposant — il basculera
+            automatiquement.
           </Alerte>
         ) : null}
       </section>

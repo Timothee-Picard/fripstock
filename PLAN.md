@@ -23,7 +23,7 @@ session dédiée (ou en continu, mais valide/teste avant de passer à la suivant
       CRUD produit, assignation à une boutique, upload photo (MinIO), valeurs
       d'attributs dynamiques, statuts personnalisables, changement de statut +
       historique, pages Next.js (liste, création, fiche).
-- [ ] **Étape 6 — Dépôt-vente & notifications**
+- [x] **Étape 6 — Dépôt-vente & notifications**
       Clients déposants, contrats de dépôt, commission, blocage revente si rendu,
       suivi paiement déposant, job planifié d'alerte d'échéance de contrat, pages
       Next.js.

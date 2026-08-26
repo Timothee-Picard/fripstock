@@ -275,6 +275,43 @@ Le type est vérifié sur les **premiers octets du fichier**, pas sur le `mimety
 par le navigateur : n'importe qui peut annoncer `image/png` en envoyant autre chose. La
 clé d'objet est préfixée par l'entreprise, ce qui cloisonne aussi le stockage.
 
+## Dépôt-vente
+
+Deux écrans : `/dashboard/clients-deposants` (déposants et leur relevé) et
+`/dashboard/contrats-depot` (contrats, rattachement des produits).
+
+**Le sens de la commission est la chose à ne pas se tromper** : le pourcentage est la part
+que _garde la boutique_. `commission = 40` sur un article vendu 100 € donne 40 € à la
+boutique et 60 € au déposant. L'interface le rappelle partout où le champ apparaît, parce
+que la lecture inverse est tout aussi naturelle et fausserait chaque relevé.
+
+Le relevé lit `Produit.commissionAppliquee`, **figée à la vente**, jamais celle du contrat :
+modifier un contrat ne réécrit donc pas un relevé déjà réglé. Un produit y compte comme
+vendu si son statut porte `estVente` — jamais sur son libellé.
+
+Un produit déjà vendu ne peut plus être détaché de son contrat ni rattaché ailleurs : sa
+commission a été figée d'après le contrat d'alors, le déplacer falsifierait un relevé.
+
+Le règlement du déposant est un simple drapeau coché depuis la fiche produit — paiement en
+espèces, l'application ne gère aucun encaissement.
+
+### Alertes d'échéance
+
+Un job quotidien (`EcheancesJob`, 7 h) fait deux choses en une passe sur les contrats
+`ACTIF` : il crée une `Notification` quand `dateFin - notifyBeforeDays` est atteint, et il
+bascule en `EXPIRE` les contrats échus — sans quoi rien ne sortirait jamais de `ACTIF`.
+
+`notifieLe` empêche de renotifier chaque jour jusqu'à l'échéance ; repousser une date de
+fin le remet à zéro, pour qu'un contrat prolongé puisse alerter à nouveau.
+`POST /contrats-depot/echeances` (gérant) déclenche la passe à la main — attendre le
+lendemain pour vérifier qu'une alerte part serait absurde.
+
+`ContratDepot` n'ayant pas d'`entrepriseId`, le job remonte l'entreprise via
+`client.entrepriseId` pour créer la notification au bon endroit.
+
+**Limite connue** : les notifications appartiennent à l'entreprise, pas à un utilisateur.
+Marquer une alerte comme lue la masque pour tout le monde.
+
 ## Contribuer
 
 ### Convention de commit
