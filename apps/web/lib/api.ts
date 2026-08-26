@@ -63,3 +63,22 @@ export async function appelApiPublic<T>(chemin: string, corps: unknown): Promise
   }
   return (await reponse.json()) as T;
 }
+
+/**
+ * Appel authentifié tolérant au refus.
+ *
+ * Un manque de droits n'est pas une panne : plutôt que de laisser remonter
+ * l'exception — qui produit une page en erreur illisible — on renvoie
+ * `{ refus: true }` et l'écran affiche une explication.
+ */
+export async function appelApiTolerant<T>(
+  chemin: string,
+  options: RequestInit = {},
+): Promise<{ donnees: T; refus?: false } | { donnees?: undefined; refus: true }> {
+  try {
+    return { donnees: await appelApi<T>(chemin, options) };
+  } catch (erreur) {
+    if (erreur instanceof ErreurApi && erreur.statut === 403) return { refus: true };
+    throw erreur;
+  }
+}

@@ -4,7 +4,8 @@ import { BoutonExport } from './bouton-export';
 import { IconeModifier, IconeVoir } from '@/components/icones';
 import { Filtres } from './filtres';
 import { BadgeStatut } from '@/components/badge-statut';
-import { appelApi } from '@/lib/api';
+import { AccesRefuse } from '@/components/acces-refuse';
+import { appelApi, appelApiTolerant } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import {
   euros,
@@ -40,12 +41,17 @@ export default async function PageProduitsListe({
     if (typeof valeur === 'string' && valeur !== '') requete.set(cle, valeur);
   }
 
-  const [page, boutiques, categories, statuts] = await Promise.all([
-    appelApi<PageProduits>(`/produits?${requete.toString()}`),
+  const [inventaire, boutiques, categories, statuts] = await Promise.all([
+    appelApiTolerant<PageProduits>(`/produits?${requete.toString()}`),
     appelApi<Boutique[]>('/boutiques'),
     appelApi<Categorie[]>('/categories'),
     appelApi<Statut[]>('/statuts'),
   ]);
+
+  if (inventaire.refus || !inventaire.donnees) {
+    return <AccesRefuse quoi="Produits" permission="produits.voir" />;
+  }
+  const page = inventaire.donnees;
 
   function lienPage(numero: number) {
     const suivants = new URLSearchParams(requete.toString());

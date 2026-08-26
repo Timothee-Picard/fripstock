@@ -4,20 +4,31 @@ import { ClocheNotifications } from '@/components/cloche-notifications';
 import { SelecteurBoutique } from '@/components/selecteur-boutique';
 import { appelApi } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
-import type { Notifications } from '@/lib/types';
+import { aLaPermission } from '@/lib/permissions';
+import type { Notifications, Permission } from '@/lib/types';
 
-/** Les entrées grisées pointent vers des écrans à venir (voir PLAN.md). */
-const NAVIGATION = [
-  { href: '/dashboard', label: 'Tableau de bord', actif: true },
-  { href: '/dashboard/produits', label: 'Produits', actif: true },
-  { href: '/dashboard/categories', label: 'Catégories', actif: true },
-  { href: '/dashboard/attributs', label: 'Attributs', actif: true },
-  { href: '/dashboard/statuts', label: 'Statuts', actif: true },
-  { href: '/dashboard/clients-deposants', label: 'Clients déposants', actif: true },
-  { href: '/dashboard/contrats-depot', label: 'Contrats de dépôt', actif: true },
-  { href: '/dashboard/boutiques', label: 'Boutiques', actif: true },
-  { href: '/dashboard/utilisateurs', label: 'Utilisateurs', actif: true, gerant: true },
-  { href: '/dashboard/profil', label: 'Mon profil', actif: true },
+/**
+ * Entrées du menu, avec la permission qu'elles supposent.
+ *
+ * On ne propose pas un lien que l'API refusera : la permission est vérifiée
+ * côté serveur de toute façon, mais offrir une porte fermée n'aide personne.
+ */
+const NAVIGATION: {
+  href: string;
+  label: string;
+  permission?: Permission;
+  gerant?: boolean;
+}[] = [
+  { href: '/dashboard', label: 'Tableau de bord' },
+  { href: '/dashboard/produits', label: 'Produits', permission: 'produits.voir' },
+  { href: '/dashboard/categories', label: 'Catégories' },
+  { href: '/dashboard/attributs', label: 'Attributs' },
+  { href: '/dashboard/statuts', label: 'Statuts' },
+  { href: '/dashboard/clients-deposants', label: 'Clients déposants', permission: 'clients.gerer' },
+  { href: '/dashboard/contrats-depot', label: 'Contrats de dépôt', permission: 'depots.gerer' },
+  { href: '/dashboard/boutiques', label: 'Boutiques' },
+  { href: '/dashboard/utilisateurs', label: 'Utilisateurs', gerant: true },
+  { href: '/dashboard/profil', label: 'Mon profil' },
 ];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -31,25 +42,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <p className="mb-6 px-2 text-xs text-slate-600">{session.entreprise.nom}</p>
 
         <nav className="space-y-0.5">
-          {NAVIGATION.filter((e) => !e.gerant || session.estGerant).map((entree) =>
-            entree.actif ? (
-              <Link
-                key={entree.href}
-                href={entree.href}
-                className="block rounded-md px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
-              >
-                {entree.label}
-              </Link>
-            ) : (
-              <span
-                key={entree.href}
-                title="Disponible à une étape suivante"
-                className="block cursor-not-allowed rounded-md px-2 py-1.5 text-sm text-slate-500"
-              >
-                {entree.label}
-              </span>
-            ),
-          )}
+          {NAVIGATION.filter(
+            (e) =>
+              (!e.gerant || session.estGerant) &&
+              (!e.permission || aLaPermission(session, e.permission)),
+          ).map((entree) => (
+            <Link
+              key={entree.href}
+              href={entree.href}
+              className="block rounded-md px-2 py-1.5 text-sm text-slate-700 transition hover:bg-slate-100"
+            >
+              {entree.label}
+            </Link>
+          ))}
         </nav>
       </aside>
 

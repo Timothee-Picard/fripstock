@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { BoutonEcheances, FormulaireCreation } from './formulaires';
-import { appelApi } from '@/lib/api';
+import { IconeVoir } from '@/components/icones';
+import { AccesRefuse } from '@/components/acces-refuse';
+import { appelApiTolerant } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import {
   joursAvant,
@@ -30,10 +32,17 @@ function etat(contrat: ContratDepot): { libelle: string; classe: string } {
 
 export default async function PageContratsDepot() {
   await exigerSession();
-  const [contrats, clients] = await Promise.all([
-    appelApi<ContratDepot[]>('/contrats-depot'),
-    appelApi<ClientDeposant[]>('/clients-deposants'),
+  const [liste, deposants] = await Promise.all([
+    appelApiTolerant<ContratDepot[]>('/contrats-depot'),
+    appelApiTolerant<ClientDeposant[]>('/clients-deposants'),
   ]);
+  if (liste.refus || !liste.donnees) {
+    return <AccesRefuse quoi="Contrats de dépôt" permission="depots.gerer" />;
+  }
+  const contrats = liste.donnees;
+  // Créer un contrat suppose de choisir un déposant : sans `clients.gerer`, on
+  // masque simplement le formulaire.
+  const clients = deposants.donnees ?? [];
 
   return (
     <div className="space-y-6">
@@ -64,6 +73,7 @@ export default async function PageContratsDepot() {
                 <th className="px-4 py-2 font-medium">Commission</th>
                 <th className="px-4 py-2 font-medium">Produits</th>
                 <th className="px-4 py-2 font-medium">État</th>
+                <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -87,6 +97,16 @@ export default async function PageContratsDepot() {
                     <td className="px-4 py-2 text-slate-700">{c._count.produits}</td>
                     <td className="px-4 py-2">
                       <span className={`rounded px-2 py-0.5 text-xs ${e.classe}`}>{e.libelle}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/dashboard/contrats-depot/${c.id}`}
+                        title="Voir le contrat"
+                        aria-label={`Ouvrir le contrat de ${c.client.nom}`}
+                        className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        <IconeVoir />
+                      </Link>
                     </td>
                   </tr>
                 );

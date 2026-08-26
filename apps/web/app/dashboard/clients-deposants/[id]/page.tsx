@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { BoutonSupprimerClient, ModificationClient } from '../formulaires';
 import { BadgeStatut } from '@/components/badge-statut';
-import { appelApi } from '@/lib/api';
+import { AccesRefuse } from '@/components/acces-refuse';
+import { appelApiTolerant } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import {
   eurosNombre,
@@ -28,13 +29,20 @@ export default async function PageClientDeposant({ params }: { params: Promise<{
   await exigerSession();
   const { id } = await params;
 
-  const [client, releve, contrats] = await Promise.all([
-    appelApi<ClientDeposant & { contrats: ContratDepot[] }>(`/clients-deposants/${id}`),
-    appelApi<Releve>(`/clients-deposants/${id}/releve`),
-    appelApi<ContratDepot[]>('/contrats-depot'),
+  const [fiche, bilan, tousContrats] = await Promise.all([
+    appelApiTolerant<ClientDeposant & { contrats: ContratDepot[] }>(`/clients-deposants/${id}`),
+    appelApiTolerant<Releve>(`/clients-deposants/${id}/releve`),
+    appelApiTolerant<ContratDepot[]>('/contrats-depot'),
   ]);
+  if (fiche.refus || !fiche.donnees || !bilan.donnees) {
+    return <AccesRefuse quoi="Client déposant" permission="clients.gerer" />;
+  }
 
-  const siens = contrats.filter((c) => c.clientId === id);
+  const client = fiche.donnees;
+  const releve = bilan.donnees;
+  // Les contrats exigent `depots.gerer` : sans, on affiche le relevé sans eux
+  // plutôt que de refuser toute la page.
+  const siens = (tousContrats.donnees ?? []).filter((c) => c.clientId === id);
 
   return (
     <div className="space-y-6">

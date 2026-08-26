@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { BoutonDetacher, BoutonSupprimerContrat, FormulaireContrat, Rattachement } from './gestion';
 import { BadgeStatut } from '@/components/badge-statut';
-import { appelApi } from '@/lib/api';
+import { AccesRefuse } from '@/components/acces-refuse';
+import { appelApiTolerant } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import {
   euros,
@@ -15,10 +16,15 @@ export default async function PageContratDepot({ params }: { params: Promise<{ i
   await exigerSession();
   const { id } = await params;
 
-  const [contrat, stock] = await Promise.all([
-    appelApi<Required<ContratDepot>>(`/contrats-depot/${id}`),
-    appelApi<PageProduits>('/produits?parPage=200'),
+  const [fiche, inventaire] = await Promise.all([
+    appelApiTolerant<Required<ContratDepot>>(`/contrats-depot/${id}`),
+    appelApiTolerant<PageProduits>('/produits?parPage=200'),
   ]);
+  if (fiche.refus || !fiche.donnees) {
+    return <AccesRefuse quoi="Contrat de dépôt" permission="depots.gerer" />;
+  }
+  const contrat = fiche.donnees;
+  const stock = inventaire.donnees ?? { produits: [], total: 0, page: 1, parPage: 0, pages: 1 };
 
   // Rattachables : ni vendus, ni déjà sur ce contrat.
   const dejaDessus = new Set(contrat.produits.map((p) => p.id));

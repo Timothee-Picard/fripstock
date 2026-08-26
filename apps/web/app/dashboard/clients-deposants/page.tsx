@@ -1,12 +1,16 @@
 import Link from 'next/link';
 import { FormulaireCreation } from './formulaires';
-import { appelApi } from '@/lib/api';
+import { IconeVoir } from '@/components/icones';
+import { AccesRefuse } from '@/components/acces-refuse';
+import { appelApiTolerant } from '@/lib/api';
 import { exigerSession } from '@/lib/session';
 import type { ClientDeposant } from '@/lib/types';
 
 export default async function PageClientsDeposants() {
   await exigerSession();
-  const clients = await appelApi<ClientDeposant[]>('/clients-deposants');
+  const { donnees: clients, refus } =
+    await appelApiTolerant<ClientDeposant[]>('/clients-deposants');
+  if (refus) return <AccesRefuse quoi="Clients déposants" permission="clients.gerer" />;
 
   return (
     <div className="space-y-6">
@@ -34,6 +38,7 @@ export default async function PageClientsDeposants() {
                 <th className="px-4 py-2 font-medium">Contact</th>
                 <th className="px-4 py-2 font-medium">Commission</th>
                 <th className="px-4 py-2 font-medium">Contrats</th>
+                <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -57,6 +62,16 @@ export default async function PageClientsDeposants() {
                     </span>
                   </td>
                   <td className="px-4 py-2 text-slate-700">{c._count?.contrats ?? 0}</td>
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/dashboard/clients-deposants/${c.id}`}
+                      title="Voir la fiche et le relevé"
+                      aria-label={`Ouvrir ${c.nom}`}
+                      className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <IconeVoir />
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
