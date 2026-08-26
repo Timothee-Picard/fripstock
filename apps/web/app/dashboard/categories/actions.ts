@@ -1,70 +1,70 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { appelApi, ErreurApi } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 
-export interface EtatCategorie {
-  erreur?: string;
-  succes?: string;
+export interface CategoryState {
+  error?: string;
+  success?: string;
 }
 
-function message(erreur: unknown, defaut: string): EtatCategorie {
-  return { erreur: erreur instanceof ErreurApi ? erreur.message : defaut };
+function message(error: unknown, defaut: string): CategoryState {
+  return { error: error instanceof ApiError ? error.message : defaut };
 }
 
-export async function creerCategorie(
-  _etat: EtatCategorie,
-  donnees: FormData,
-): Promise<EtatCategorie> {
-  const nom = String(donnees.get('nom') ?? '').trim();
-  if (!nom) return { erreur: 'Le nom est obligatoire.' };
-  const parentId = String(donnees.get('parentId') ?? '');
+export async function createCategory(
+  _state: CategoryState,
+  data: FormData,
+): Promise<CategoryState> {
+  const name = String(data.get('name') ?? '').trim();
+  if (!name) return { error: 'Le nom est obligatoire.' };
+  const parentId = String(data.get('parentId') ?? '');
 
   try {
-    await appelApi('/categories', {
+    await apiFetch('/categories', {
       method: 'POST',
-      body: JSON.stringify({ nom, parentId: parentId || null }),
+      body: JSON.stringify({ name, parentId: parentId || null }),
     });
-  } catch (erreur) {
-    return message(erreur, 'Création impossible.');
+  } catch (error) {
+    return message(error, 'Création impossible.');
   }
   revalidatePath('/dashboard/categories');
-  return { succes: `Catégorie « ${nom} » créée.` };
+  return { success: `Catégorie « ${name} » créée.` };
 }
 
-export async function modifierCategorie(
-  _etat: EtatCategorie,
-  donnees: FormData,
-): Promise<EtatCategorie> {
-  const id = String(donnees.get('id'));
-  const parentId = String(donnees.get('parentId') ?? '');
+export async function updateCategory(
+  _state: CategoryState,
+  data: FormData,
+): Promise<CategoryState> {
+  const id = String(data.get('id'));
+  const parentId = String(data.get('parentId') ?? '');
 
   try {
-    await appelApi(`/categories/${id}`, {
+    await apiFetch(`/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify({
-        nom: String(donnees.get('nom') ?? '').trim(),
+        name: String(data.get('name') ?? '').trim(),
         parentId: parentId || null,
       }),
     });
-  } catch (erreur) {
-    return message(erreur, 'Modification impossible.');
+  } catch (error) {
+    return message(error, 'Modification impossible.');
   }
   revalidatePath('/dashboard/categories');
-  return { succes: 'Catégorie mise à jour.' };
+  return { success: 'Catégorie mise à jour.' };
 }
 
-export async function supprimerCategorie(
-  _etat: EtatCategorie,
-  donnees: FormData,
-): Promise<EtatCategorie> {
+export async function deleteCategory(
+  _state: CategoryState,
+  data: FormData,
+): Promise<CategoryState> {
   try {
-    await appelApi(`/categories/${String(donnees.get('id'))}`, { method: 'DELETE' });
-  } catch (erreur) {
-    return message(erreur, 'Suppression impossible.');
+    await apiFetch(`/categories/${String(data.get('id'))}`, { method: 'DELETE' });
+  } catch (error) {
+    return message(error, 'Suppression impossible.');
   }
   revalidatePath('/dashboard/categories');
-  return { succes: 'Catégorie supprimée.' };
+  return { success: 'Catégorie supprimée.' };
 }
 
 /**
@@ -74,20 +74,17 @@ export async function supprimerCategorie(
  * une couleur » — et non l'inverse. La table est la même que côté attribut,
  * seule la direction de l'écran change.
  */
-export async function definirAttributs(
-  _etat: EtatCategorie,
-  donnees: FormData,
-): Promise<EtatCategorie> {
+export async function setAttributes(_state: CategoryState, data: FormData): Promise<CategoryState> {
   try {
-    await appelApi(`/categories/${String(donnees.get('id'))}/attributs`, {
+    await apiFetch(`/categories/${String(data.get('id'))}/attributes`, {
       method: 'PUT',
       body: JSON.stringify({
-        attributDefinitionIds: donnees.getAll('attributId').map(String),
+        attributeDefinitionIds: data.getAll('attributeId').map(String),
       }),
     });
-  } catch (erreur) {
-    return message(erreur, 'Enregistrement impossible.');
+  } catch (error) {
+    return message(error, 'Enregistrement impossible.');
   }
   revalidatePath('/dashboard/categories');
-  return { succes: 'Attributs enregistrés.' };
+  return { success: 'Attributs enregistrés.' };
 }

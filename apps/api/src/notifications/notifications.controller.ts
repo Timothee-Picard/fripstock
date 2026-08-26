@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Put } from '@nestjs/common';
-import { Utilisateur } from '../common/decorators/current-user.decorator';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import type { CurrentUser } from '../common/types/current-user';
 import { NotificationsService } from './notifications.service';
 
 /**
@@ -12,18 +12,18 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
-  lister(@Utilisateur() courant: UtilisateurCourant) {
-    return this.notifications.lister(courant);
+  list(@AuthUser() currentUser: CurrentUser) {
+    return this.notifications.list(currentUser);
   }
 
   // Route littérale déclarée avant celle qui porte un paramètre.
-  @Put('tout-lu')
-  toutLu(@Utilisateur() courant: UtilisateurCourant) {
-    return this.notifications.toutMarquerLu(courant);
+  @Put('read-all')
+  markAllRead(@AuthUser() currentUser: CurrentUser) {
+    return this.notifications.markAllRead(currentUser);
   }
 
-  @Put(':id/lu')
-  marquerLue(@Utilisateur() courant: UtilisateurCourant, @Param('id') id: string) {
-    return this.notifications.marquerLue(courant, id);
+  @Put(':id/read')
+  markRead(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
+    return this.notifications.markRead(currentUser, id);
   }
 }

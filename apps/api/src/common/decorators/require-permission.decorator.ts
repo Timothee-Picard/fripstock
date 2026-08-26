@@ -1,7 +1,7 @@
 import { SetMetadata } from '@nestjs/common';
 import type { Permission } from '../permissions';
 
-export const CLE_PERMISSION = 'permissionRequise';
+export const PERMISSION_KEY = 'permissionRequise';
 
 /**
  * Exige une permission sur la boutique ciblée par la requête.
@@ -11,4 +11,4 @@ export const CLE_PERMISSION = 'permissionRequise';
  * s'applique en commentaire sur la route décorée.
  */
 export const RequirePermission = (permission: Permission) =>
-  SetMetadata(CLE_PERMISSION, permission);
+  SetMetadata(PERMISSION_KEY, permission);

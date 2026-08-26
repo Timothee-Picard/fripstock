@@ -1,38 +1,38 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
-import { Utilisateur } from '../common/decorators/current-user.decorator';
-import { GerantUniquement } from '../common/decorators/gerant.decorator';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
-import { DefinirAccesDto } from './dto/definir-acces.dto';
-import { InviterUserDto } from './dto/inviter-user.dto';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import { ManagerOnly } from '../common/decorators/manager.decorator';
+import type { CurrentUser } from '../common/types/current-user';
+import { SetAccessDto } from './dto/set-access.dto';
+import { InviteUserDto } from './dto/invite-user.dto';
 import { UsersService } from './users.service';
 
 /** Gestion des employés : entièrement réservée au gérant de l'entreprise. */
 @Controller('users')
-@GerantUniquement()
+@ManagerOnly()
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  lister(@Utilisateur() courant: UtilisateurCourant) {
-    return this.users.lister(courant);
+  list(@AuthUser() currentUser: CurrentUser) {
+    return this.users.list(currentUser);
   }
 
   @Post('invite')
-  inviter(@Utilisateur() courant: UtilisateurCourant, @Body() dto: InviterUserDto) {
-    return this.users.inviter(courant, dto);
+  invite(@AuthUser() currentUser: CurrentUser, @Body() dto: InviteUserDto) {
+    return this.users.invite(currentUser, dto);
   }
 
-  @Put(':id/acces')
-  definirAcces(
-    @Utilisateur() courant: UtilisateurCourant,
+  @Put(':id/access')
+  setAccess(
+    @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
-    @Body() dto: DefinirAccesDto,
+    @Body() dto: SetAccessDto,
   ) {
-    return this.users.definirAcces(courant, id, dto);
+    return this.users.setAccess(currentUser, id, dto);
   }
 
   @Delete(':id')
-  supprimer(@Utilisateur() courant: UtilisateurCourant, @Param('id') id: string) {
-    return this.users.supprimer(courant, id);
+  delete(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
+    return this.users.delete(currentUser, id);
   }
 }

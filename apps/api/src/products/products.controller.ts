@@ -1,0 +1,132 @@
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { ShopFromResource } from '../common/decorators/shop-source.decorator';
+import { AuthUser } from '../common/decorators/current-user.decorator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import type { CurrentUser } from '../common/types/current-user';
+import { AssignShopDto } from './dto/assign-shop.dto';
+import { ChangeStatusDto } from './dto/change-status.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { FilterProductsDto } from './dto/filter-products.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
+import { PaymentDepositorDto } from './dto/depositor-payment.dto';
+import { boutiqueDuProduct, ProductsService } from './products.service';
+
+/**
+ * Comment le PermissionsGuard retrouve la boutique, route par route :
+ *
+ * - `GET /products`, `POST /products` : `shopId` explicite en query ou dans
+ *   le body, sinon stock central.
+ * - toutes les routes en `:id` : la boutique se lit sur le produit chargé, via
+ *   @ShopFromResource — elle n'est ni dans les params ni dans le body.
+ */
+@Controller('products')
+export class ProductsController {
+  constructor(private readonly products: ProductsService) {}
+
+  @Get()
+  @RequirePermission('products.view')
+  list(@AuthUser() currentUser: CurrentUser, @Query() filters: FilterProductsDto) {
+    return this.products.list(currentUser, filters);
+  }
+
+  /**
+   * Export CSV du stock filtré.
+   *
+   * Déclarée AVANT @Get(':id') : NestJS matche dans l'ordre de déclaration, et
+   * le paramètre avalerait « export » s'il venait en premier.
+   */
+  @Get('export')
+  @RequirePermission('export.csv')
+  async exportCsv(
+    @AuthUser() currentUser: CurrentUser,
+    @Query() filters: FilterProductsDto,
+    @Res({ passthrough: true }) reponse: Response,
+  ) {
+    const csv = await this.products.exportCsv(currentUser, filters);
+    const name = `stock-${new Date().toISOString().slice(0, 10)}.csv`;
+    reponse.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${name}"`,
+    });
+    return csv;
+  }
+
+  @Get(':id')
+  @RequirePermission('products.view')
+  @ShopFromResource('id', boutiqueDuProduct)
+  detail(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
+    return this.products.detail(currentUser, id);
+  }
+
+  @Post()
+  @RequirePermission('products.create')
+  create(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateProductDto) {
+    return this.products.create(currentUser, dto);
+  }
+
+  @Put(':id')
+  @RequirePermission('products.update')
+  @ShopFromResource('id', boutiqueDuProduct)
+  update(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateProductDto,
+  ) {
+    return this.products.update(currentUser, id, dto);
+  }
+
+  @Put(':id/assign-shop')
+  @RequirePermission('products.update')
+  @ShopFromResource('id', boutiqueDuProduct)
+  assignShop(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: AssignShopDto,
+  ) {
+    return this.products.assignShop(currentUser, id, dto);
+  }
+
+  /** Corrige une vente déjà enregistrée : prix encaissé, date, commission. */
+  @Put(':id/sale')
+  @RequirePermission('products.update')
+  @ShopFromResource('id', boutiqueDuProduct)
+  updateSale(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateSaleDto,
+  ) {
+    return this.products.updateSale(currentUser, id, dto);
+  }
+
+  /** Marque la part du déposant comme réglée, ou revient dessus. */
+  @Put(':id/depositor-payment')
+  @RequirePermission('deposits.manage')
+  @ShopFromResource('id', boutiqueDuProduct)
+  depositorPayment(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: PaymentDepositorDto,
+  ) {
+    return this.products.toggleDepositorPayment(currentUser, id, dto.paid);
+  }
+
+  @Put(':id/status')
+  @RequirePermission('products.changeStatus')
+  @ShopFromResource('id', boutiqueDuProduct)
+  changeStatus(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: ChangeStatusDto,
+  ) {
+    return this.products.changeStatus(currentUser, id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermission('products.delete')
+  @ShopFromResource('id', boutiqueDuProduct)
+  delete(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
+    return this.products.delete(currentUser, id);
+  }
+}

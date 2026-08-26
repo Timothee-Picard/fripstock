@@ -11,7 +11,7 @@ import type { Permission, Session } from './types';
  * Sert uniquement à ne pas proposer ce qui sera refusé. L'autorisation, elle,
  * est toujours rendue par l'API.
  */
-export function aLaPermission(session: Session, permission: Permission): boolean {
-  if (session.estGerant) return true;
-  return session.boutiques.some((b) => b.tousDroits || b.permissions.includes(permission));
+export function hasPermission(session: Session, permission: Permission): boolean {
+  if (session.isManager) return true;
+  return session.shops.some((b) => b.allRights || b.permissions.includes(permission));
 }

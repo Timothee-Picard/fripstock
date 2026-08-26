@@ -1,0 +1,122 @@
+import Link from 'next/link';
+import { DeadlinesButton, CreateForm } from './forms';
+import { ViewIcon } from '@/components/icons';
+import { AccessDenied } from '@/components/access-denied';
+import { tolerantApiFetch } from '@/lib/api';
+import { requireSession } from '@/lib/session';
+import {
+  daysUntil,
+  CONTRACT_STATUS_LABELS,
+  type Depositor,
+  type DepositContract,
+} from '@/lib/types';
+
+/**
+ * Un contrat actif dont l'échéance approche mérite d'être distingué : c'est
+ * exactement le moment où le gérant doit décider de prolonger ou de rendre.
+ */
+function state(contract: DepositContract): { label: string; css: string } {
+  if (contract.status !== 'ACTIVE') {
+    return {
+      label: CONTRACT_STATUS_LABELS[contract.status],
+      css: 'bg-slate-100 text-slate-700',
+    };
+  }
+  const days = daysUntil(contract.endDate);
+  if (days < 0) return { label: 'Échu', css: 'bg-red-50 text-red-800' };
+  if (days <= contract.notifyBeforeDays) {
+    return { label: `Expire dans ${days} j`, css: 'bg-amber-50 text-amber-900' };
+  }
+  return { label: 'Actif', css: 'bg-emerald-50 text-emerald-800' };
+}
+
+export default async function DepositContractsPage() {
+  await requireSession();
+  const [list, deposants] = await Promise.all([
+    tolerantApiFetch<DepositContract[]>('/deposit-contracts'),
+    tolerantApiFetch<Depositor[]>('/depositors'),
+  ]);
+  if (list.denied || !list.data) {
+    return <AccessDenied what="Contrats de dépôt" permission="deposits.manage" />;
+  }
+  const contracts = list.data;
+  // Créer un contrat suppose de choisir un déposant : sans `depositors.manage`, on
+  // masque simplement le formulaire.
+  const depositors = deposants.data ?? [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Contrats de dépôt</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Chaque contrat lie un déposant à une période et à une commission. Les articles qui y
+            sont rattachés passent en dépôt-vente.
+          </p>
+        </div>
+        <DeadlinesButton />
+      </div>
+
+      <CreateForm depositors={depositors} />
+
+      {contracts.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
+          Aucun contrat pour l&apos;instant.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-4 py-2 font-medium">Déposant</th>
+                <th className="px-4 py-2 font-medium">Période</th>
+                <th className="px-4 py-2 font-medium">Commission</th>
+                <th className="px-4 py-2 font-medium">Produits</th>
+                <th className="px-4 py-2 font-medium">État</th>
+                <th className="px-4 py-2 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {contracts.map((c) => {
+                const e = state(c);
+                return (
+                  <tr key={c.id}>
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/dashboard/deposit-contracts/${c.id}`}
+                        className="font-medium text-slate-900 underline-offset-2 hover:underline"
+                      >
+                        {c.depositor.firstName
+                          ? `${c.depositor.firstName} ${c.depositor.lastName}`
+                          : c.depositor.lastName}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                      {new Date(c.startDate).toLocaleDateString('fr-FR')} →{' '}
+                      {new Date(c.endDate).toLocaleDateString('fr-FR')}
+                    </td>
+                    <td className="px-4 py-2 text-slate-700">{c.commission} %</td>
+                    <td className="px-4 py-2 text-slate-700">{c._count.products}</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded px-2 py-0.5 text-xs ${e.css}`}>{e.label}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/dashboard/deposit-contracts/${c.id}`}
+                        title="Voir le contrat"
+                        aria-label={`Ouvrir le contrat de ${c.depositor.lastName}`}
+                        className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        <ViewIcon />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

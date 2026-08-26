@@ -5,6 +5,6 @@
  * la contrainte d'unicité : on pourrait créer un doublon, ou ne plus se
  * connecter après avoir changé la casse de son propre email.
  */
-export function normaliserEmail(email: string): string {
+export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }

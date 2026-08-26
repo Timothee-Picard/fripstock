@@ -1,20 +1,21 @@
-// Schéma Fripstock — voir CLAUDE.md pour les règles métier.
+// Fripstock schema — see CLAUDE.md for the business rules.
 //
-// Conventions : modèles en PascalCase français, champs en camelCase français,
-// tables et colonnes en snake_case via @@map / @map.
+// Conventions: models in PascalCase, fields in camelCase, tables and columns in
+// snake_case through @@map / @map. Identifiers are English; user-facing text and
+// explanatory comments stay French.
 //
-// Prisma 7 : l'URL de connexion ne vit plus ici mais dans prisma.config.ts, et
-// le client reçoit un adaptateur de driver (voir PrismaService / seed.ts).
+// Prisma 7: the connection URL no longer lives here but in prisma.config.ts,
+// and the client receives a driver adapter (see PrismaService and seed.ts).
 
 generator client {
   provider            = "prisma-client"
   output              = "../src/generated/prisma"
-  // NestJS compile en CommonJS : sans ça le client est généré en ESM et
-  // explose au chargement ("exports is not defined in ES module scope").
+  // NestJS compiles to CommonJS: without this the client is emitted as ESM and
+  // blows up on load ("exports is not defined in ES module scope").
   moduleFormat        = "cjs"
-  // Imports sans extension : le client est consommé à la fois compilé (dist,
-  // résolution CommonJS) et directement en .ts par ts-node pour le seed. Un
-  // `.js` en dur casserait le second cas.
+  // Extensionless imports: the client is consumed both compiled (CommonJS
+  // resolution) and straight from .ts by ts-node for the seed. A hardcoded
+  // ".js" would break the second case.
   importFileExtension = ""
 }
 
@@ -26,418 +27,418 @@ datasource db {
 // Organisation
 // ---------------------------------------------------------------------------
 
-model Entreprise {
+model Company {
   id        String   @id @default(cuid())
-  nom       String
+  name      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  boutiques     Boutique[]
-  utilisateurs  User[]
-  categories    Categorie[]
-  attributs     AttributDefinition[]
-  statuts       Statut[]
-  clients       Client[]
-  produits      Produit[]
-  notifications Notification[]
+  shops                Shop[]
+  users                User[]
+  categories           Category[]
+  attributeDefinitions AttributeDefinition[]
+  statuses             Status[]
+  depositors           Depositor[]
+  products             Product[]
+  notifications        Notification[]
 
-  @@map("entreprise")
+  @@map("company")
 }
 
-model Boutique {
-  id           String   @id @default(cuid())
-  entrepriseId String   @map("entreprise_id")
-  nom          String
-  adresse      String?
-  createdAt    DateTime @default(now()) @map("created_at")
+model Shop {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  name      String
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
 
-  entreprise Entreprise      @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  acces      AccesBoutique[]
-  produits   Produit[]
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accesses ShopAccess[]
+  products Product[]
 
-  @@index([entrepriseId])
-  @@map("boutique")
+  @@index([companyId])
+  @@map("shop")
 }
 
 model User {
-  id             String   @id @default(cuid())
-  entrepriseId   String   @map("entreprise_id")
-  email          String   @unique
-  motDePasseHash String   @map("mot_de_passe_hash")
-  prenom         String
-  nom            String
-  estGerant      Boolean  @default(false) @map("est_gerant")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  isManager    Boolean  @default(false) @map("is_manager")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  entreprise        Entreprise         @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  acces             AccesBoutique[]
-  changementsStatut HistoriqueStatut[]
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accesses      ShopAccess[]
+  statusChanges StatusHistory[]
 
-  @@index([entrepriseId])
-  @@map("utilisateur")
+  @@index([companyId])
+  @@map("user")
 }
 
-// Un employé a une ligne par boutique à laquelle il a accès, avec ses
-// permissions activées. Le gérant (estGerant) ne passe jamais par cette table.
-// Ce modèle n'a pas de entrepriseId : le cloisonnement passe par `user`.
-model AccesBoutique {
+/// One row per shop an employee can reach, holding the permissions granted
+/// there. A manager (isManager) never goes through this table.
+///
+/// No companyId: isolation flows through `user`.
+model ShopAccess {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
-  boutiqueId  String   @map("boutique_id")
+  shopId      String   @map("shop_id")
   permissions Json
   createdAt   DateTime @default(now()) @map("created_at")
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  boutique Boutique @relation(fields: [boutiqueId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, boutiqueId])
+  @@unique([userId, shopId])
   @@index([userId])
-  @@index([boutiqueId])
-  @@map("acces_boutique")
+  @@index([shopId])
+  @@map("shop_access")
 }
 
 // ---------------------------------------------------------------------------
-// Catalogue : catégories et attributs, définis au niveau Entreprise
+// Catalogue: categories and attributes, defined at company level
 // ---------------------------------------------------------------------------
 
-model Categorie {
-  id           String   @id @default(cuid())
-  entrepriseId String   @map("entreprise_id")
-  parentId     String?  @map("parent_id")
-  nom          String
-  createdAt    DateTime @default(now()) @map("created_at")
+model Category {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  parentId  String?  @map("parent_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
 
-  entreprise Entreprise          @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  // Restrict : supprimer une catégorie qui a des enfants doit lever une erreur
-  // explicite côté service, pas emporter tout le sous-arbre en silence.
-  parent     Categorie?          @relation("CategorieHierarchie", fields: [parentId], references: [id], onDelete: Restrict)
-  enfants    Categorie[]         @relation("CategorieHierarchie")
-  attributs  CategorieAttribut[]
-  produits   Produit[]
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// Restrict: deleting a category that has children must raise an explicit
+  /// error rather than silently take the whole subtree with it.
+  parent     Category?           @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children   Category[]          @relation("CategoryTree")
+  attributes CategoryAttribute[]
+  products   Product[]
 
-  @@index([entrepriseId])
+  @@index([companyId])
   @@index([parentId])
-  @@map("categorie")
+  @@map("category")
 }
 
-enum TypeAttribut {
+enum AttributeType {
   TEXT
   NUMBER
   SELECT
   MULTISELECT
   BOOLEAN
 
-  @@map("type_attribut")
+  @@map("attribute_type")
 }
 
-// Bibliothèque globale, en lecture seule, alimentée par le seed uniquement :
-// pas de entrepriseId, aucune entreprise ne la modifie.
-model AttributTemplate {
-  id   String       @id @default(cuid())
-  nom  String       @unique
-  type TypeAttribut
+/// Global, read-only library filled by the seed only: no companyId, no company
+/// ever edits it.
+model AttributeTemplate {
+  id   String        @id @default(cuid())
+  name String        @unique
+  type AttributeType
 
-  options AttributTemplateOption[]
-  clones  AttributDefinition[]
+  options AttributeTemplateOption[]
+  clones  AttributeDefinition[]
 
-  @@map("attribut_template")
+  @@map("attribute_template")
 }
 
-model AttributTemplateOption {
-  id                 String @id @default(cuid())
-  attributTemplateId String @map("attribut_template_id")
-  valeur             String
-  ordre              Int    @default(0)
+model AttributeTemplateOption {
+  id                  String @id @default(cuid())
+  attributeTemplateId String @map("attribute_template_id")
+  value               String
+  position            Int    @default(0)
 
-  template AttributTemplate @relation(fields: [attributTemplateId], references: [id], onDelete: Cascade)
+  template AttributeTemplate @relation(fields: [attributeTemplateId], references: [id], onDelete: Cascade)
 
-  @@unique([attributTemplateId, valeur])
-  @@index([attributTemplateId])
-  @@map("attribut_template_option")
+  @@unique([attributeTemplateId, value])
+  @@index([attributeTemplateId])
+  @@map("attribute_template_option")
 }
 
-model AttributDefinition {
-  id                   String       @id @default(cuid())
-  entrepriseId         String       @map("entreprise_id")
-  nom                  String
-  type                 TypeAttribut
-  clonedFromTemplateId String?      @map("cloned_from_template_id")
-  createdAt            DateTime     @default(now()) @map("created_at")
+model AttributeDefinition {
+  id                   String        @id @default(cuid())
+  companyId            String        @map("company_id")
+  name                 String
+  type                 AttributeType
+  clonedFromTemplateId String?       @map("cloned_from_template_id")
+  createdAt            DateTime      @default(now()) @map("created_at")
 
-  entreprise Entreprise          @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  // SetNull : le clone est indépendant, la disparition du template ne doit pas
-  // emporter l'attribut personnalisé de l'entreprise.
-  template   AttributTemplate?   @relation(fields: [clonedFromTemplateId], references: [id], onDelete: SetNull)
-  options    AttributOption[]
-  categories CategorieAttribut[]
-  valeurs    ValeurAttribut[]
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// SetNull: the clone is independent, losing the template must not take the
+  /// company's own attribute with it.
+  template   AttributeTemplate?  @relation(fields: [clonedFromTemplateId], references: [id], onDelete: SetNull)
+  options    AttributeOption[]
+  categories CategoryAttribute[]
+  values     AttributeValue[]
 
-  @@unique([entrepriseId, nom])
-  @@index([entrepriseId])
+  @@unique([companyId, name])
+  @@index([companyId])
   @@index([clonedFromTemplateId])
-  @@map("attribut_definition")
+  @@map("attribute_definition")
 }
 
-model AttributOption {
-  id                   String @id @default(cuid())
-  attributDefinitionId String @map("attribut_definition_id")
-  valeur               String
-  ordre                Int    @default(0)
+model AttributeOption {
+  id                    String @id @default(cuid())
+  attributeDefinitionId String @map("attribute_definition_id")
+  value                 String
+  position              Int    @default(0)
 
-  attribut AttributDefinition      @relation(fields: [attributDefinitionId], references: [id], onDelete: Cascade)
-  produits ProduitAttributOption[]
+  attribute AttributeDefinition      @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+  products  ProductAttributeOption[]
 
-  @@unique([attributDefinitionId, valeur])
-  @@index([attributDefinitionId])
-  @@map("attribut_option")
+  @@unique([attributeDefinitionId, value])
+  @@index([attributeDefinitionId])
+  @@map("attribute_option")
 }
 
-// Quels attributs s'appliquent à quelle catégorie : "Sac" n'a pas de Taille,
-// "Robe" si.
-model CategorieAttribut {
-  categorieId          String @map("categorie_id")
-  attributDefinitionId String @map("attribut_definition_id")
+/// Which attributes apply to which category: a bag has no size, a dress does.
+model CategoryAttribute {
+  categoryId            String @map("category_id")
+  attributeDefinitionId String @map("attribute_definition_id")
 
-  categorie Categorie          @relation(fields: [categorieId], references: [id], onDelete: Cascade)
-  attribut  AttributDefinition @relation(fields: [attributDefinitionId], references: [id], onDelete: Cascade)
+  category  Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
 
-  @@id([categorieId, attributDefinitionId])
-  @@index([categorieId])
-  @@index([attributDefinitionId])
-  @@map("categorie_attribut")
+  @@id([categoryId, attributeDefinitionId])
+  @@index([categoryId])
+  @@index([attributeDefinitionId])
+  @@map("category_attribute")
 }
 
 // ---------------------------------------------------------------------------
-// Statuts
+// Statuses
 // ---------------------------------------------------------------------------
 
-// Les trois flags comportementaux pilotent la logique métier indépendamment du
-// libellé, que le gérant peut renommer. Voir CLAUDE.md, section "Statuts".
-//
-// `estDefaut` doit être vrai pour exactement un statut par entreprise. Ce n'est
-// pas exprimable en index unique Prisma (un index sur [entrepriseId, estDefaut]
-// interdirait aussi deux `false`), et un index partiel écrit à la main dans la
-// migration serait vu comme une dérive par `make check-db`. La contrainte est
-// donc tenue au niveau service, dans le module `statuts`.
-model Statut {
-  id           String   @id @default(cuid())
-  entrepriseId String   @map("entreprise_id")
-  nom          String
-  couleur      String   @default("#6b7280")
-  ordre        Int      @default(0)
-  estDefaut    Boolean  @default(false) @map("est_defaut")
-  estVente     Boolean  @default(false) @map("est_vente")
-  bloqueVente  Boolean  @default(false) @map("bloque_vente")
-  sortStock    Boolean  @default(false) @map("sort_stock")
-  createdAt    DateTime @default(now()) @map("created_at")
+/// The three behaviour flags drive the business logic independently of the
+/// label, which the manager may rename. See CLAUDE.md, "Statuts".
+///
+/// Exactly one status per company must carry `isDefault`. That is not
+/// expressible as a Prisma unique index — one on [companyId, isDefault] would
+/// also forbid two `false` — and a hand-written partial index would read as
+/// drift to `make check-db`. The rule is held in the statuses service.
+model Status {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  name        String
+  color       String   @default("#6b7280")
+  position    Int      @default(0)
+  isDefault   Boolean  @default(false) @map("is_default")
+  isSale      Boolean  @default(false) @map("is_sale")
+  blocksSale  Boolean  @default(false) @map("blocks_sale")
+  leavesStock Boolean  @default(false) @map("leaves_stock")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  // Position sur le schéma du flux (écran Statuts). Nulles tant que le gérant
-  // n'a rien déplacé : l'écran dispose alors les statuts automatiquement.
+  /// Position on the workflow diagram, set with the default flow.
   positionX Float? @map("position_x")
   positionY Float? @map("position_y")
 
-  entreprise           Entreprise         @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  produits             Produit[]
-  historique           HistoriqueStatut[]
-  transitionsSortantes TransitionStatut[] @relation("TransitionSource")
-  transitionsEntrantes TransitionStatut[] @relation("TransitionCible")
+  company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products            Product[]
+  history             StatusHistory[]
+  outgoingTransitions StatusTransition[] @relation("TransitionSource")
+  incomingTransitions StatusTransition[] @relation("TransitionTarget")
 
-  @@unique([entrepriseId, nom])
-  @@index([entrepriseId])
-  @@map("statut")
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("status")
 }
 
-/// Transition autorisée d'un statut vers un autre — les flèches du schéma.
+/// An allowed move from one status to another — the arrows on the diagram.
 ///
-/// Tant qu'une entreprise n'en a tracé AUCUNE, tous les changements restent
-/// permis : imposer un graphe vide bloquerait tout le stock. Dès la première
-/// flèche, seules les transitions tracées sont acceptées.
+/// While a company has NO transition at all, every move stays allowed:
+/// enforcing an empty graph would freeze its whole stock. From the first arrow
+/// onwards, only the drawn paths are accepted.
 ///
-/// Pas de entrepriseId : le cloisonnement passe par `source`. Voir la règle de
-/// scoping via relation parente dans CLAUDE.md.
-model TransitionStatut {
+/// No companyId: isolation flows through `source`.
+model StatusTransition {
   id       String @id @default(cuid())
   sourceId String @map("source_id")
-  cibleId  String @map("cible_id")
+  targetId String @map("target_id")
 
-  source Statut @relation("TransitionSource", fields: [sourceId], references: [id], onDelete: Cascade)
-  cible  Statut @relation("TransitionCible", fields: [cibleId], references: [id], onDelete: Cascade)
+  source Status @relation("TransitionSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target Status @relation("TransitionTarget", fields: [targetId], references: [id], onDelete: Cascade)
 
-  @@unique([sourceId, cibleId])
+  @@unique([sourceId, targetId])
   @@index([sourceId])
-  @@index([cibleId])
-  @@map("transition_statut")
+  @@index([targetId])
+  @@map("status_transition")
 }
 
 // ---------------------------------------------------------------------------
-// Dépôt-vente
+// Consignment
 // ---------------------------------------------------------------------------
 
-model Client {
-  id               String   @id @default(cuid())
-  entrepriseId     String   @map("entreprise_id")
-  nom              String
-  prenom           String?
-  email            String?
-  telephone        String?
-  adresse          String?
-  iban             String?
-  // Part que garde la boutique, en pourcentage. Voir CLAUDE.md, section
-  // "Dépôt-vente" : partDeposant = prixVendu * (1 - commission / 100).
-  commissionDefaut Decimal  @default(0) @map("commission_defaut") @db.Decimal(5, 2)
-  createdAt        DateTime @default(now()) @map("created_at")
+model Depositor {
+  id                String   @id @default(cuid())
+  companyId         String   @map("company_id")
+  lastName          String   @map("last_name")
+  firstName         String?  @map("first_name")
+  email             String?
+  phone             String?
+  address           String?
+  iban              String?
+  /// Share the shop keeps, as a percentage. See CLAUDE.md, "Dépôt-vente":
+  /// depositorShare = soldPrice * (1 - commission / 100).
+  defaultCommission Decimal  @default(0) @map("default_commission") @db.Decimal(5, 2)
+  createdAt         DateTime @default(now()) @map("created_at")
 
-  entreprise Entreprise     @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  contrats   ContratDepot[]
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contracts DepositContract[]
 
-  @@index([entrepriseId])
-  @@map("client")
+  @@index([companyId])
+  @@map("depositor")
 }
 
-enum StatutContrat {
-  ACTIF
-  EXPIRE
-  CLOS
+enum ContractStatus {
+  ACTIVE
+  EXPIRED
+  CLOSED
 
-  @@map("statut_contrat")
+  @@map("contract_status")
 }
 
-// Pas de entrepriseId : le cloisonnement passe par `client`. Toute requête doit
-// filtrer via la relation parente (voir CLAUDE.md, conventions de code).
-model ContratDepot {
-  id               String        @id @default(cuid())
-  clientId         String        @map("client_id")
-  dateDebut        DateTime      @map("date_debut")
-  dateFin          DateTime      @map("date_fin")
-  commission       Decimal       @db.Decimal(5, 2)
-  notifyBeforeDays Int           @default(7) @map("notify_before_days")
-  statut           StatutContrat @default(ACTIF)
-  // Renseigné par le job d'alerte d'échéance pour ne pas renotifier en boucle.
-  notifieLe        DateTime?     @map("notifie_le")
-  createdAt        DateTime      @default(now()) @map("created_at")
+/// No companyId: isolation flows through `depositor`. Every query must filter
+/// through the parent relation (see CLAUDE.md, coding conventions).
+model DepositContract {
+  id               String         @id @default(cuid())
+  depositorId      String         @map("depositor_id")
+  startDate        DateTime       @map("start_date")
+  endDate          DateTime       @map("end_date")
+  commission       Decimal        @db.Decimal(5, 2)
+  notifyBeforeDays Int            @default(7) @map("notify_before_days")
+  status           ContractStatus @default(ACTIVE)
+  /// Set by the deadline job so it does not notify again every day.
+  notifiedAt       DateTime?      @map("notified_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
 
-  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  produits      Produit[]
+  depositor     Depositor      @relation(fields: [depositorId], references: [id], onDelete: Cascade)
+  products      Product[]
   notifications Notification[]
 
-  @@index([clientId])
-  @@index([dateFin])
-  @@map("contrat_depot")
+  @@index([depositorId])
+  @@index([endDate])
+  @@map("deposit_contract")
 }
 
 // ---------------------------------------------------------------------------
-// Produits
+// Products
 // ---------------------------------------------------------------------------
 
-enum TypeVente {
-  ACHAT_REVENTE
-  DEPOT_VENTE
+enum SaleType {
+  /// The shop bought the item and resells it: purchasePrice is relevant.
+  RESALE
+  /// The item belongs to a depositor through a DepositContract.
+  CONSIGNMENT
 
-  @@map("type_vente")
+  @@map("sale_type")
 }
 
-model Produit {
-  id           String  @id @default(cuid())
-  entrepriseId String  @map("entreprise_id")
-  // Nullable : un produit peut exister au niveau entreprise avant d'être
-  // assigné à une boutique (stock central / à trier).
-  boutiqueId   String? @map("boutique_id")
-  categorieId  String  @map("categorie_id")
-  statutId     String  @map("statut_id")
+model Product {
+  id         String  @id @default(cuid())
+  companyId  String  @map("company_id")
+  /// Nullable: a product may exist at company level before being assigned to a
+  /// shop (central stock, waiting to be sorted).
+  shopId     String? @map("shop_id")
+  categoryId String  @map("category_id")
+  statusId   String  @map("status_id")
 
-  // Saisie manuelle et libre (ex: BTR6). `sku` est réservé à un futur scan QR.
-  reference   String?
-  sku         String?
-  nom         String
-  description String?
-  commentaire String?
-  photoUrl    String? @map("photo_url")
+  /// Free-form, typed by hand (e.g. BTR6). `sku` is reserved for a future QR
+  /// scan and unused for now.
+  reference    String?
+  sku          String?
+  name         String
+  description  String?
+  internalNote String? @map("internal_note")
+  photoUrl     String? @map("photo_url")
 
-  prixAchat Decimal? @map("prix_achat") @db.Decimal(10, 2)
-  prixVente Decimal? @map("prix_vente") @db.Decimal(10, 2)
-  prixVendu Decimal? @map("prix_vendu") @db.Decimal(10, 2)
-  quantite  Int      @default(1)
+  purchasePrice Decimal? @map("purchase_price") @db.Decimal(10, 2)
+  salePrice     Decimal? @map("sale_price") @db.Decimal(10, 2)
+  soldPrice     Decimal? @map("sold_price") @db.Decimal(10, 2)
+  quantity      Int      @default(1)
 
-  typeVente           TypeVente @map("type_vente")
-  contratDepotId      String?   @map("contrat_depot_id")
-  // Copie figée de ContratDepot.commission au passage à un statut estVente.
-  // C'est elle que lisent le relevé, l'export et les stats — jamais celle du
-  // contrat, qui peut être modifiée après coup.
-  commissionAppliquee Decimal?  @map("commission_appliquee") @db.Decimal(5, 2)
-  deposantPaye        Boolean?  @map("deposant_paye")
-  dateVente           DateTime? @map("date_vente")
+  saleType          SaleType  @map("sale_type")
+  depositContractId String?   @map("deposit_contract_id")
+  /// Frozen copy of DepositContract.commission, taken when the product moves to
+  /// a status carrying isSale. Statements, exports and stats read this copy and
+  /// never the contract, which may be edited afterwards.
+  appliedCommission Decimal?  @map("applied_commission") @db.Decimal(5, 2)
+  depositorPaid     Boolean?  @map("depositor_paid")
+  soldAt            DateTime? @map("sold_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  entreprise   Entreprise    @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  boutique     Boutique?     @relation(fields: [boutiqueId], references: [id], onDelete: SetNull)
-  categorie    Categorie     @relation(fields: [categorieId], references: [id], onDelete: Restrict)
-  statut       Statut        @relation(fields: [statutId], references: [id], onDelete: Restrict)
-  contratDepot ContratDepot? @relation(fields: [contratDepotId], references: [id], onDelete: SetNull)
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shop            Shop?            @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  status          Status           @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  depositContract DepositContract? @relation(fields: [depositContractId], references: [id], onDelete: SetNull)
 
-  valeurs    ValeurAttribut[]
-  options    ProduitAttributOption[]
-  historique HistoriqueStatut[]
+  attributeValues  AttributeValue[]
+  attributeOptions ProductAttributeOption[]
+  statusHistory    StatusHistory[]
 
-  @@index([entrepriseId])
-  @@index([boutiqueId])
-  @@index([categorieId])
-  @@index([statutId])
-  @@index([contratDepotId])
+  @@index([companyId])
+  @@index([shopId])
+  @@index([categoryId])
+  @@index([statusId])
+  @@index([depositContractId])
   @@index([reference])
-  @@map("produit")
+  @@map("product")
 }
 
-// Valeurs des attributs TEXT / NUMBER / BOOLEAN.
-model ValeurAttribut {
-  id                   String   @id @default(cuid())
-  produitId            String   @map("produit_id")
-  attributDefinitionId String   @map("attribut_definition_id")
-  valeurTexte          String?  @map("valeur_texte")
-  valeurNombre         Decimal? @map("valeur_nombre") @db.Decimal(12, 3)
-  valeurBooleenne      Boolean? @map("valeur_booleenne")
+/// Values for TEXT / NUMBER / BOOLEAN attributes.
+model AttributeValue {
+  id                    String   @id @default(cuid())
+  productId             String   @map("product_id")
+  attributeDefinitionId String   @map("attribute_definition_id")
+  textValue             String?  @map("text_value")
+  numberValue           Decimal? @map("number_value") @db.Decimal(12, 3)
+  booleanValue          Boolean? @map("boolean_value")
 
-  produit  Produit            @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  attribut AttributDefinition @relation(fields: [attributDefinitionId], references: [id], onDelete: Cascade)
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
 
-  @@unique([produitId, attributDefinitionId])
-  @@index([produitId])
-  @@index([attributDefinitionId])
-  @@map("valeur_attribut")
+  @@unique([productId, attributeDefinitionId])
+  @@index([productId])
+  @@index([attributeDefinitionId])
+  @@map("attribute_value")
 }
 
-// Valeurs des attributs SELECT (une ligne) et MULTISELECT (plusieurs).
-model ProduitAttributOption {
-  produitId        String @map("produit_id")
-  attributOptionId String @map("attribut_option_id")
+/// Values for SELECT (one row) and MULTISELECT (several) attributes.
+model ProductAttributeOption {
+  productId         String @map("product_id")
+  attributeOptionId String @map("attribute_option_id")
 
-  produit Produit        @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  option  AttributOption @relation(fields: [attributOptionId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  option  AttributeOption @relation(fields: [attributeOptionId], references: [id], onDelete: Cascade)
 
-  @@id([produitId, attributOptionId])
-  @@index([produitId])
-  @@index([attributOptionId])
-  @@map("produit_attribut_option")
+  @@id([productId, attributeOptionId])
+  @@index([productId])
+  @@index([attributeOptionId])
+  @@map("product_attribute_option")
 }
 
-model HistoriqueStatut {
+model StatusHistory {
   id              String   @id @default(cuid())
-  produitId       String   @map("produit_id")
-  statutId        String   @map("statut_id")
-  // Nullable + SetNull : supprimer un employé ne doit pas effacer la trace des
-  // changements de statut qu'il a faits.
+  productId       String   @map("product_id")
+  statusId        String   @map("status_id")
+  /// Nullable + SetNull: deleting an employee must not erase the trace of the
+  /// status changes they made.
   changedByUserId String?  @map("changed_by_user_id")
   changedAt       DateTime @default(now()) @map("changed_at")
   note            String?
 
-  produit Produit @relation(fields: [produitId], references: [id], onDelete: Cascade)
-  statut  Statut  @relation(fields: [statutId], references: [id], onDelete: Restrict)
-  auteur  User?   @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  status  Status  @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  author  User?   @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
 
-  @@index([produitId])
-  @@index([statutId])
+  @@index([productId])
+  @@index([statusId])
   @@index([changedByUserId])
-  @@map("historique_statut")
+  @@map("status_history")
 }
 
 // ---------------------------------------------------------------------------
@@ -445,18 +446,18 @@ model HistoriqueStatut {
 // ---------------------------------------------------------------------------
 
 model Notification {
-  id             String   @id @default(cuid())
-  entrepriseId   String   @map("entreprise_id")
-  type           String
-  contratDepotId String?  @map("contrat_depot_id")
-  message        String
-  isRead         Boolean  @default(false) @map("is_read")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                String   @id @default(cuid())
+  companyId         String   @map("company_id")
+  type              String
+  depositContractId String?  @map("deposit_contract_id")
+  message           String
+  isRead            Boolean  @default(false) @map("is_read")
+  createdAt         DateTime @default(now()) @map("created_at")
 
-  entreprise   Entreprise    @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  contratDepot ContratDepot? @relation(fields: [contratDepotId], references: [id], onDelete: Cascade)
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  depositContract DepositContract? @relation(fields: [depositContractId], references: [id], onDelete: Cascade)
 
-  @@index([entrepriseId])
-  @@index([contratDepotId])
+  @@index([companyId])
+  @@index([depositContractId])
   @@map("notification")
 }

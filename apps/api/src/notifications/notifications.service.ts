@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
+import type { CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -7,49 +7,49 @@ export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Notifications de l'entreprise.
+   * Liste des notifications de l'entreprise.
    *
    * Elles ne sont pas rattachées à un utilisateur : marquer une alerte comme lue
    * la masque pour toute l'entreprise. Assumé pour le MVP — voir la note dans
    * README.md.
    */
-  async lister(courant: UtilisateurCourant) {
+  async list(currentUser: CurrentUser) {
     const notifications = await this.prisma.notification.findMany({
-      where: { entrepriseId: courant.entrepriseId },
+      where: { companyId: currentUser.companyId },
       orderBy: [{ isRead: 'asc' }, { createdAt: 'desc' }],
       take: 50,
       include: {
-        contratDepot: {
+        depositContract: {
           select: {
             id: true,
-            dateFin: true,
-            client: { select: { id: true, nom: true, prenom: true } },
+            endDate: true,
+            depositor: { select: { id: true, lastName: true, firstName: true } },
           },
         },
       },
     });
     return {
       notifications,
-      nonLues: notifications.filter((n) => !n.isRead).length,
+      unread: notifications.filter((n) => !n.isRead).length,
     };
   }
 
-  async marquerLue(courant: UtilisateurCourant, id: string) {
+  async markRead(currentUser: CurrentUser, id: string) {
     const notification = await this.prisma.notification.findFirst({
-      where: { id, entrepriseId: courant.entrepriseId },
+      where: { id, companyId: currentUser.companyId },
       select: { id: true },
     });
     if (!notification) throw new NotFoundException('Notification introuvable.');
 
     await this.prisma.notification.update({ where: { id }, data: { isRead: true } });
-    return this.lister(courant);
+    return this.list(currentUser);
   }
 
-  async toutMarquerLu(courant: UtilisateurCourant) {
+  async markAllRead(currentUser: CurrentUser) {
     await this.prisma.notification.updateMany({
-      where: { entrepriseId: courant.entrepriseId, isRead: false },
+      where: { companyId: currentUser.companyId, isRead: false },
       data: { isRead: true },
     });
-    return this.lister(courant);
+    return this.list(currentUser);
   }
 }

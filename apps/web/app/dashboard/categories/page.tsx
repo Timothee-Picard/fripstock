@@ -1,13 +1,13 @@
-import { ArbreCategories, FormulaireCreation } from './arbre';
-import { appelApi } from '@/lib/api';
-import { exigerSession } from '@/lib/session';
-import type { AttributDefinition, CategorieArbre } from '@/lib/types';
+import { CategoryTreeView, CreateForm } from './tree';
+import { apiFetch } from '@/lib/api';
+import { requireSession } from '@/lib/session';
+import type { AttributeDefinition, CategoryTree } from '@/lib/types';
 
-export default async function PageCategories() {
-  await exigerSession();
-  const [arbre, attributs] = await Promise.all([
-    appelApi<CategorieArbre[]>('/categories/arbre'),
-    appelApi<AttributDefinition[]>('/attributs'),
+export default async function CategoriesPage() {
+  await requireSession();
+  const [tree, attributes] = await Promise.all([
+    apiFetch<CategoryTree[]>('/categories/tree'),
+    apiFetch<AttributeDefinition[]>('/attributes'),
   ]);
 
   return (
@@ -22,8 +22,8 @@ export default async function PageCategories() {
         </p>
       </div>
 
-      <FormulaireCreation arbre={arbre} />
-      <ArbreCategories arbre={arbre} attributs={attributs} />
+      <CreateForm tree={tree} />
+      <CategoryTreeView tree={tree} attributes={attributes} />
     </div>
   );
 }

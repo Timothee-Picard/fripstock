@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { NOM_COOKIE } from '@/lib/api';
+import { COOKIE_NAME } from '@/lib/api';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3001';
 
@@ -11,25 +11,25 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3001';
  * Next, qui rattache l'authentification. Les filtres de la liste sont passés
  * tels quels.
  */
-export async function GET(requete: Request) {
-  const jeton = (await cookies()).get(NOM_COOKIE)?.value;
-  if (!jeton) return new Response('Non authentifié', { status: 401 });
+export async function GET(request: Request) {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return new Response('Non authentifié', { status: 401 });
 
-  const filtres = new URL(requete.url).searchParams;
-  const reponse = await fetch(`${API_URL}/produits/export?${filtres.toString()}`, {
-    headers: { Authorization: `Bearer ${jeton}` },
+  const filters = new URL(request.url).searchParams;
+  const response = await fetch(`${API_URL}/products/export?${filters.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });
 
-  if (!reponse.ok || !reponse.body) {
-    return new Response('Export impossible.', { status: reponse.status });
+  if (!response.ok || !response.body) {
+    return new Response('Export impossible.', { status: response.status });
   }
 
-  return new Response(reponse.body, {
+  return new Response(response.body, {
     headers: {
-      'Content-Type': reponse.headers.get('content-type') ?? 'text/csv; charset=utf-8',
+      'Content-Type': response.headers.get('content-type') ?? 'text/csv; charset=utf-8',
       'Content-Disposition':
-        reponse.headers.get('content-disposition') ?? 'attachment; filename="stock.csv"',
+        response.headers.get('content-disposition') ?? 'attachment; filename="stock.csv"',
     },
   });
 }

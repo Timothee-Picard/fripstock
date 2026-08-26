@@ -6,18 +6,18 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { normaliserEmail } from '../common/email';
-import { lirePermissions, PERMISSIONS, type Permission } from '../common/permissions';
-import type { AccesBoutiqueResume, UtilisateurCourant } from '../common/types/utilisateur-courant';
+import { normalizeEmail } from '../common/email';
+import { readPermissions, PERMISSIONS, type Permission } from '../common/permissions';
+import type { ShopAccessSummary, CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
-import { STATUTS_DE_BASE, TRANSITIONS_DE_BASE } from '../statuts/statuts.defaut';
-import type { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
+import { BASE_STATUSES, BASE_TRANSITIONS } from '../statuses/statuses.defaults';
+import type { ChangePasswordDto } from './dto/change-password.dto';
 import type { LoginDto } from './dto/login.dto';
-import type { ModifierProfilDto } from './dto/modifier-profil.dto';
+import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { RegisterDto } from './dto/register.dto';
 import type { ChargeJwt } from './jwt.strategy';
 
-const COUT_BCRYPT = 10;
+const BCRYPT_COST = 10;
 
 @Injectable()
 export class AuthService {
@@ -31,93 +31,93 @@ export class AuthService {
    * base. Aucune boutique n'est créée automatiquement : c'est une action à part.
    */
   async register(dto: RegisterDto) {
-    const email = normaliserEmail(dto.email);
+    const email = normalizeEmail(dto.email);
     const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (existant) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
     }
 
-    const motDePasseHash = await bcrypt.hash(dto.motDePasse, COUT_BCRYPT);
+    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_COST);
 
-    const gerant = await this.prisma.$transaction(async (tx) => {
-      const entreprise = await tx.entreprise.create({ data: { nom: dto.nomEntreprise } });
+    const manager = await this.prisma.$transaction(async (tx) => {
+      const company = await tx.company.create({ data: { name: dto.companyName } });
 
-      await tx.statut.createMany({
-        data: STATUTS_DE_BASE.map((statut, ordre) => ({
-          ...statut,
-          ordre,
-          entrepriseId: entreprise.id,
+      await tx.status.createMany({
+        data: BASE_STATUSES.map((status, position) => ({
+          ...status,
+          position,
+          companyId: company.id,
         })),
       });
 
       // Flux de départ : sans lui, la nouvelle entreprise tomberait dans le
       // repli permissif et le schéma s'ouvrirait vide, sans rien à comprendre.
-      const crees = await tx.statut.findMany({
-        where: { entrepriseId: entreprise.id },
-        select: { id: true, nom: true },
+      const crees = await tx.status.findMany({
+        where: { companyId: company.id },
+        select: { id: true, name: true },
       });
-      const parNom = new Map(crees.map((s) => [s.nom, s.id]));
-      await tx.transitionStatut.createMany({
-        data: TRANSITIONS_DE_BASE.map(([source, cible]) => ({
-          sourceId: parNom.get(source)!,
-          cibleId: parNom.get(cible)!,
+      const byName = new Map(crees.map((s) => [s.name, s.id]));
+      await tx.statusTransition.createMany({
+        data: BASE_TRANSITIONS.map(([source, target]) => ({
+          sourceId: byName.get(source)!,
+          targetId: byName.get(target)!,
         })),
       });
       return tx.user.create({
         data: {
-          entrepriseId: entreprise.id,
+          companyId: company.id,
           email,
-          motDePasseHash,
-          prenom: dto.prenom,
-          nom: dto.nom,
-          estGerant: true,
+          passwordHash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          isManager: true,
         },
       });
     });
 
-    return this.emettreJeton(gerant.id, gerant.entrepriseId, gerant.estGerant);
+    return this.issueToken(manager.id, manager.companyId, manager.isManager);
   }
 
   async login(dto: LoginDto) {
-    const utilisateur = await this.prisma.user.findUnique({
-      where: { email: normaliserEmail(dto.email) },
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizeEmail(dto.email) },
     });
 
     // Message identique dans les deux cas : distinguer "email inconnu" de
     // "mot de passe faux" permettrait d'énumérer les comptes existants.
     const echec = new UnauthorizedException('Email ou mot de passe incorrect.');
-    if (!utilisateur) {
+    if (!user) {
       // Hachage à vide malgré tout, pour que la réponse mette le même temps
       // qu'avec un email connu.
       await bcrypt.compare(
-        dto.motDePasse,
+        dto.password,
         '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva',
       );
       throw echec;
     }
-    const valide = await bcrypt.compare(dto.motDePasse, utilisateur.motDePasseHash);
+    const valide = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valide) throw echec;
 
-    return this.emettreJeton(utilisateur.id, utilisateur.entrepriseId, utilisateur.estGerant);
+    return this.issueToken(user.id, user.companyId, user.isManager);
   }
 
   /** Profil complet : identité, entreprise, et accès boutique par boutique. */
-  async me(courant: UtilisateurCourant) {
-    const utilisateur = await this.prisma.user.findFirstOrThrow({
-      where: { id: courant.userId, entrepriseId: courant.entrepriseId },
+  async me(currentUser: CurrentUser) {
+    const user = await this.prisma.user.findFirstOrThrow({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
       select: {
         id: true,
         email: true,
-        prenom: true,
-        nom: true,
-        estGerant: true,
-        entreprise: { select: { id: true, nom: true } },
+        firstName: true,
+        lastName: true,
+        isManager: true,
+        company: { select: { id: true, name: true } },
       },
     });
 
     return {
-      ...utilisateur,
-      boutiques: await this.accesBoutiques(courant),
+      ...user,
+      shops: await this.shopAccesses(currentUser),
     };
   }
 
@@ -125,54 +125,54 @@ export class AuthService {
    * Le gérant voit toutes les boutiques de son entreprise avec tous les droits,
    * sans passer par la table d'accès. Un employé ne voit que les siennes.
    */
-  async accesBoutiques(courant: UtilisateurCourant): Promise<AccesBoutiqueResume[]> {
-    if (courant.estGerant) {
-      const boutiques = await this.prisma.boutique.findMany({
-        where: { entrepriseId: courant.entrepriseId },
-        orderBy: { nom: 'asc' },
-        select: { id: true, nom: true },
+  async shopAccesses(currentUser: CurrentUser): Promise<ShopAccessSummary[]> {
+    if (currentUser.isManager) {
+      const shops = await this.prisma.shop.findMany({
+        where: { companyId: currentUser.companyId },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
       });
-      return boutiques.map((b) => ({
-        boutiqueId: b.id,
-        nom: b.nom,
-        tousDroits: true,
+      return shops.map((b) => ({
+        shopId: b.id,
+        name: b.name,
+        allRights: true,
         permissions: [...PERMISSIONS],
       }));
     }
 
-    const acces = await this.prisma.accesBoutique.findMany({
+    const accesses = await this.prisma.shopAccess.findMany({
       where: {
-        userId: courant.userId,
-        boutique: { entrepriseId: courant.entrepriseId },
+        userId: currentUser.userId,
+        shop: { companyId: currentUser.companyId },
       },
-      orderBy: { boutique: { nom: 'asc' } },
-      select: { boutiqueId: true, permissions: true, boutique: { select: { nom: true } } },
+      orderBy: { shop: { name: 'asc' } },
+      select: { shopId: true, permissions: true, shop: { select: { name: true } } },
     });
 
-    return acces.map((a) => ({
-      boutiqueId: a.boutiqueId,
-      nom: a.boutique.nom,
-      tousDroits: false,
-      permissions: Object.keys(lirePermissions(a.permissions)) as Permission[],
+    return accesses.map((a) => ({
+      shopId: a.shopId,
+      name: a.shop.name,
+      allRights: false,
+      permissions: Object.keys(readPermissions(a.permissions)) as Permission[],
     }));
   }
 
   /** Modification de son propre profil : prénom, nom, email. */
-  async modifierProfil(courant: UtilisateurCourant, dto: ModifierProfilDto) {
-    const utilisateur = await this.prisma.user.findFirstOrThrow({
-      where: { id: courant.userId, entrepriseId: courant.entrepriseId },
+  async updateProfile(currentUser: CurrentUser, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findFirstOrThrow({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
     });
 
-    const email = normaliserEmail(dto.email);
-    const changeEmail = email !== utilisateur.email;
+    const email = normalizeEmail(dto.email);
+    const changeEmail = email !== user.email;
 
     if (changeEmail) {
-      if (!dto.motDePasseActuel) {
+      if (!dto.currentPassword) {
         throw new BadRequestException(
           'Le mot de passe actuel est requis pour changer votre adresse email.',
         );
       }
-      const valide = await bcrypt.compare(dto.motDePasseActuel, utilisateur.motDePasseHash);
+      const valide = await bcrypt.compare(dto.currentPassword, user.passwordHash);
       if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
 
       const pris = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
@@ -180,45 +180,45 @@ export class AuthService {
     }
 
     await this.prisma.user.update({
-      where: { id: utilisateur.id },
-      data: { prenom: dto.prenom, nom: dto.nom, email },
+      where: { id: user.id },
+      data: { firstName: dto.firstName, lastName: dto.lastName, email },
     });
 
-    return this.me(courant);
+    return this.me(currentUser);
   }
 
   /**
    * Changement de son propre mot de passe. L'ancien est exigé : une session
    * détournée ne doit pas suffire à verrouiller le compte de son propriétaire.
    */
-  async changerMotDePasse(courant: UtilisateurCourant, dto: ChangerMotDePasseDto) {
-    const utilisateur = await this.prisma.user.findFirstOrThrow({
-      where: { id: courant.userId, entrepriseId: courant.entrepriseId },
+  async changePassword(currentUser: CurrentUser, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findFirstOrThrow({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
     });
 
-    const valide = await bcrypt.compare(dto.motDePasseActuel, utilisateur.motDePasseHash);
+    const valide = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
 
-    if (await bcrypt.compare(dto.nouveauMotDePasse, utilisateur.motDePasseHash)) {
+    if (await bcrypt.compare(dto.newPassword, user.passwordHash)) {
       throw new BadRequestException("Le nouveau mot de passe est identique à l'ancien.");
     }
 
     await this.prisma.user.update({
-      where: { id: utilisateur.id },
-      data: { motDePasseHash: await bcrypt.hash(dto.nouveauMotDePasse, COUT_BCRYPT) },
+      where: { id: user.id },
+      data: { passwordHash: await bcrypt.hash(dto.newPassword, BCRYPT_COST) },
     });
 
     // Un jeton neuf est renvoyé pour que la session courante reste valide.
     // Attention : les jetons déjà émis ailleurs, eux, restent valables jusqu'à
     // leur expiration — le JWT est sans état, rien ne permet de les révoquer.
-    return this.emettreJeton(utilisateur.id, utilisateur.entrepriseId, utilisateur.estGerant);
+    return this.issueToken(user.id, user.companyId, user.isManager);
   }
 
-  private async emettreJeton(userId: string, entrepriseId: string, estGerant: boolean) {
-    const charge: ChargeJwt = { sub: userId, entrepriseId, estGerant };
+  private async issueToken(userId: string, companyId: string, isManager: boolean) {
+    const charge: ChargeJwt = { sub: userId, companyId, isManager };
     return {
       accessToken: await this.jwt.signAsync(charge),
-      utilisateur: { id: userId, entrepriseId, estGerant },
+      user: { id: userId, companyId, isManager },
     };
   }
 }

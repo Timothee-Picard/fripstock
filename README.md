@@ -53,10 +53,10 @@ make seed      # jeu de données de démonstration
 
 Le seed est idempotent et crée deux comptes de démonstration, affichés à la fin :
 
-| Compte  | Identifiants                           | Accès                                                                 |
-| ------- | -------------------------------------- | --------------------------------------------------------------------- |
-| Gérant  | `gerant@fripstock.test` / `fripstock`  | Tous les droits sur toute l'entreprise                                |
-| Employé | `employe@fripstock.test` / `fripstock` | Boutique Centre-ville, `produits.voir` et `produits.creer` uniquement |
+| Compte  | Identifiants                           | Accès                                                                  |
+| ------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Gérant  | `gerant@fripstock.test` / `fripstock`  | Tous les droits sur toute l'entreprise                                 |
+| Employé | `employe@fripstock.test` / `fripstock` | Boutique Centre-ville, `products.view` et `products.create` uniquement |
 
 Les permissions de l'employé sont volontairement partielles : tout le reste doit lui
 renvoyer un 403, ce qui rend la restriction testable sans bricoler un compte à la main.
@@ -99,15 +99,15 @@ appels partent du serveur Next, qui rattache le jeton lui-même.
 
 Trois niveaux d'autorisation, tous appliqués côté API et jamais seulement dans l'UI :
 
-| Niveau          | Mécanisme                              | Exemple                                |
-| --------------- | -------------------------------------- | -------------------------------------- |
-| Authentifié     | `JwtAuthGuard` global                  | Toute route non `@Public()`            |
-| Gérant          | `@GerantUniquement()`                  | Créer une boutique, inviter un employé |
-| Permission fine | `@RequirePermission('produits.creer')` | Actions sur les produits (étape 5)     |
+| Niveau          | Mécanisme                               | Exemple                                |
+| --------------- | --------------------------------------- | -------------------------------------- |
+| Authentifié     | `JwtAuthGuard` global                   | Toute route non `@Public()`            |
+| Gérant          | `@GerantUniquement()`                   | Créer une boutique, inviter un employé |
+| Permission fine | `@RequirePermission('products.create')` | Actions sur les produits (étape 5)     |
 
 Le gérant contourne entièrement la table des permissions, une seule fois, dans le guard.
 Pour un employé, `PermissionsGuard` retrouve la boutique concernée de trois façons :
-un `boutiqueId` explicite, une ressource ciblée par l'URL via
+un `shopId` explicite, une ressource ciblée par l'URL via
 `@BoutiqueDepuisRessource`, ou aucune — c'est alors le stock central, et la permission
 est accordée si l'employé la détient sur au moins une boutique.
 
@@ -116,9 +116,9 @@ guard est donc couvert par ses propres tests (`permissions.guard.spec.ts`).
 
 ### Son propre compte
 
-`/dashboard/profil` permet à chacun — gérant comme employé — de modifier son prénom, son
-nom, son email et son mot de passe. Les routes correspondantes (`PUT /auth/profil`,
-`PUT /auth/mot-de-passe`) ne prennent aucun identifiant dans l'URL : la cible est
+`/dashboard/profile` permet à chacun — gérant comme employé — de modifier son prénom, son
+nom, son email et son mot de passe. Les routes correspondantes (`PUT /auth/profile`,
+`PUT /auth/password`) ne prennent aucun identifiant dans l'URL : la cible est
 toujours l'utilisateur du jeton.
 
 Le mot de passe actuel est exigé pour changer le mot de passe, et pour changer l'email —
@@ -141,13 +141,13 @@ aucun recours.
 ## Catalogue
 
 Catégories et attributs sont définis **au niveau Entreprise** et partagés par toutes ses
-boutiques — jamais par boutique. Les routes d'écriture n'ont donc pas de `boutiqueId` :
+boutiques — jamais par boutique. Les routes d'écriture n'ont donc pas de `shopId` :
 le `PermissionsGuard` applique sa règle du stock central, et la permission
-(`categories.gerer`, `attributs.gerer`) est accordée si l'utilisateur la détient sur au
+(`categories.manage`, `attributes.manage`) est accordée si l'utilisateur la détient sur au
 moins une de ses boutiques. La lecture est ouverte à tout utilisateur de l'entreprise.
 
 Deux écrans : `/dashboard/categories` (arbre, avec sélecteur de parent) et
-`/dashboard/attributs`.
+`/dashboard/attributes`.
 
 **L'association se pilote depuis la catégorie**, sur `/dashboard/categories` : chaque
 catégorie déclare les attributs qui seront demandés à la création d'un produit. C'est le
@@ -156,12 +156,12 @@ l'inverse.
 
 Attention au contresens que ce nom peut induire : `CategorieAttribut` n'est **pas** une
 possession. Les valeurs appartiennent au produit (`ValeurAttribut`,
-`ProduitAttributOption`) ; cette table dit seulement quels attributs le formulaire
+`ProductAttributeOption`) ; cette table dit seulement quels attributs le formulaire
 produit propose, et lesquels l'API accepte, pour un produit de cette catégorie.
 
-L'API expose les deux directions — `PUT /categories/:id/attributs` (utilisée par l'écran)
-et `PUT /attributs/:id/categories` — sur la même table et avec la **même permission**
-`attributs.gerer` : deux chemins vers la même écriture ne peuvent pas coûter des droits
+L'API expose les deux directions — `PUT /categories/:id/attributes` (utilisée par l'écran)
+et `PUT /attributes/:id/categories` — sur la même table et avec la **même permission**
+`attributes.manage` : deux chemins vers la même écriture ne peuvent pas coûter des droits
 différents, sinon l'un contourne l'autre.
 
 **L'association attribut ↔ catégorie est directe, sans héritage.** Rattacher « Taille » à
@@ -170,7 +170,7 @@ pas avoir Taille, Robe l'aura ») et ce que fait le seed. Si l'héritage devient
 souhaitable, il ne concerne qu'une requête — mais il faudra d'abord trancher si une
 sous-catégorie peut retirer un attribut hérité.
 
-**Les options d'un attribut s'éditent en une seule opération.** `PUT /attributs/:id/options`
+**Les options d'un attribut s'éditent en une seule opération.** `PUT /attributes/:id/options`
 reçoit la liste complète et ordonnée : les entrées sans `id` sont créées, celles qui en
 ont un sont renommées, les absentes sont supprimées, et l'ordre du tableau devient
 l'ordre affiché. Un seul appel atomique couvre ajout, renommage, réordonnancement et
@@ -186,8 +186,8 @@ changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
 ## Produits
 
-Quatre écrans : la liste filtrée (`/dashboard/produits`), la création
-(`/dashboard/produits/nouveau`), la fiche (`/dashboard/produits/:id`) et sa modification
+Quatre écrans : la liste filtrée (`/dashboard/products`), la création
+(`/dashboard/products/nouveau`), la fiche (`/dashboard/products/:id`) et sa modification
 (`.../modifier`).
 
 **Consultation et modification sont le même composant**, avec un mode. Le libellé, la
@@ -199,7 +199,7 @@ avec libellé en infobulle et pour les lecteurs d'écran. Le changement de statu
 depuis la fiche, où l'on voit ce qu'on change.
 
 **Corriger une vente déjà enregistrée** (prix encaissé, date, commission) se fait depuis la
-fiche, par `PUT /produits/:id/vente`. C'est volontairement distinct du changement de
+fiche, par `PUT /products/:id/vente`. C'est volontairement distinct du changement de
 statut : on rectifie une saisie, on ne fait pas franchir une étape au produit, et
 l'historique ne bouge pas. Un produit dont le statut n'est plus un statut de vente — rendu
 au client, retiré — n'est pas corrigeable, conformément à la règle `bloqueVente` de
@@ -207,7 +207,7 @@ au client, retiré — n'est pas corrigeable, conformément à la règle `bloque
 dans l'URL, donc la vue reste partageable et le retour arrière fonctionne.
 
 **Le formulaire s'adapte à la catégorie** : les champs d'attributs sont chargés depuis
-`GET /categories/:id/attributs` dès qu'une catégorie est choisie — on ne demande pas la
+`GET /categories/:id/attributes` dès qu'une catégorie est choisie — on ne demande pas la
 taille d'un sac. L'API applique la même règle et refuse un attribut inapplicable :
 l'affichage n'est qu'un confort, la validation est côté service.
 
@@ -227,7 +227,7 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 
 ### Statuts
 
-`/dashboard/statuts` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
+`/dashboard/statuses` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
 Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule.
 
 **L'écran affiche le cycle de vie** sur un schéma plein écran (`@xyflow/react`), en
@@ -260,9 +260,9 @@ les deux contrôles — l'affichage n'est qu'un confort. Les trois flags comport
 `sortStock`) se fixent à la création et **ne sont plus modifiables** : des produits
 s'appuient dessus, les basculer sous eux réécrirait leur histoire métier.
 
-L'unicité de `estDefaut` est tenue par une route dédiée (`PUT /statuts/:id/par-defaut`)
+L'unicité de `estDefaut` est tenue par une route dédiée (`PUT /statuses/:id/par-defaut`)
 qui remet les autres à `false` dans une transaction — un index unique Prisma sur
-`[entrepriseId, estDefaut]` interdirait aussi deux `false`.
+`[companyId, estDefaut]` interdirait aussi deux `false`.
 
 ### Photos
 
@@ -277,8 +277,8 @@ clé d'objet est préfixée par l'entreprise, ce qui cloisonne aussi le stockage
 
 ## Dépôt-vente
 
-Deux écrans : `/dashboard/clients-deposants` (déposants et leur relevé) et
-`/dashboard/contrats-depot` (contrats, rattachement des produits).
+Deux écrans : `/dashboard/depositors` (déposants et leur relevé) et
+`/dashboard/deposit-contracts` (contrats, rattachement des produits).
 
 Le déposant porte une `commissionDefaut` qui n'est **qu'une valeur de départ** : elle
 pré-remplit le champ à la création d'un contrat, puis c'est le contrat qui fait foi — et
@@ -308,11 +308,11 @@ bascule en `EXPIRE` les contrats échus — sans quoi rien ne sortirait jamais d
 
 `notifieLe` empêche de renotifier chaque jour jusqu'à l'échéance ; repousser une date de
 fin le remet à zéro, pour qu'un contrat prolongé puisse alerter à nouveau.
-`POST /contrats-depot/echeances` (gérant) déclenche la passe à la main — attendre le
+`POST /deposit-contracts/echeances` (gérant) déclenche la passe à la main — attendre le
 lendemain pour vérifier qu'une alerte part serait absurde.
 
-`ContratDepot` n'ayant pas d'`entrepriseId`, le job remonte l'entreprise via
-`client.entrepriseId` pour créer la notification au bon endroit.
+`DepositContract` n'ayant pas d'`companyId`, le job remonte l'entreprise via
+`client.companyId` pour créer la notification au bon endroit.
 
 **Limite connue** : les notifications appartiennent à l'entreprise, pas à un utilisateur.
 Marquer une alerte comme lue la masque pour tout le monde.
@@ -335,7 +335,7 @@ renommage.
 
 ### Export CSV
 
-`GET /produits/export` (permission `export.csv`) applique **exactement les mêmes filtres
+`GET /products/export` (permission `export.csv`) applique **exactement les mêmes filtres
 que la liste** — le service partage la même construction de filtre, sinon « exporter ce
 qu'on voit » deviendrait un mensonge. La pagination est ignorée : un export ne s'arrête pas
 à la page en cours.
@@ -362,7 +362,7 @@ appliqués par un hook `commit-msg` :
 
 ```
 feat(produits): bloque la vente d'un produit rendu au client
-fix(api): scope les contrats de dépôt via client.entrepriseId
+fix(api): scope les contrats de dépôt via client.companyId
 ```
 
 Sujet sur **une seule ligne, 72 caractères maximum**, en minuscule, à l'impératif,

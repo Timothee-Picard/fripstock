@@ -4,17 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
+import type { CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreerCategorieDto } from './dto/creer-categorie.dto';
-import type { DefinirAttributsDto } from './dto/definir-attributs.dto';
-import type { ModifierCategorieDto } from './dto/modifier-categorie.dto';
+import type { CreateCategoryDto } from './dto/create-category.dto';
+import type { SetAttributesDto } from './dto/set-attributes.dto';
+import type { UpdateCategoryDto } from './dto/update-category.dto';
 
-export interface CategorieArbre {
+export interface CategoryTree {
   id: string;
-  nom: string;
+  name: string;
   parentId: string | null;
-  enfants: CategorieArbre[];
+  children: CategoryTree[];
 }
 
 @Injectable()
@@ -22,10 +22,10 @@ export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Liste plate, triée par nom. */
-  lister(courant: UtilisateurCourant) {
-    return this.prisma.categorie.findMany({
-      where: { entrepriseId: courant.entrepriseId },
-      orderBy: { nom: 'asc' },
+  list(currentUser: CurrentUser) {
+    return this.prisma.category.findMany({
+      where: { companyId: currentUser.companyId },
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -34,84 +34,84 @@ export class CategoriesService {
    * catégorie hiérarchique n'a jamais assez de niveaux pour justifier une
    * requête récursive, et n récursions coûteraient bien plus cher.
    */
-  async arbre(courant: UtilisateurCourant): Promise<CategorieArbre[]> {
-    const plates = await this.lister(courant);
+  async tree(currentUser: CurrentUser): Promise<CategoryTree[]> {
+    const plates = await this.list(currentUser);
 
-    const parId = new Map<string, CategorieArbre>(
-      plates.map((c) => [c.id, { id: c.id, nom: c.nom, parentId: c.parentId, enfants: [] }]),
+    const parId = new Map<string, CategoryTree>(
+      plates.map((c) => [c.id, { id: c.id, name: c.name, parentId: c.parentId, children: [] }]),
     );
 
-    const racines: CategorieArbre[] = [];
+    const racines: CategoryTree[] = [];
     for (const noeud of parId.values()) {
       const parent = noeud.parentId ? parId.get(noeud.parentId) : undefined;
-      if (parent) parent.enfants.push(noeud);
+      if (parent) parent.children.push(noeud);
       else racines.push(noeud);
     }
     return racines;
   }
 
-  async detail(courant: UtilisateurCourant, id: string) {
-    const categorie = await this.prisma.categorie.findFirst({
-      where: { id, entrepriseId: courant.entrepriseId },
-      include: { enfants: { select: { id: true, nom: true } } },
+  async detail(currentUser: CurrentUser, id: string) {
+    const category = await this.prisma.category.findFirst({
+      where: { id, companyId: currentUser.companyId },
+      include: { children: { select: { id: true, name: true } } },
     });
-    if (!categorie) throw new NotFoundException('Catégorie introuvable.');
-    return categorie;
+    if (!category) throw new NotFoundException('Catégorie introuvable.');
+    return category;
   }
 
-  async creer(courant: UtilisateurCourant, dto: CreerCategorieDto) {
-    if (dto.parentId) await this.exigerCategorie(courant, dto.parentId);
-    return this.prisma.categorie.create({
+  async create(currentUser: CurrentUser, dto: CreateCategoryDto) {
+    if (dto.parentId) await this.requireCategory(currentUser, dto.parentId);
+    return this.prisma.category.create({
       data: {
-        entrepriseId: courant.entrepriseId,
-        nom: dto.nom,
+        companyId: currentUser.companyId,
+        name: dto.name,
         parentId: dto.parentId ?? null,
       },
     });
   }
 
-  async modifier(courant: UtilisateurCourant, id: string, dto: ModifierCategorieDto) {
-    await this.exigerCategorie(courant, id);
+  async update(currentUser: CurrentUser, id: string, dto: UpdateCategoryDto) {
+    await this.requireCategory(currentUser, id);
 
     if (dto.parentId !== undefined && dto.parentId !== null) {
       if (dto.parentId === id) {
         throw new BadRequestException('Une catégorie ne peut pas être son propre parent.');
       }
-      await this.exigerCategorie(courant, dto.parentId);
-      await this.refuserCycle(courant, id, dto.parentId);
+      await this.requireCategory(currentUser, dto.parentId);
+      await this.rejectCycle(currentUser, id, dto.parentId);
     }
 
-    return this.prisma.categorie.update({
+    return this.prisma.category.update({
       where: { id },
       data: {
-        ...(dto.nom !== undefined ? { nom: dto.nom } : {}),
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
       },
     });
   }
 
-  async supprimer(courant: UtilisateurCourant, id: string) {
-    await this.exigerCategorie(courant, id);
+  async delete(currentUser: CurrentUser, id: string) {
+    await this.requireCategory(currentUser, id);
 
-    const [enfants, produits] = await Promise.all([
-      this.prisma.categorie.count({ where: { parentId: id } }),
-      this.prisma.produit.count({ where: { categorieId: id } }),
+    const [children, products] = await Promise.all([
+      this.prisma.category.count({ where: { parentId: id } }),
+      this.prisma.product.count({ where: { categoryId: id } }),
     ]);
 
     // Erreur explicite plutôt qu'une cascade silencieuse : le schéma est en
     // Restrict, mais un message clair vaut mieux qu'une contrainte violée.
-    if (enfants > 0) {
+    if (children > 0) {
       throw new ConflictException(
-        `Cette catégorie a ${enfants} sous-catégorie(s). Déplacez-les ou supprimez-les d'abord.`,
+        `Cette catégorie a ${children} sous-catégorie(s). Déplacez-les ou supprimez-les d'abord.`,
       );
     }
-    if (produits > 0) {
+    if (products > 0) {
       throw new ConflictException(
-        `Cette catégorie contient ${produits} produit(s). Reclassez-les d'abord.`,
+        `Cette catégorie contient ${products} produit(s). Reclassez-les d'abord.`,
       );
     }
 
-    await this.prisma.categorie.delete({ where: { id } });
+    await this.prisma.category.delete({ where: { id } });
     return { supprime: true };
   }
 
@@ -123,77 +123,77 @@ export class CategoriesService {
    * « Vêtements » ne le donne pas à « Robe ». C'est ce que décrit CLAUDE.md
    * (« Sac peut ne pas avoir Taille, Robe l'aura ») et ce que fait le seed.
    */
-  async attributsDe(courant: UtilisateurCourant, id: string) {
-    await this.exigerCategorie(courant, id);
-    const liens = await this.prisma.categorieAttribut.findMany({
-      where: { categorieId: id },
-      include: { attribut: { include: { options: { orderBy: { ordre: 'asc' } } } } },
+  async attributesOf(currentUser: CurrentUser, id: string) {
+    await this.requireCategory(currentUser, id);
+    const liens = await this.prisma.categoryAttribute.findMany({
+      where: { categoryId: id },
+      include: { attribute: { include: { options: { orderBy: { position: 'asc' } } } } },
     });
-    return liens.map((l) => l.attribut).sort((a, b) => a.nom.localeCompare(b.nom));
+    return liens.map((l) => l.attribute).sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
    * Remplace la liste des attributs proposés pour cette catégorie.
    *
-   * Opération symétrique de `PUT /attributs/:id/categories` : même table, même
+   * Opération symétrique de `PUT /attributes/:id/categories` : même table, même
    * effet, donc même permission exigée — sinon l'une deviendrait un moyen de
    * contourner l'autre.
    */
-  async definirAttributs(courant: UtilisateurCourant, id: string, dto: DefinirAttributsDto) {
-    await this.exigerCategorie(courant, id);
+  async setAttributes(currentUser: CurrentUser, id: string, dto: SetAttributesDto) {
+    await this.requireCategory(currentUser, id);
 
-    if (dto.attributDefinitionIds.length > 0) {
-      const valides = await this.prisma.attributDefinition.count({
-        where: { id: { in: dto.attributDefinitionIds }, entrepriseId: courant.entrepriseId },
+    if (dto.attributeDefinitionIds.length > 0) {
+      const valides = await this.prisma.attributeDefinition.count({
+        where: { id: { in: dto.attributeDefinitionIds }, companyId: currentUser.companyId },
       });
-      if (valides !== dto.attributDefinitionIds.length) {
+      if (valides !== dto.attributeDefinitionIds.length) {
         throw new BadRequestException("Un attribut cité n'appartient pas à cette entreprise.");
       }
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.categorieAttribut.deleteMany({ where: { categorieId: id } });
-      if (dto.attributDefinitionIds.length > 0) {
-        await tx.categorieAttribut.createMany({
-          data: dto.attributDefinitionIds.map((attributDefinitionId) => ({
-            categorieId: id,
-            attributDefinitionId,
+      await tx.categoryAttribute.deleteMany({ where: { categoryId: id } });
+      if (dto.attributeDefinitionIds.length > 0) {
+        await tx.categoryAttribute.createMany({
+          data: dto.attributeDefinitionIds.map((attributeDefinitionId) => ({
+            categoryId: id,
+            attributeDefinitionId,
           })),
         });
       }
     });
 
-    return this.attributsDe(courant, id);
+    return this.attributesOf(currentUser, id);
   }
 
-  private async exigerCategorie(courant: UtilisateurCourant, id: string) {
-    const categorie = await this.prisma.categorie.findFirst({
-      where: { id, entrepriseId: courant.entrepriseId },
+  private async requireCategory(currentUser: CurrentUser, id: string) {
+    const category = await this.prisma.category.findFirst({
+      where: { id, companyId: currentUser.companyId },
       select: { id: true },
     });
-    if (!categorie) throw new NotFoundException('Catégorie introuvable.');
-    return categorie;
+    if (!category) throw new NotFoundException('Catégorie introuvable.');
+    return category;
   }
 
   /**
    * Interdit de rattacher une catégorie à l'un de ses propres descendants :
    * l'arbre se détacherait en boucle, invisible depuis la racine.
    */
-  private async refuserCycle(courant: UtilisateurCourant, id: string, nouveauParentId: string) {
-    const plates = await this.prisma.categorie.findMany({
-      where: { entrepriseId: courant.entrepriseId },
+  private async rejectCycle(currentUser: CurrentUser, id: string, newParentId: string) {
+    const plates = await this.prisma.category.findMany({
+      where: { companyId: currentUser.companyId },
       select: { id: true, parentId: true },
     });
     const parents = new Map(plates.map((c) => [c.id, c.parentId]));
 
-    let curseur: string | null = nouveauParentId;
-    while (curseur) {
-      if (curseur === id) {
+    let cursor: string | null = newParentId;
+    while (cursor) {
+      if (cursor === id) {
         throw new BadRequestException(
           'Cette catégorie ne peut pas être rattachée à l’une de ses sous-catégories.',
         );
       }
-      curseur = parents.get(curseur) ?? null;
+      cursor = parents.get(cursor) ?? null;
     }
   }
 }

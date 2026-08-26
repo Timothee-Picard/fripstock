@@ -38,7 +38,7 @@ Le squelette passe avant, sinon il n'y a rien à linter ni à builder.
 
 Auth avant catalogue avant produits parce que chaque étape suivante a besoin de pouvoir
 scoper ses données par entreprise/boutique et donc d'un JWT + de guards fonctionnels.
-Dépôt-vente vient après produits parce qu'il s'y accroche (`ContratDepot` référence des
+Dépôt-vente vient après produits parce qu'il s'y accroche (`DepositContract` référence des
 `Produit`) — les notifications d'échéance de contrat sont regroupées dans cette même
 étape puisqu'elles portent uniquement sur les contrats de dépôt. Stats/export est mis
 en dernier parce que c'est une couche qui lit des données déjà là — rien ne bloque

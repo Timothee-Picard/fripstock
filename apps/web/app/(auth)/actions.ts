@@ -1,52 +1,49 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { appelApiPublic, ErreurApi } from '@/lib/api';
-import { effacerJeton, poserJeton } from '@/lib/session';
+import { publicApiFetch, ApiError } from '@/lib/api';
+import { clearToken, setToken } from '@/lib/session';
 
-export interface EtatFormulaire {
-  erreur?: string;
+export interface FormState {
+  error?: string;
 }
 
-interface ReponseAuth {
+interface AuthResponse {
   accessToken: string;
 }
 
-export async function connexion(_etat: EtatFormulaire, donnees: FormData): Promise<EtatFormulaire> {
+export async function login(_state: FormState, data: FormData): Promise<FormState> {
   try {
-    const reponse = await appelApiPublic<ReponseAuth>('/auth/login', {
-      email: String(donnees.get('email') ?? ''),
-      motDePasse: String(donnees.get('motDePasse') ?? ''),
+    const response = await publicApiFetch<AuthResponse>('/auth/login', {
+      email: String(data.get('email') ?? ''),
+      password: String(data.get('password') ?? ''),
     });
-    await poserJeton(reponse.accessToken);
-  } catch (erreur) {
-    return { erreur: erreur instanceof ErreurApi ? erreur.message : 'Connexion impossible.' };
+    await setToken(response.accessToken);
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : 'Connexion impossible.' };
   }
   // Hors du try : redirect() lève une exception de contrôle que le catch
   // avalerait en la présentant comme une erreur de connexion.
   redirect('/dashboard');
 }
 
-export async function inscription(
-  _etat: EtatFormulaire,
-  donnees: FormData,
-): Promise<EtatFormulaire> {
+export async function register(_state: FormState, data: FormData): Promise<FormState> {
   try {
-    const reponse = await appelApiPublic<ReponseAuth>('/auth/register', {
-      nomEntreprise: String(donnees.get('nomEntreprise') ?? ''),
-      email: String(donnees.get('email') ?? ''),
-      motDePasse: String(donnees.get('motDePasse') ?? ''),
-      prenom: String(donnees.get('prenom') ?? ''),
-      nom: String(donnees.get('nom') ?? ''),
+    const response = await publicApiFetch<AuthResponse>('/auth/register', {
+      companyName: String(data.get('companyName') ?? ''),
+      email: String(data.get('email') ?? ''),
+      password: String(data.get('password') ?? ''),
+      firstName: String(data.get('firstName') ?? ''),
+      lastName: String(data.get('lastName') ?? ''),
     });
-    await poserJeton(reponse.accessToken);
-  } catch (erreur) {
-    return { erreur: erreur instanceof ErreurApi ? erreur.message : 'Inscription impossible.' };
+    await setToken(response.accessToken);
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : 'Inscription impossible.' };
   }
   redirect('/dashboard');
 }
 
-export async function deconnexion(): Promise<void> {
-  await effacerJeton();
+export async function logout(): Promise<void> {
+  await clearToken();
   redirect('/login');
 }

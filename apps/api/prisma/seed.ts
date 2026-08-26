@@ -1,18 +1,19 @@
 /**
- * Seed Fripstock.
+ * Fripstock seed.
  *
- * Insère la bibliothèque globale de templates d'attributs, puis une entreprise
- * de démonstration complète (gérant, boutique, catalogue, statuts, déposant,
- * produits) pour pouvoir travailler sur l'UI dès l'étape suivante.
+ * Inserts the global attribute template library, then a complete demo company
+ * (manager, shop, catalogue, statuses, depositor, products) so the UI has
+ * something to show from the next step onwards.
  *
- * Idempotent : relançable sans dupliquer les données.
+ * Idempotent: re-running it does not duplicate anything, and it resets the demo
+ * accounts — password included — so `make seed` always lands on a known state.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
 import type { PermissionMap } from '../src/common/permissions';
-import { STATUTS_DE_BASE, TRANSITIONS_DE_BASE } from '../src/statuts/statuts.defaut';
+import { BASE_STATUSES, BASE_TRANSITIONS } from '../src/statuses/statuses.defaults';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { TypeAttribut, TypeVente } from '../src/generated/prisma/enums';
+import { AttributeType, SaleType } from '../src/generated/prisma/enums';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -21,57 +22,57 @@ if (!DATABASE_URL) {
 
 const prisma = new PrismaClient({ adapter: new PrismaPg(DATABASE_URL) });
 
-const EMAIL_GERANT = 'gerant@fripstock.test';
-const EMAIL_EMPLOYE = 'employe@fripstock.test';
-const MOT_DE_PASSE_DEMO = 'fripstock';
+const MANAGER_EMAIL = 'gerant@fripstock.test';
+const EMPLOYEE_EMAIL = 'employe@fripstock.test';
+const DEMO_PASSWORD = 'fripstock';
 
 /**
- * Permissions volontairement partielles : l'employé de démonstration peut voir
- * et créer des produits, rien d'autre. Tout le reste doit lui renvoyer un 403,
- * c'est ce qui rend la restriction testable sans bricoler un compte à la main.
+ * Deliberately partial permissions: the demo employee may view and create
+ * products, nothing else. Everything else must answer 403, which is what makes
+ * the restriction testable without hand-crafting an account.
  */
-const PERMISSIONS_EMPLOYE_DEMO: PermissionMap = {
-  'produits.voir': true,
-  'produits.creer': true,
+const DEMO_EMPLOYEE_PERMISSIONS: PermissionMap = {
+  'products.view': true,
+  'products.create': true,
 };
 
-/** Bibliothèque globale, partagée par toutes les entreprises, en lecture seule. */
-const TEMPLATES: { nom: string; type: TypeAttribut; options: string[] }[] = [
-  { nom: 'Taille', type: 'SELECT', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+/** Global library, shared by every company, read-only. */
+const TEMPLATES: { name: string; type: AttributeType; options: string[] }[] = [
+  { name: 'Taille', type: 'SELECT', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
   {
-    nom: 'Couleur',
+    name: 'Couleur',
     type: 'SELECT',
     options: ['Noir', 'Blanc', 'Gris', 'Bleu', 'Rouge', 'Vert', 'Beige', 'Multicolore'],
   },
   {
-    nom: 'Matière',
+    name: 'Matière',
     type: 'SELECT',
     options: ['Coton', 'Laine', 'Cuir', 'Jean', 'Lin', 'Synthétique'],
   },
-  { nom: 'Marque', type: 'TEXT', options: [] },
+  { name: 'Marque', type: 'TEXT', options: [] },
 ];
 
-/** Quels attributs s'appliquent à quelle catégorie : un sac n'a pas de taille. */
-const CATEGORIES: { nom: string; attributs: string[] }[] = [
-  { nom: 'Robe', attributs: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { nom: 'Haut', attributs: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { nom: 'Chemise', attributs: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { nom: 'Chaussures', attributs: ['Taille', 'Couleur', 'Marque'] },
-  { nom: 'Sac', attributs: ['Couleur', 'Matière', 'Marque'] },
+/** Which attributes apply to which category: a bag has no size. */
+const CATEGORIES: { name: string; attributes: string[] }[] = [
+  { name: 'Robe', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
+  { name: 'Haut', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
+  { name: 'Chemise', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
+  { name: 'Chaussures', attributes: ['Taille', 'Couleur', 'Marque'] },
+  { name: 'Sac', attributes: ['Couleur', 'Matière', 'Marque'] },
 ];
 
 async function seedTemplates() {
-  for (const t of TEMPLATES) {
-    const template = await prisma.attributTemplate.upsert({
-      where: { nom: t.nom },
-      update: { type: t.type },
-      create: { nom: t.nom, type: t.type },
+  for (const template of TEMPLATES) {
+    const created = await prisma.attributeTemplate.upsert({
+      where: { name: template.name },
+      update: { type: template.type },
+      create: { name: template.name, type: template.type },
     });
-    for (const [ordre, valeur] of t.options.entries()) {
-      await prisma.attributTemplateOption.upsert({
-        where: { attributTemplateId_valeur: { attributTemplateId: template.id, valeur } },
-        update: { ordre },
-        create: { attributTemplateId: template.id, valeur, ordre },
+    for (const [position, value] of template.options.entries()) {
+      await prisma.attributeTemplateOption.upsert({
+        where: { attributeTemplateId_value: { attributeTemplateId: created.id, value } },
+        update: { position },
+        create: { attributeTemplateId: created.id, value, position },
       });
     }
   }
@@ -79,8 +80,8 @@ async function seedTemplates() {
 }
 
 async function main() {
-  // Ce seed crée des comptes aux identifiants publics et connus de tous. Il ne
-  // doit jamais s'exécuter ailleurs qu'en développement.
+  // This seed creates accounts whose credentials are public knowledge. It must
+  // never run anywhere but in development.
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
       'Le seed crée des comptes de démonstration : refus de tourner avec NODE_ENV=production.',
@@ -88,311 +89,315 @@ async function main() {
   }
 
   console.log('Seed Fripstock');
-
   await seedTemplates();
 
-  // --- Entreprise de démonstration ---------------------------------------
-  let entreprise = await prisma.entreprise.findFirst({ where: { nom: 'Friperie Démo' } });
-  entreprise ??= await prisma.entreprise.create({ data: { nom: 'Friperie Démo' } });
+  // --- Demo company -------------------------------------------------------
+  let company = await prisma.company.findFirst({ where: { name: 'Friperie Démo' } });
+  company ??= await prisma.company.create({ data: { name: 'Friperie Démo' } });
 
-  // Les comptes de démonstration sont réinitialisés à chaque passage, mot de
-  // passe compris : ils servent à tester, y compris le changement de mot de
-  // passe, et `make seed` doit pouvoir les remettre dans un état connu.
-  const gerant = await prisma.user.upsert({
-    where: { email: EMAIL_GERANT },
+  // Demo accounts are reset on every pass, password included: they exist to be
+  // tested, changing password among other things.
+  const manager = await prisma.user.upsert({
+    where: { email: MANAGER_EMAIL },
     update: {
-      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
-      prenom: 'Camille',
-      nom: 'Durand',
+      passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      firstName: 'Camille',
+      lastName: 'Durand',
     },
     create: {
-      entrepriseId: entreprise.id,
-      email: EMAIL_GERANT,
-      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
-      prenom: 'Camille',
-      nom: 'Durand',
-      estGerant: true,
+      companyId: company.id,
+      email: MANAGER_EMAIL,
+      passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      firstName: 'Camille',
+      lastName: 'Durand',
+      isManager: true,
     },
   });
 
-  let boutique = await prisma.boutique.findFirst({
-    where: { entrepriseId: entreprise.id, nom: 'Boutique Centre-ville' },
+  let shop = await prisma.shop.findFirst({
+    where: { companyId: company.id, name: 'Boutique Centre-ville' },
   });
-  boutique ??= await prisma.boutique.create({
+  shop ??= await prisma.shop.create({
     data: {
-      entrepriseId: entreprise.id,
-      nom: 'Boutique Centre-ville',
-      adresse: '12 rue des Lilas, Lyon',
+      companyId: company.id,
+      name: 'Boutique Centre-ville',
+      address: '12 rue des Lilas, Lyon',
     },
   });
 
-  // --- Employé de démonstration, aux droits limités ----------------------
-  const employe = await prisma.user.upsert({
-    where: { email: EMAIL_EMPLOYE },
+  // --- Demo employee, with limited rights ---------------------------------
+  const employee = await prisma.user.upsert({
+    where: { email: EMPLOYEE_EMAIL },
     update: {
-      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
-      prenom: 'Théo',
-      nom: 'Bernard',
+      passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      firstName: 'Théo',
+      lastName: 'Bernard',
     },
     create: {
-      entrepriseId: entreprise.id,
-      email: EMAIL_EMPLOYE,
-      motDePasseHash: await bcrypt.hash(MOT_DE_PASSE_DEMO, 10),
-      prenom: 'Théo',
-      nom: 'Bernard',
-      estGerant: false,
+      companyId: company.id,
+      email: EMPLOYEE_EMAIL,
+      passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
+      firstName: 'Théo',
+      lastName: 'Bernard',
+      isManager: false,
     },
   });
 
-  await prisma.accesBoutique.upsert({
-    where: { userId_boutiqueId: { userId: employe.id, boutiqueId: boutique.id } },
-    update: { permissions: PERMISSIONS_EMPLOYE_DEMO },
+  await prisma.shopAccess.upsert({
+    where: { userId_shopId: { userId: employee.id, shopId: shop.id } },
+    update: { permissions: DEMO_EMPLOYEE_PERMISSIONS },
     create: {
-      userId: employe.id,
-      boutiqueId: boutique.id,
-      permissions: PERMISSIONS_EMPLOYE_DEMO,
+      userId: employee.id,
+      shopId: shop.id,
+      permissions: DEMO_EMPLOYEE_PERMISSIONS,
     },
   });
 
-  // --- Statuts ------------------------------------------------------------
-  const statuts = new Map<string, string>();
-  for (const [ordre, s] of STATUTS_DE_BASE.entries()) {
-    const statut = await prisma.statut.upsert({
-      where: { entrepriseId_nom: { entrepriseId: entreprise.id, nom: s.nom } },
-      update: { ...s, ordre },
-      create: { ...s, ordre, entrepriseId: entreprise.id },
+  // --- Statuses and their flow --------------------------------------------
+  const statuses = new Map<string, string>();
+  for (const [position, base] of BASE_STATUSES.entries()) {
+    const status = await prisma.status.upsert({
+      where: { companyId_name: { companyId: company.id, name: base.name } },
+      update: { ...base, position },
+      create: { ...base, position, companyId: company.id },
     });
-    statuts.set(s.nom, statut.id);
+    statuses.set(base.name, status.id);
   }
 
-  // Flux de départ, remis d'aplomb à chaque passage comme le reste du seed.
-  await prisma.transitionStatut.deleteMany({
-    where: { source: { entrepriseId: entreprise.id } },
+  await prisma.statusTransition.deleteMany({
+    where: { source: { companyId: company.id } },
   });
-  await prisma.transitionStatut.createMany({
-    data: TRANSITIONS_DE_BASE.map(([source, cible]) => ({
-      sourceId: statuts.get(source)!,
-      cibleId: statuts.get(cible)!,
+  await prisma.statusTransition.createMany({
+    data: BASE_TRANSITIONS.map(([source, target]) => ({
+      sourceId: statuses.get(source)!,
+      targetId: statuses.get(target)!,
     })),
   });
-  console.log(`  ${STATUTS_DE_BASE.length} statuts et ${TRANSITIONS_DE_BASE.length} transitions`);
+  console.log(`  ${BASE_STATUSES.length} statuts et ${BASE_TRANSITIONS.length} transitions`);
 
-  // --- Attributs de l'entreprise, clonés depuis les templates -------------
-  const attributs = new Map<string, string>();
-  for (const t of TEMPLATES) {
-    const template = await prisma.attributTemplate.findUniqueOrThrow({
-      where: { nom: t.nom },
+  // --- Company attributes, cloned from the templates ----------------------
+  const attributes = new Map<string, string>();
+  for (const template of TEMPLATES) {
+    const source = await prisma.attributeTemplate.findUniqueOrThrow({
+      where: { name: template.name },
       include: { options: true },
     });
-    const attribut = await prisma.attributDefinition.upsert({
-      where: { entrepriseId_nom: { entrepriseId: entreprise.id, nom: t.nom } },
+    const attribute = await prisma.attributeDefinition.upsert({
+      where: { companyId_name: { companyId: company.id, name: template.name } },
       update: {},
       create: {
-        entrepriseId: entreprise.id,
-        nom: template.nom,
-        type: template.type,
-        clonedFromTemplateId: template.id,
+        companyId: company.id,
+        name: source.name,
+        type: source.type,
+        clonedFromTemplateId: source.id,
       },
     });
-    // Le clone copie les options du template puis devient indépendant.
-    for (const option of template.options) {
-      await prisma.attributOption.upsert({
+    // The clone copies the template options, then becomes independent.
+    for (const option of source.options) {
+      await prisma.attributeOption.upsert({
         where: {
-          attributDefinitionId_valeur: { attributDefinitionId: attribut.id, valeur: option.valeur },
+          attributeDefinitionId_value: {
+            attributeDefinitionId: attribute.id,
+            value: option.value,
+          },
         },
-        update: { ordre: option.ordre },
-        create: { attributDefinitionId: attribut.id, valeur: option.valeur, ordre: option.ordre },
+        update: { position: option.position },
+        create: {
+          attributeDefinitionId: attribute.id,
+          value: option.value,
+          position: option.position,
+        },
       });
     }
-    attributs.set(t.nom, attribut.id);
+    attributes.set(template.name, attribute.id);
   }
   console.log(`  ${TEMPLATES.length} attributs clonés pour l'entreprise`);
 
-  // --- Catégories ---------------------------------------------------------
+  // --- Categories ---------------------------------------------------------
   const categories = new Map<string, string>();
-  let vetements = await prisma.categorie.findFirst({
-    where: { entrepriseId: entreprise.id, nom: 'Vêtements' },
+  let clothing = await prisma.category.findFirst({
+    where: { companyId: company.id, name: 'Vêtements' },
   });
-  vetements ??= await prisma.categorie.create({
-    data: { entrepriseId: entreprise.id, nom: 'Vêtements' },
+  clothing ??= await prisma.category.create({
+    data: { companyId: company.id, name: 'Vêtements' },
   });
 
-  for (const c of CATEGORIES) {
-    let categorie = await prisma.categorie.findFirst({
-      where: { entrepriseId: entreprise.id, nom: c.nom },
+  for (const entry of CATEGORIES) {
+    let category = await prisma.category.findFirst({
+      where: { companyId: company.id, name: entry.name },
     });
-    categorie ??= await prisma.categorie.create({
+    category ??= await prisma.category.create({
       data: {
-        entrepriseId: entreprise.id,
-        nom: c.nom,
-        // Les accessoires ne sont pas des vêtements : Sac reste à la racine.
-        parentId: c.nom === 'Sac' ? null : vetements.id,
+        companyId: company.id,
+        name: entry.name,
+        // Accessories are not clothing: bags stay at the root.
+        parentId: entry.name === 'Sac' ? null : clothing.id,
       },
     });
-    categories.set(c.nom, categorie.id);
+    categories.set(entry.name, category.id);
 
-    for (const nomAttribut of c.attributs) {
-      const attributId = attributs.get(nomAttribut)!;
-      await prisma.categorieAttribut.upsert({
+    for (const attributeName of entry.attributes) {
+      const attributeId = attributes.get(attributeName)!;
+      await prisma.categoryAttribute.upsert({
         where: {
-          categorieId_attributDefinitionId: {
-            categorieId: categorie.id,
-            attributDefinitionId: attributId,
+          categoryId_attributeDefinitionId: {
+            categoryId: category.id,
+            attributeDefinitionId: attributeId,
           },
         },
         update: {},
-        create: { categorieId: categorie.id, attributDefinitionId: attributId },
+        create: { categoryId: category.id, attributeDefinitionId: attributeId },
       });
     }
   }
   console.log(`  ${CATEGORIES.length + 1} catégories`);
 
-  // --- Client déposant et contrat ----------------------------------------
-  let deposant = await prisma.client.findFirst({
-    where: { entrepriseId: entreprise.id, nom: 'Martin', prenom: 'Sophie' },
+  // --- Depositor and contract ---------------------------------------------
+  let depositor = await prisma.depositor.findFirst({
+    where: { companyId: company.id, lastName: 'Martin', firstName: 'Sophie' },
   });
-  deposant ??= await prisma.client.create({
+  depositor ??= await prisma.depositor.create({
     data: {
-      entrepriseId: entreprise.id,
-      nom: 'Martin',
-      prenom: 'Sophie',
+      companyId: company.id,
+      lastName: 'Martin',
+      firstName: 'Sophie',
       email: 'sophie.martin@example.test',
-      telephone: '0612345678',
+      phone: '0612345678',
       iban: 'FR7630001007941234567890185',
-      // 40 % pour la boutique, donc 60 % pour la déposante.
-      commissionDefaut: 40,
+      // 40% for the shop, so 60% for the depositor.
+      defaultCommission: 40,
     },
   });
 
-  const dateDebut = new Date('2026-08-01T00:00:00Z');
-  const dateFin = new Date('2026-10-30T00:00:00Z');
-  let contrat = await prisma.contratDepot.findFirst({ where: { clientId: deposant.id } });
-  contrat ??= await prisma.contratDepot.create({
+  let contract = await prisma.depositContract.findFirst({
+    where: { depositorId: depositor.id },
+  });
+  contract ??= await prisma.depositContract.create({
     data: {
-      clientId: deposant.id,
-      dateDebut,
-      dateFin,
-      commission: deposant.commissionDefaut,
+      depositorId: depositor.id,
+      startDate: new Date('2026-08-01T00:00:00Z'),
+      endDate: new Date('2026-10-30T00:00:00Z'),
+      commission: depositor.defaultCommission,
       notifyBeforeDays: 5,
     },
   });
 
-  // --- Produits de démonstration -----------------------------------------
-  const produits = [
+  // --- Demo products ------------------------------------------------------
+  const products = [
     {
       reference: 'BTR6',
-      nom: 'Robe fleurie été',
-      categorie: 'Robe',
-      statut: 'En rayon',
-      typeVente: 'ACHAT_REVENTE' as TypeVente,
-      prixAchat: 8,
-      prixVente: 25,
+      name: 'Robe fleurie été',
+      category: 'Robe',
+      status: 'En stock',
+      saleType: 'RESALE' as SaleType,
+      purchasePrice: 8,
+      salePrice: 25,
       options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
-      marque: 'Zara',
+      brand: 'Zara',
     },
     {
       reference: 'BTA4',
-      nom: 'Chemise en lin',
-      categorie: 'Chemise',
-      statut: 'En stock',
-      typeVente: 'ACHAT_REVENTE' as TypeVente,
-      prixAchat: 5,
-      prixVente: 18,
+      name: 'Chemise en lin',
+      category: 'Chemise',
+      status: 'En stock',
+      saleType: 'RESALE' as SaleType,
+      purchasePrice: 5,
+      salePrice: 18,
       options: { Taille: 'L', Couleur: 'Blanc', Matière: 'Lin' },
-      marque: 'Uniqlo',
+      brand: 'Uniqlo',
     },
     {
       reference: 'DEP1',
-      nom: 'Sac à main cuir',
-      categorie: 'Sac',
-      statut: 'En rayon',
-      typeVente: 'DEPOT_VENTE' as TypeVente,
-      prixVente: 60,
-      contrat: true,
+      name: 'Sac à main cuir',
+      category: 'Sac',
+      status: 'En rayon',
+      saleType: 'CONSIGNMENT' as SaleType,
+      salePrice: 60,
+      onContract: true,
       options: { Couleur: 'Noir', Matière: 'Cuir' },
-      marque: 'Lancel',
+      brand: 'Lancel',
     },
     {
       reference: 'DEP2',
-      nom: 'Bottines daim',
-      categorie: 'Chaussures',
-      statut: 'Vendu',
-      typeVente: 'DEPOT_VENTE' as TypeVente,
-      prixVente: 45,
-      prixVendu: 40,
-      contrat: true,
-      vendu: true,
+      name: 'Bottines daim',
+      category: 'Chaussures',
+      status: 'Vendu',
+      saleType: 'CONSIGNMENT' as SaleType,
+      salePrice: 45,
+      soldPrice: 40,
+      onContract: true,
+      sold: true,
       options: { Taille: 'S', Couleur: 'Beige' },
-      marque: 'Minelli',
+      brand: 'Minelli',
     },
   ];
 
-  for (const p of produits) {
-    const existant = await prisma.produit.findFirst({
-      where: { entrepriseId: entreprise.id, reference: p.reference },
+  for (const entry of products) {
+    const existing = await prisma.product.findFirst({
+      where: { companyId: company.id, reference: entry.reference },
     });
-    if (existant) continue;
+    if (existing) continue;
 
-    const produit = await prisma.produit.create({
+    const product = await prisma.product.create({
       data: {
-        entrepriseId: entreprise.id,
-        boutiqueId: boutique.id,
-        categorieId: categories.get(p.categorie)!,
-        statutId: statuts.get(p.statut)!,
-        reference: p.reference,
-        nom: p.nom,
-        typeVente: p.typeVente,
-        prixAchat: p.prixAchat ?? null,
-        prixVente: p.prixVente,
-        prixVendu: p.prixVendu ?? null,
-        contratDepotId: p.contrat ? contrat.id : null,
-        // Commission figée au moment de la vente, jamais relue depuis le contrat.
-        commissionAppliquee: p.vendu ? contrat.commission : null,
-        deposantPaye: p.typeVente === 'DEPOT_VENTE' ? false : null,
-        dateVente: p.vendu ? new Date('2026-08-20T14:30:00Z') : null,
+        companyId: company.id,
+        shopId: shop.id,
+        categoryId: categories.get(entry.category)!,
+        statusId: statuses.get(entry.status)!,
+        reference: entry.reference,
+        name: entry.name,
+        saleType: entry.saleType,
+        purchasePrice: entry.purchasePrice ?? null,
+        salePrice: entry.salePrice,
+        soldPrice: entry.soldPrice ?? null,
+        depositContractId: entry.onContract ? contract.id : null,
+        // Commission frozen at sale time, never read back from the contract.
+        appliedCommission: entry.sold ? contract.commission : null,
+        depositorPaid: entry.saleType === 'CONSIGNMENT' ? false : null,
+        soldAt: entry.sold ? new Date('2026-08-20T14:30:00Z') : null,
       },
     });
 
-    // Attribut texte libre.
-    await prisma.valeurAttribut.create({
+    // Free-text attribute.
+    await prisma.attributeValue.create({
       data: {
-        produitId: produit.id,
-        attributDefinitionId: attributs.get('Marque')!,
-        valeurTexte: p.marque,
+        productId: product.id,
+        attributeDefinitionId: attributes.get('Marque')!,
+        textValue: entry.brand,
       },
     });
 
-    // Attributs de type SELECT.
-    for (const [nomAttribut, valeur] of Object.entries(p.options)) {
-      const option = await prisma.attributOption.findUniqueOrThrow({
+    // SELECT attributes.
+    for (const [attributeName, value] of Object.entries(entry.options)) {
+      const option = await prisma.attributeOption.findUniqueOrThrow({
         where: {
-          attributDefinitionId_valeur: {
-            attributDefinitionId: attributs.get(nomAttribut)!,
-            valeur,
+          attributeDefinitionId_value: {
+            attributeDefinitionId: attributes.get(attributeName)!,
+            value,
           },
         },
       });
-      await prisma.produitAttributOption.create({
-        data: { produitId: produit.id, attributOptionId: option.id },
+      await prisma.productAttributeOption.create({
+        data: { productId: product.id, attributeOptionId: option.id },
       });
     }
 
-    await prisma.historiqueStatut.create({
+    await prisma.statusHistory.create({
       data: {
-        produitId: produit.id,
-        statutId: statuts.get(p.statut)!,
-        changedByUserId: gerant.id,
+        productId: product.id,
+        statusId: statuses.get(entry.status)!,
+        changedByUserId: manager.id,
         note: 'Création via le seed',
       },
     });
   }
-  console.log(`  ${produits.length} produits`);
+  console.log(`  ${products.length} produits`);
 
   console.log('\nComptes de démonstration (développement uniquement) :');
-  console.log(`  gérant   ${EMAIL_GERANT}  / ${MOT_DE_PASSE_DEMO}`);
-  console.log(`  employé  ${EMAIL_EMPLOYE} / ${MOT_DE_PASSE_DEMO}`);
-  console.log(`           accès à « ${boutique.nom} », permissions :`);
-  console.log(`           ${Object.keys(PERMISSIONS_EMPLOYE_DEMO).join(', ')}`);
+  console.log(`  gérant   ${MANAGER_EMAIL}  / ${DEMO_PASSWORD}`);
+  console.log(`  employé  ${EMPLOYEE_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`           accès à « ${shop.name} », permissions :`);
+  console.log(`           ${Object.keys(DEMO_EMPLOYEE_PERMISSIONS).join(', ')}`);
 }
 
 main()

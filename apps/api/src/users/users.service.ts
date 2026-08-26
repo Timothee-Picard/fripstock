@@ -5,44 +5,44 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { normaliserEmail } from '../common/email';
+import { normalizeEmail } from '../common/email';
 import { randomBytes } from 'node:crypto';
-import { lirePermissions, type Permission, type PermissionMap } from '../common/permissions';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
+import { readPermissions, type Permission, type PermissionMap } from '../common/permissions';
+import type { CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
-import type { DefinirAccesDto } from './dto/definir-acces.dto';
-import type { InviterUserDto } from './dto/inviter-user.dto';
+import type { SetAccessDto } from './dto/set-access.dto';
+import type { InviteUserDto } from './dto/invite-user.dto';
 
-const COUT_BCRYPT = 10;
+const BCRYPT_COST = 10;
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  lister(courant: UtilisateurCourant) {
+  list(currentUser: CurrentUser) {
     return this.prisma.user.findMany({
-      where: { entrepriseId: courant.entrepriseId },
-      orderBy: [{ estGerant: 'desc' }, { nom: 'asc' }],
+      where: { companyId: currentUser.companyId },
+      orderBy: [{ isManager: 'desc' }, { lastName: 'asc' }],
       select: {
         id: true,
         email: true,
-        prenom: true,
-        nom: true,
-        estGerant: true,
+        firstName: true,
+        lastName: true,
+        isManager: true,
         createdAt: true,
-        acces: {
+        accesses: {
           select: {
-            boutiqueId: true,
+            shopId: true,
             permissions: true,
-            boutique: { select: { nom: true } },
+            shop: { select: { name: true } },
           },
         },
       },
     });
   }
 
-  async inviter(courant: UtilisateurCourant, dto: InviterUserDto) {
-    const email = normaliserEmail(dto.email);
+  async invite(currentUser: CurrentUser, dto: InviteUserDto) {
+    const email = normalizeEmail(dto.email);
     const existant = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (existant) {
       throw new ConflictException('Un compte existe déjà avec cet email.');
@@ -51,63 +51,63 @@ export class UsersService {
     // Sans mot de passe fourni, on en génère un et on le renvoie une seule
     // fois : il n'est jamais stocké en clair, il faudra le transmettre à
     // l'employé de vive voix.
-    const motDePasse = dto.motDePasse ?? randomBytes(9).toString('base64url');
+    const password = dto.password ?? randomBytes(9).toString('base64url');
 
-    const utilisateur = await this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
-        entrepriseId: courant.entrepriseId,
+        companyId: currentUser.companyId,
         email,
-        motDePasseHash: await bcrypt.hash(motDePasse, COUT_BCRYPT),
-        prenom: dto.prenom,
-        nom: dto.nom,
-        estGerant: false,
+        passwordHash: await bcrypt.hash(password, BCRYPT_COST),
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        isManager: false,
       },
-      select: { id: true, email: true, prenom: true, nom: true, estGerant: true },
+      select: { id: true, email: true, firstName: true, lastName: true, isManager: true },
     });
 
     return {
-      ...utilisateur,
-      motDePasseTemporaire: dto.motDePasse ? undefined : motDePasse,
+      ...user,
+      temporaryPassword: dto.password ? undefined : password,
     };
   }
 
   /** Remplace intégralement les accès d'un employé. */
-  async definirAcces(courant: UtilisateurCourant, userId: string, dto: DefinirAccesDto) {
-    const cible = await this.trouverEmploye(courant, userId);
+  async setAccess(currentUser: CurrentUser, userId: string, dto: SetAccessDto) {
+    const target = await this.findEmployee(currentUser, userId);
 
-    const boutiqueIds = dto.acces.map((a) => a.boutiqueId);
-    if (new Set(boutiqueIds).size !== boutiqueIds.length) {
+    const shopIds = dto.accesses.map((a) => a.shopId);
+    if (new Set(shopIds).size !== shopIds.length) {
       throw new BadRequestException('Une même boutique apparaît plusieurs fois.');
     }
 
     // Les boutiques citées doivent appartenir à l'entreprise du gérant : sinon
     // on donnerait accès à la boutique d'une autre entreprise.
-    const valides = await this.prisma.boutique.count({
-      where: { id: { in: boutiqueIds }, entrepriseId: courant.entrepriseId },
+    const valides = await this.prisma.shop.count({
+      where: { id: { in: shopIds }, companyId: currentUser.companyId },
     });
-    if (valides !== boutiqueIds.length) {
+    if (valides !== shopIds.length) {
       throw new BadRequestException("Une boutique citée n'appartient pas à cette entreprise.");
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.accesBoutique.deleteMany({ where: { userId: cible.id } });
-      if (dto.acces.length > 0) {
-        await tx.accesBoutique.createMany({
-          data: dto.acces.map((a) => ({
-            userId: cible.id,
-            boutiqueId: a.boutiqueId,
+      await tx.shopAccess.deleteMany({ where: { userId: target.id } });
+      if (dto.accesses.length > 0) {
+        await tx.shopAccess.createMany({
+          data: dto.accesses.map((a) => ({
+            userId: target.id,
+            shopId: a.shopId,
             permissions: enMap(a.permissions),
           })),
         });
       }
     });
 
-    return this.lister(courant).then((tous) => tous.find((u) => u.id === cible.id));
+    return this.list(currentUser).then((tous) => tous.find((u) => u.id === target.id));
   }
 
-  async supprimer(courant: UtilisateurCourant, userId: string) {
-    const cible = await this.trouverEmploye(courant, userId);
-    await this.prisma.user.delete({ where: { id: cible.id } });
+  async delete(currentUser: CurrentUser, userId: string) {
+    const target = await this.findEmployee(currentUser, userId);
+    await this.prisma.user.delete({ where: { id: target.id } });
     return { supprime: true };
   }
 
@@ -115,22 +115,22 @@ export class UsersService {
    * Un gérant ne peut agir que sur les employés de sa propre entreprise, et
    * jamais sur un autre gérant (ni sur lui-même).
    */
-  private async trouverEmploye(courant: UtilisateurCourant, userId: string) {
-    const cible = await this.prisma.user.findFirst({
-      where: { id: userId, entrepriseId: courant.entrepriseId },
-      select: { id: true, estGerant: true },
+  private async findEmployee(currentUser: CurrentUser, userId: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, companyId: currentUser.companyId },
+      select: { id: true, isManager: true },
     });
-    if (!cible) throw new NotFoundException('Utilisateur introuvable.');
-    if (cible.estGerant) {
+    if (!target) throw new NotFoundException('Utilisateur introuvable.');
+    if (target.isManager) {
       throw new BadRequestException("Un gérant n'est pas géré via cette route.");
     }
-    return cible;
+    return target;
   }
 }
 
-/** `['produits.voir']` → `{ 'produits.voir': true }`, le format stocké en base. */
+/** `['products.view']` → `{ 'products.view': true }`, le format stocké en base. */
 function enMap(permissions: Permission[]): PermissionMap {
   const map: PermissionMap = {};
   for (const p of permissions) map[p] = true;
-  return lirePermissions(map);
+  return readPermissions(map);
 }

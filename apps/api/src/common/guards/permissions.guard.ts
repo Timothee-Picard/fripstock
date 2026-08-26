@@ -1,11 +1,11 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { CLE_SOURCE_BOUTIQUE, type SourceBoutique } from '../decorators/boutique-source.decorator';
-import { CLE_PERMISSION } from '../decorators/require-permission.decorator';
-import { lirePermissions, type Permission } from '../permissions';
+import { SHOP_SOURCE_KEY, type SourceShop } from '../decorators/shop-source.decorator';
+import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
+import { readPermissions, type Permission } from '../permissions';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { UtilisateurCourant } from '../types/utilisateur-courant';
+import type { CurrentUser } from '../types/current-user';
 
 /**
  * Vérifie la permission exigée par @RequirePermission sur la boutique visée.
@@ -15,11 +15,11 @@ import type { UtilisateurCourant } from '../types/utilisateur-courant';
  *
  * La boutique concernée est retrouvée de trois façons, dans cet ordre :
  *
- *   1. un `boutiqueId` explicite, en paramètre de route, dans le body ou en
+ *   1. un `shopId` explicite, en paramètre de route, dans le body ou en
  *      query ;
- *   2. une ressource ciblée par `:id`, via @BoutiqueDepuisRessource — la
+ *   2. une ressource ciblée par `:id`, via @ShopFromResource — la
  *      boutique se lit alors sur la ressource chargée (cas des produits) ;
- *   3. aucune boutique — c'est le stock central (`boutiqueId = null`). La
+ *   3. aucune boutique — c'est le stock central (`shopId = null`). La
  *      permission est alors accordée si l'utilisateur la possède dans au moins
  *      une boutique de son entreprise : un employé doit pouvoir créer un
  *      produit avant de savoir où il ira. Voir CLAUDE.md, "Produits non
@@ -33,85 +33,85 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const permission = this.reflector.getAllAndOverride<Permission>(CLE_PERMISSION, [
+    const permission = this.reflector.getAllAndOverride<Permission>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (!permission) return true;
 
-    const requete = context.switchToHttp().getRequest<Request & { user?: UtilisateurCourant }>();
-    const utilisateur = requete.user;
-    if (!utilisateur) throw new ForbiddenException('Authentification requise.');
+    const requete = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
+    const user = requete.user;
+    if (!user) throw new ForbiddenException('Authentification requise.');
 
     // Le gérant a tous les droits sur toutes les boutiques de son entreprise.
-    if (utilisateur.estGerant) return true;
+    if (user.isManager) return true;
 
-    const boutiqueId = await this.trouverBoutique(context, requete, utilisateur);
+    const shopId = await this.findShop(context, requete, user);
 
-    if (boutiqueId === null) {
+    if (shopId === null) {
       // Cas 3 : stock central.
-      const compte = await this.prisma.accesBoutique.count({
+      const compte = await this.prisma.shopAccess.count({
         where: {
-          userId: utilisateur.userId,
+          userId: user.userId,
           permissions: { path: [permission], equals: true },
         },
       });
-      if (compte === 0) this.refuser(permission);
+      if (compte === 0) this.deny(permission);
       return true;
     }
 
-    const acces = await this.prisma.accesBoutique.findFirst({
+    const accesses = await this.prisma.shopAccess.findFirst({
       where: {
-        userId: utilisateur.userId,
-        boutiqueId,
-        // Le scoping passe par la relation : `boutiqueId` vient du client, il
+        userId: user.userId,
+        shopId,
+        // Le scoping passe par la relation : `shopId` vient du déposant, il
         // ne prouve rien tant qu'on n'a pas vérifié qu'il appartient bien à
-        // l'entreprise de l'utilisateur.
-        boutique: { entrepriseId: utilisateur.entrepriseId },
+        // l'entreprise de l'user.
+        shop: { companyId: user.companyId },
       },
       select: { permissions: true },
     });
 
-    if (!acces || lirePermissions(acces.permissions)[permission] !== true) {
-      this.refuser(permission);
+    if (!accesses || readPermissions(accesses.permissions)[permission] !== true) {
+      this.deny(permission);
     }
     return true;
   }
 
   /** Renvoie l'identifiant de boutique visé, ou `null` pour le stock central. */
-  private async trouverBoutique(
+  private async findShop(
     context: ExecutionContext,
     requete: Request,
-    utilisateur: UtilisateurCourant,
+    user: CurrentUser,
   ): Promise<string | null> {
-    const source = this.reflector.getAllAndOverride<SourceBoutique | undefined>(
-      CLE_SOURCE_BOUTIQUE,
-      [context.getHandler(), context.getClass()],
-    );
+    const source = this.reflector.getAllAndOverride<SourceShop | undefined>(SHOP_SOURCE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     // Cas 2 : la boutique se déduit d'une ressource ciblée par l'URL.
     if (source) {
       const params = requete.params as Record<string, string | undefined>;
       const id = params[source.param];
       if (!id) return null;
-      const trouve = await source.resolveur(this.prisma, id, utilisateur.entrepriseId);
+      const trouve = await source.resolver(this.prisma, id, user.companyId);
       return trouve ?? null;
     }
 
-    // Cas 1 : boutiqueId explicite.
+    // Cas 1 : shopId explicite.
     const params = requete.params as Record<string, unknown>;
     const body = (requete.body ?? {}) as Record<string, unknown>;
     const query = requete.query as Record<string, unknown>;
     for (const source of [params, body, query]) {
-      const valeur = source['boutiqueId'];
-      if (typeof valeur === 'string' && valeur.length > 0) return valeur;
+      const value = source['shopId'];
+      if (typeof value === 'string' && value.length > 0) return value;
     }
 
     // Cas 3.
     return null;
   }
 
-  private refuser(permission: Permission): never {
+  private deny(permission: Permission): never {
     throw new ForbiddenException(`Permission manquante : ${permission}`);
   }
 }

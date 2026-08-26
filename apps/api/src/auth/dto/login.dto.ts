@@ -7,5 +7,5 @@ export class LoginDto {
 
   @IsString()
   @MinLength(1)
-  motDePasse!: string;
+  password!: string;
 }

@@ -7,20 +7,20 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3001';
 
 type HealthResponse = { status: string };
 
-type HealthResult = { reachable: true; status: string } | { reachable: false; erreur: string };
+type HealthResult = { reachable: true; status: string } | { reachable: false; error: string };
 
 async function getHealth(): Promise<HealthResult> {
   try {
     const res = await fetch(`${API_URL}/health`, { cache: 'no-store' });
     if (!res.ok) {
-      return { reachable: false, erreur: `l'API a répondu ${res.status}` };
+      return { reachable: false, error: `l'API a répondu ${res.status}` };
     }
     const data = (await res.json()) as HealthResponse;
     return { reachable: true, status: data.status };
   } catch (err) {
     return {
       reachable: false,
-      erreur: err instanceof Error ? err.message : 'API injoignable',
+      error: err instanceof Error ? err.message : 'API injoignable',
     };
   }
 }
@@ -54,7 +54,7 @@ export default async function Home() {
           <p className="font-mono text-sm">
             {health.reachable
               ? `GET /health → { status: "${health.status}" }`
-              : `GET /health → ${health.erreur}`}
+              : `GET /health → ${health.error}`}
           </p>
         </div>
         <p className="mt-3 text-xs text-neutral-500">

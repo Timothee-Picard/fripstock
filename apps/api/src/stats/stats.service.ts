@@ -1,13 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
+import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { PeriodeDto } from './dto/periode.dto';
+import type { PeriodDto } from './dto/period.dto';
 
-const JOURS_PAR_DEFAUT = 30;
+const DEFAULT_DAYS = 30;
 
-function arrondir(valeur: number): number {
-  return Math.round(valeur * 100) / 100;
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 @Injectable()
@@ -17,167 +17,168 @@ export class StatsService {
   /**
    * Tableau de bord.
    *
-   * Tous les agrégats se définissent par les **flags de `Statut`**, jamais par
-   * le libellé : le gérant peut renommer ses statuts, et un `nom === 'Vendu'`
+   * Tous les agrégats se définissent par les **flags de `Status`**, jamais par
+   * le libellé : le gérant peut renommer ses statuts, et un `name === 'Vendu'`
    * en dur casserait silencieusement les chiffres.
    *
-   * - vendu       → statut `estVente`
-   * - stock actif → statut `sortStock = false`
-   * - rendu       → statut `bloqueVente`
+   * - vendu       → statut `isSale`
+   * - stock actif → statut `leavesStock = false`
+   * - rendu       → statut `blocksSale`
    */
-  async tableauDeBord(courant: UtilisateurCourant, filtres: PeriodeDto) {
-    const au = filtres.au ? new Date(filtres.au) : new Date();
-    const du = filtres.du
-      ? new Date(filtres.du)
-      : new Date(au.getTime() - JOURS_PAR_DEFAUT * 86400000);
-    if (du > au) throw new BadRequestException('La date de début doit précéder la date de fin.');
+  async dashboard(currentUser: CurrentUser, filters: PeriodDto) {
+    const to = filters.to ? new Date(filters.to) : new Date();
+    const from = filters.from
+      ? new Date(filters.from)
+      : new Date(to.getTime() - DEFAULT_DAYS * 86400000);
+    if (from > to) throw new BadRequestException('La date de début doit précéder la date de fin.');
 
-    if (filtres.boutiqueId) {
-      const boutique = await this.prisma.boutique.count({
-        where: { id: filtres.boutiqueId, entrepriseId: courant.entrepriseId },
+    if (filters.shopId) {
+      const shop = await this.prisma.shop.count({
+        where: { id: filters.shopId, companyId: currentUser.companyId },
       });
-      if (boutique === 0) {
+      if (shop === 0) {
         throw new BadRequestException("Cette boutique n'appartient pas à votre entreprise.");
       }
     }
 
-    const base: Prisma.ProduitWhereInput = {
-      entrepriseId: courant.entrepriseId,
-      ...(filtres.boutiqueId ? { boutiqueId: filtres.boutiqueId } : {}),
+    const base: Prisma.ProductWhereInput = {
+      companyId: currentUser.companyId,
+      ...(filters.shopId ? { shopId: filters.shopId } : {}),
     };
 
-    const [vendus, stock, depotPeriode] = await Promise.all([
+    const [sold, stock, consignmentPeriod] = await Promise.all([
       // Les produits vendus sur la période, avec ce qu'il faut pour le CA et la
       // marge. Le volume est celui des ventes d'une boutique : on agrège en
       // mémoire plutôt que d'empiler cinq requêtes d'agrégation.
-      this.prisma.produit.findMany({
-        where: { ...base, statut: { estVente: true }, dateVente: { gte: du, lte: au } },
+      this.prisma.product.findMany({
+        where: { ...base, status: { isSale: true }, soldAt: { gte: from, lte: to } },
         select: {
           id: true,
-          nom: true,
+          name: true,
           reference: true,
-          prixAchat: true,
-          prixVendu: true,
-          commissionAppliquee: true,
-          typeVente: true,
-          dateVente: true,
-          categorie: { select: { id: true, nom: true } },
+          purchasePrice: true,
+          soldPrice: true,
+          appliedCommission: true,
+          saleType: true,
+          soldAt: true,
+          category: { select: { id: true, name: true } },
         },
       }),
-      this.prisma.produit.findMany({
+      this.prisma.product.findMany({
         where: base,
         select: {
-          quantite: true,
-          prixVente: true,
-          statut: { select: { id: true, nom: true, couleur: true, sortStock: true } },
+          quantity: true,
+          salePrice: true,
+          status: { select: { id: true, name: true, color: true, leavesStock: true } },
         },
       }),
       // Taux de retour : parmi les articles en dépôt-vente créés sur la période,
       // ceux qui ont fini dans un statut bloquant (rendu, retiré).
-      this.prisma.produit.findMany({
-        where: { ...base, typeVente: 'DEPOT_VENTE', createdAt: { gte: du, lte: au } },
-        select: { statut: { select: { bloqueVente: true } } },
+      this.prisma.product.findMany({
+        where: { ...base, saleType: 'CONSIGNMENT', createdAt: { gte: from, lte: to } },
+        select: { status: { select: { blocksSale: true } } },
       }),
     ]);
 
     // --- Ventes -------------------------------------------------------------
-    const chiffreAffaires = arrondir(
-      vendus.reduce((total, p) => total + Number(p.prixVendu ?? 0), 0),
-    );
+    const revenue = round(sold.reduce((total, p) => total + Number(p.soldPrice ?? 0), 0));
 
     // Ce que la boutique garde réellement : sa marge en achat-revente, sa
     // commission en dépôt-vente — où l'essentiel du prix revient au déposant.
-    const marge = arrondir(
-      vendus.reduce((total, p) => {
-        const encaisse = Number(p.prixVendu ?? 0);
-        if (p.typeVente === 'DEPOT_VENTE') {
-          return total + (encaisse * Number(p.commissionAppliquee ?? 0)) / 100;
+    const margin = round(
+      sold.reduce((total, p) => {
+        const encaisse = Number(p.soldPrice ?? 0);
+        if (p.saleType === 'CONSIGNMENT') {
+          return total + (encaisse * Number(p.appliedCommission ?? 0)) / 100;
         }
-        return total + (encaisse - Number(p.prixAchat ?? 0));
+        return total + (encaisse - Number(p.purchasePrice ?? 0));
       }, 0),
     );
 
     // --- Ventes par jour, pour la courbe ------------------------------------
-    const parJour = new Map<string, { ca: number; nombre: number }>();
-    for (const p of vendus) {
-      const jour = (p.dateVente ?? du).toISOString().slice(0, 10);
-      const courant = parJour.get(jour) ?? { ca: 0, nombre: 0 };
-      courant.ca += Number(p.prixVendu ?? 0);
-      courant.nombre += 1;
-      parJour.set(jour, courant);
+    const byDay = new Map<string, { revenue: number; count: number }>();
+    for (const p of sold) {
+      const day = (p.soldAt ?? from).toISOString().slice(0, 10);
+      const entry = byDay.get(day) ?? { revenue: 0, count: 0 };
+      entry.revenue += Number(p.soldPrice ?? 0);
+      entry.count += 1;
+      byDay.set(day, entry);
     }
 
     // --- Classements --------------------------------------------------------
-    const parCategorie = new Map<string, { id: string; nom: string; ca: number; nombre: number }>();
-    for (const p of vendus) {
-      const entree = parCategorie.get(p.categorie.id) ?? {
-        id: p.categorie.id,
-        nom: p.categorie.nom,
-        ca: 0,
-        nombre: 0,
+    const byCategory = new Map<
+      string,
+      { id: string; name: string; revenue: number; count: number }
+    >();
+    for (const p of sold) {
+      const entry = byCategory.get(p.category.id) ?? {
+        id: p.category.id,
+        name: p.category.name,
+        revenue: 0,
+        count: 0,
       };
-      entree.ca += Number(p.prixVendu ?? 0);
-      entree.nombre += 1;
-      parCategorie.set(p.categorie.id, entree);
+      entry.revenue += Number(p.soldPrice ?? 0);
+      entry.count += 1;
+      byCategory.set(p.category.id, entry);
     }
 
     // --- Stock --------------------------------------------------------------
-    const parStatut = new Map<
+    const byStatus = new Map<
       string,
       {
         id: string;
-        nom: string;
-        couleur: string;
-        sortStock: boolean;
-        nombre: number;
-        valeur: number;
+        name: string;
+        color: string;
+        leavesStock: boolean;
+        count: number;
+        value: number;
       }
     >();
     for (const p of stock) {
-      const entree = parStatut.get(p.statut.id) ?? { ...p.statut, nombre: 0, valeur: 0 };
-      entree.nombre += p.quantite;
-      entree.valeur += Number(p.prixVente ?? 0) * p.quantite;
-      parStatut.set(p.statut.id, entree);
+      const entry = byStatus.get(p.status.id) ?? { ...p.status, count: 0, value: 0 };
+      entry.count += p.quantity;
+      entry.value += Number(p.salePrice ?? 0) * p.quantity;
+      byStatus.set(p.status.id, entry);
     }
-    const statuts = [...parStatut.values()].map((s) => ({ ...s, valeur: arrondir(s.valeur) }));
-    const actifs = statuts.filter((s) => !s.sortStock);
+    const statuses = [...byStatus.values()].map((s) => ({ ...s, value: round(s.value) }));
+    const active = statuses.filter((s) => !s.leavesStock);
 
     // --- Retours ------------------------------------------------------------
-    const rendus = depotPeriode.filter((p) => p.statut.bloqueVente).length;
+    const returned = consignmentPeriod.filter((p) => p.status.blocksSale).length;
 
     return {
-      periode: { du: du.toISOString(), au: au.toISOString() },
-      ventes: {
-        nombre: vendus.length,
-        chiffreAffaires,
-        marge,
-        panierMoyen: vendus.length > 0 ? arrondir(chiffreAffaires / vendus.length) : 0,
+      period: { from: from.toISOString(), to: to.toISOString() },
+      sales: {
+        count: sold.length,
+        revenue,
+        margin,
+        averageBasket: sold.length > 0 ? round(revenue / sold.length) : 0,
       },
-      parJour: [...parJour.entries()]
-        .map(([jour, v]) => ({ jour, ca: arrondir(v.ca), nombre: v.nombre }))
-        .sort((a, b) => a.jour.localeCompare(b.jour)),
-      topCategories: [...parCategorie.values()]
-        .map((c) => ({ ...c, ca: arrondir(c.ca) }))
-        .sort((a, b) => b.ca - a.ca)
+      byDay: [...byDay.entries()]
+        .map(([day, v]) => ({ day, revenue: round(v.revenue), count: v.count }))
+        .sort((a, b) => a.day.localeCompare(b.day)),
+      topCategories: [...byCategory.values()]
+        .map((c) => ({ ...c, revenue: round(c.revenue) }))
+        .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5),
-      topProduits: vendus
+      topProducts: sold
         .map((p) => ({
           id: p.id,
-          nom: p.nom,
+          name: p.name,
           reference: p.reference,
-          ca: arrondir(Number(p.prixVendu ?? 0)),
+          revenue: round(Number(p.soldPrice ?? 0)),
         }))
-        .sort((a, b) => b.ca - a.ca)
+        .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5),
       stock: {
-        parStatut: statuts.sort((a, b) => b.nombre - a.nombre),
-        actifs: actifs.reduce((t, s) => t + s.nombre, 0),
-        valeurActive: arrondir(actifs.reduce((t, s) => t + s.valeur, 0)),
+        byStatus: statuses.sort((a, b) => b.count - a.count),
+        active: active.reduce((t, s) => t + s.count, 0),
+        activeValue: round(active.reduce((t, s) => t + s.value, 0)),
       },
-      retours: {
-        depotSurPeriode: depotPeriode.length,
-        rendus,
-        taux: depotPeriode.length > 0 ? arrondir((rendus / depotPeriode.length) * 100) : 0,
+      returns: {
+        consignmentOverPeriod: consignmentPeriod.length,
+        returned,
+        rate: consignmentPeriod.length > 0 ? round((returned / consignmentPeriod.length) * 100) : 0,
       },
     };
   }

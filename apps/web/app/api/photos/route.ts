@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { NOM_COOKIE } from '@/lib/api';
+import { COOKIE_NAME } from '@/lib/api';
 
 const API_URL = process.env.API_URL ?? 'http://localhost:3001';
 
@@ -9,16 +9,16 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3001';
  * Le navigateur ne peut pas rattacher le jeton lui-même (cookie httpOnly) et ne
  * doit pas parler à l'API directement : le multipart transite donc par ici.
  */
-export async function POST(requete: Request) {
-  const jeton = (await cookies()).get(NOM_COOKIE)?.value;
-  if (!jeton) return Response.json({ message: 'Non authentifié.' }, { status: 401 });
+export async function POST(request: Request) {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return Response.json({ message: 'Non authentifié.' }, { status: 401 });
 
-  const reponse = await fetch(`${API_URL}/uploads/photo`, {
+  const response = await fetch(`${API_URL}/uploads/photo`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${jeton}` },
-    body: await requete.formData(),
+    headers: { Authorization: `Bearer ${token}` },
+    body: await request.formData(),
   });
 
-  const donnees: unknown = await reponse.json().catch(() => null);
-  return Response.json(donnees ?? { message: 'Envoi impossible.' }, { status: reponse.status });
+  const data: unknown = await response.json().catch(() => null);
+  return Response.json(data ?? { message: 'Envoi impossible.' }, { status: response.status });
 }

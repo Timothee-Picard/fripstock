@@ -2,35 +2,35 @@
 
 import Link from 'next/link';
 import { useActionState, useRef } from 'react';
-import { connexion, type EtatFormulaire } from '../actions';
-import { Alerte, Bouton, Champ } from '@/components/champ';
-import { ConnexionDemo } from '@/components/connexion-demo';
+import { login, type FormState } from '../actions';
+import { Alert, Button, Field } from '@/components/field';
+import { DemoLogin } from '@/components/demo-login';
 
-const ETAT_INITIAL: EtatFormulaire = {};
+const INITIAL_STATE: FormState = {};
 
 export default function PageConnexion() {
-  const [etat, action, enCours] = useActionState(connexion, ETAT_INITIAL);
-  const formulaire = useRef<HTMLFormElement>(null);
+  const [state, action, pending] = useActionState(login, INITIAL_STATE);
+  const form = useRef<HTMLFormElement>(null);
 
   return (
     <div className="space-y-5">
-      <form ref={formulaire} action={action} className="space-y-4">
+      <form ref={form} action={action} className="space-y-4">
         <h2 className="text-lg font-medium text-slate-900">Connexion</h2>
 
-        {etat.erreur ? <Alerte>{etat.erreur}</Alerte> : null}
+        {state.error ? <Alert>{state.error}</Alert> : null}
 
-        <Champ label="Email" name="email" type="email" required autoComplete="email" />
-        <Champ
+        <Field label="Email" name="email" type="email" required autoComplete="email" />
+        <Field
           label="Mot de passe"
-          name="motDePasse"
+          name="password"
           type="password"
           required
           autoComplete="current-password"
         />
 
-        <Bouton type="submit" disabled={enCours} className="w-full">
-          {enCours ? 'Connexion…' : 'Se connecter'}
-        </Bouton>
+        <Button type="submit" disabled={pending} className="w-full">
+          {pending ? 'Connexion…' : 'Se connecter'}
+        </Button>
 
         <p className="text-center text-sm text-slate-600">
           Pas encore de compte ?{' '}
@@ -43,7 +43,7 @@ export default function PageConnexion() {
       {/* Next remplace process.env.NODE_ENV à la compilation : en build de
           production, cette condition est fausse en dur et le composant est
           éliminé du bundle. */}
-      {process.env.NODE_ENV !== 'production' ? <ConnexionDemo formulaire={formulaire} /> : null}
+      {process.env.NODE_ENV !== 'production' ? <DemoLogin formRef={form} /> : null}
     </div>
   );
 }

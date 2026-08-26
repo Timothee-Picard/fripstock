@@ -2,21 +2,21 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
-import { AttributsModule } from './attributs/attributs.module';
+import { AttributesModule } from './attributes/attributes.module';
 import { AuthModule } from './auth/auth.module';
-import { BoutiquesModule } from './boutiques/boutiques.module';
-import { ClientsDeposantsModule } from './clients-deposants/clients-deposants.module';
-import { ContratsDepotModule } from './contrats-depot/contrats-depot.module';
+import { ShopsModule } from './shops/shops.module';
+import { DepositorsModule } from './depositors/depositors.module';
+import { DepositContractsModule } from './deposit-contracts/deposit-contracts.module';
 import { CategoriesModule } from './categories/categories.module';
-import { GerantGuard } from './common/guards/gerant.guard';
+import { ManagerGuard } from './common/guards/manager.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { ProduitsModule } from './produits/produits.module';
+import { ProductsModule } from './products/products.module';
 import { StatsModule } from './stats/stats.module';
-import { StatutsModule } from './statuts/statuts.module';
+import { StatusesModule } from './statuses/statuses.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 
@@ -27,14 +27,14 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     HealthModule,
     AuthModule,
-    BoutiquesModule,
+    ShopsModule,
     CategoriesModule,
-    AttributsModule,
-    StatutsModule,
+    AttributesModule,
+    StatusesModule,
     UploadsModule,
-    ProduitsModule,
-    ClientsDeposantsModule,
-    ContratsDepotModule,
+    ProductsModule,
+    DepositorsModule,
+    DepositContractsModule,
     NotificationsModule,
     StatsModule,
     UsersModule,
@@ -43,7 +43,7 @@ import { UsersModule } from './users/users.module';
     // L'ordre compte : l'authentification pose `request.user`, dont les deux
     // guards suivants dépendent.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: GerantGuard },
+    { provide: APP_GUARD, useClass: ManagerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

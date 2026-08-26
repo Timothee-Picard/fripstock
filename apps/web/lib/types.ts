@@ -1,75 +1,75 @@
 export const PERMISSIONS = [
-  'produits.voir',
-  'produits.creer',
-  'produits.modifier',
-  'produits.supprimer',
-  'produits.changerStatut',
-  'categories.gerer',
-  'attributs.gerer',
-  'clients.gerer',
-  'depots.gerer',
-  'stats.voir',
+  'products.view',
+  'products.create',
+  'products.update',
+  'products.delete',
+  'products.changeStatus',
+  'categories.manage',
+  'attributes.manage',
+  'depositors.manage',
+  'deposits.manage',
+  'stats.view',
   'export.csv',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
 /** Libellés lisibles, pour ne pas afficher les clés techniques au gérant. */
-export const LIBELLES_PERMISSIONS: Record<Permission, string> = {
-  'produits.voir': 'Voir les produits',
-  'produits.creer': 'Créer des produits',
-  'produits.modifier': 'Modifier des produits',
-  'produits.supprimer': 'Supprimer des produits',
-  'produits.changerStatut': 'Changer le statut',
-  'categories.gerer': 'Gérer les catégories',
-  'attributs.gerer': 'Gérer les attributs',
-  'clients.gerer': 'Gérer les déposants',
-  'depots.gerer': 'Gérer les dépôts',
-  'stats.voir': 'Voir les statistiques',
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  'products.view': 'Voir les produits',
+  'products.create': 'Créer des produits',
+  'products.update': 'Modifier des produits',
+  'products.delete': 'Supprimer des produits',
+  'products.changeStatus': 'Changer le statut',
+  'categories.manage': 'Gérer les catégories',
+  'attributes.manage': 'Gérer les attributs',
+  'depositors.manage': 'Gérer les déposants',
+  'deposits.manage': 'Gérer les dépôts',
+  'stats.view': 'Voir les statistiques',
   'export.csv': 'Exporter en CSV',
 };
 
-export interface AccesBoutique {
-  boutiqueId: string;
-  nom: string;
-  tousDroits: boolean;
+export interface ShopAccess {
+  shopId: string;
+  name: string;
+  allRights: boolean;
   permissions: Permission[];
 }
 
 export interface Session {
   id: string;
   email: string;
-  prenom: string;
-  nom: string;
-  estGerant: boolean;
-  entreprise: { id: string; nom: string };
-  boutiques: AccesBoutique[];
+  firstName: string;
+  lastName: string;
+  isManager: boolean;
+  company: { id: string; name: string };
+  shops: ShopAccess[];
 }
 
-export interface Boutique {
+export interface Shop {
   id: string;
-  nom: string;
-  adresse: string | null;
+  name: string;
+  address: string | null;
   createdAt: string;
 }
 
-export interface Employe {
+export interface Employee {
   id: string;
   email: string;
-  prenom: string;
-  nom: string;
-  estGerant: boolean;
+  firstName: string;
+  lastName: string;
+  isManager: boolean;
   createdAt: string;
-  acces: {
-    boutiqueId: string;
+  accesses: {
+    shopId: string;
     permissions: Record<string, boolean>;
-    boutique: { nom: string };
+    shop: { name: string };
   }[];
 }
 
-export type TypeAttribut = 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTISELECT' | 'BOOLEAN';
+export type AttributeType = 'TEXT' | 'NUMBER' | 'SELECT' | 'MULTISELECT' | 'BOOLEAN';
 
-export const LIBELLES_TYPES: Record<TypeAttribut, string> = {
+export const TYPE_LABELS: Record<AttributeType, string> = {
   TEXT: 'Texte libre',
   NUMBER: 'Nombre',
   SELECT: 'Choix unique',
@@ -78,232 +78,229 @@ export const LIBELLES_TYPES: Record<TypeAttribut, string> = {
 };
 
 /** Seuls ces types portent une liste d'options. */
-export const TYPES_A_OPTIONS: TypeAttribut[] = ['SELECT', 'MULTISELECT'];
+export const TYPES_WITH_OPTIONS: AttributeType[] = ['SELECT', 'MULTISELECT'];
 
-export interface Categorie {
+export interface Category {
   id: string;
-  nom: string;
+  name: string;
   parentId: string | null;
   createdAt: string;
 }
 
-export interface CategorieArbre {
+export interface CategoryTree {
   id: string;
-  nom: string;
+  name: string;
   parentId: string | null;
-  enfants: CategorieArbre[];
+  children: CategoryTree[];
 }
 
-export interface AttributOption {
+export interface AttributeOption {
   id: string;
-  valeur: string;
-  ordre: number;
+  value: string;
+  position: number;
 }
 
-export interface AttributDefinition {
+export interface AttributeDefinition {
   id: string;
-  nom: string;
-  type: TypeAttribut;
+  name: string;
+  type: AttributeType;
   clonedFromTemplateId: string | null;
-  options: AttributOption[];
-  categories: { categorieId: string }[];
+  options: AttributeOption[];
+  categories: { categoryId: string }[];
 }
 
-export interface AttributTemplate {
+export interface AttributeTemplate {
   id: string;
-  nom: string;
-  type: TypeAttribut;
-  options: { id: string; valeur: string; ordre: number }[];
+  name: string;
+  type: AttributeType;
+  options: { id: string; value: string; position: number }[];
 }
 
 /** Aplatit l'arbre en libellés indentés, pour les listes déroulantes. */
-export function aplatirArbre(
-  noeuds: CategorieArbre[],
-  profondeur = 0,
-): { id: string; libelle: string }[] {
-  return noeuds.flatMap((n) => [
+export function flattenTree(nodes: CategoryTree[], depth = 0): { id: string; label: string }[] {
+  return nodes.flatMap((n) => [
     {
       id: n.id,
-      libelle: `${'\u00a0\u00a0'.repeat(profondeur)}${profondeur > 0 ? '└ ' : ''}${n.nom}`,
+      label: `${'  '.repeat(depth)}${depth > 0 ? '└ ' : ''}${n.name}`,
     },
-    ...aplatirArbre(n.enfants, profondeur + 1),
+    ...flattenTree(n.children, depth + 1),
   ]);
 }
 
-export type TypeVente = 'ACHAT_REVENTE' | 'DEPOT_VENTE';
+export type SaleType = 'RESALE' | 'CONSIGNMENT';
 
-export const LIBELLES_TYPE_VENTE: Record<TypeVente, string> = {
-  ACHAT_REVENTE: 'Achat-revente',
-  DEPOT_VENTE: 'Dépôt-vente',
+export const SALE_TYPE_LABELS: Record<SaleType, string> = {
+  RESALE: 'Achat-revente',
+  CONSIGNMENT: 'Dépôt-vente',
 };
 
-export interface Statut {
+export interface Status {
   id: string;
-  nom: string;
-  couleur: string;
-  ordre: number;
-  estDefaut: boolean;
-  estVente: boolean;
-  bloqueVente: boolean;
-  sortStock: boolean;
+  name: string;
+  color: string;
+  position: number;
+  isDefault: boolean;
+  isSale: boolean;
+  blocksSale: boolean;
+  leavesStock: boolean;
   positionX: number | null;
   positionY: number | null;
   /** `false` tant qu'aucune flèche n'est tracée : tout est alors permis. */
-  fluxDefini: boolean;
+  flowDefined: boolean;
   /** Statuts atteignables depuis celui-ci. */
-  ciblesAutorisees: string[];
+  allowedTargets: string[];
 }
 
-export interface ProduitResume {
+export interface ProductSummary {
   id: string;
   reference: string | null;
-  nom: string;
+  name: string;
   photoUrl: string | null;
-  prixVente: string | null;
-  prixVendu: string | null;
-  quantite: number;
-  typeVente: TypeVente;
-  dateVente: string | null;
+  salePrice: string | null;
+  soldPrice: string | null;
+  quantity: number;
+  saleType: SaleType;
+  soldAt: string | null;
   createdAt: string;
-  categorie: { id: string; nom: string };
-  boutique: { id: string; nom: string } | null;
-  statut: Statut;
+  category: { id: string; name: string };
+  shop: { id: string; name: string } | null;
+  status: Status;
 }
 
-export interface ValeurProduit {
-  attributDefinitionId: string;
-  valeurTexte: string | null;
-  valeurNombre: string | null;
-  valeurBooleenne: boolean | null;
-  attribut: { id: string; nom: string; type: TypeAttribut };
+export interface ProductAttributeValue {
+  attributeDefinitionId: string;
+  textValue: string | null;
+  numberValue: string | null;
+  booleanValue: boolean | null;
+  attribute: { id: string; name: string; type: AttributeType };
 }
 
-export interface OptionProduit {
+export interface ProductAttributeOption {
   option: {
     id: string;
-    valeur: string;
-    attribut: { id: string; nom: string; type: TypeAttribut };
+    value: string;
+    attribute: { id: string; name: string; type: AttributeType };
   };
 }
 
-export interface Produit extends ProduitResume {
+export interface Product extends ProductSummary {
   description: string | null;
-  commentaire: string | null;
-  prixAchat: string | null;
-  commissionAppliquee: string | null;
-  deposantPaye: boolean | null;
-  contratDepotId: string | null;
-  valeurs: ValeurProduit[];
-  options: OptionProduit[];
-  historique: {
+  internalNote: string | null;
+  purchasePrice: string | null;
+  appliedCommission: string | null;
+  depositorPaid: boolean | null;
+  depositContractId: string | null;
+  attributeValues: ProductAttributeValue[];
+  attributeOptions: ProductAttributeOption[];
+  statusHistory: {
     id: string;
     changedAt: string;
     note: string | null;
-    statut: { id: string; nom: string; couleur: string };
-    auteur: { id: string; prenom: string; nom: string } | null;
+    status: { id: string; name: string; color: string };
+    author: { id: string; firstName: string; lastName: string } | null;
   }[];
 }
 
-export interface PageProduits {
-  produits: ProduitResume[];
+export interface ProductPage {
+  products: ProductSummary[];
   total: number;
   page: number;
-  parPage: number;
+  perPage: number;
   pages: number;
 }
 
 /** Regroupe les valeurs d'un produit en couples lisibles, options comprises. */
-export function attributsLisibles(produit: Produit): { nom: string; valeur: string }[] {
-  const parNom = new Map<string, string[]>();
+export function readableAttributes(product: Product): { name: string; value: string }[] {
+  const byName = new Map<string, string[]>();
 
-  for (const v of produit.valeurs) {
-    const brut =
-      v.valeurTexte ??
-      v.valeurNombre ??
-      (v.valeurBooleenne === null ? null : v.valeurBooleenne ? 'Oui' : 'Non');
-    if (brut !== null) parNom.set(v.attribut.nom, [String(brut)]);
+  for (const v of product.attributeValues) {
+    const raw =
+      v.textValue ??
+      v.numberValue ??
+      (v.booleanValue === null ? null : v.booleanValue ? 'Oui' : 'Non');
+    if (raw !== null) byName.set(v.attribute.name, [String(raw)]);
   }
-  for (const o of produit.options) {
-    const liste = parNom.get(o.option.attribut.nom) ?? [];
-    liste.push(o.option.valeur);
-    parNom.set(o.option.attribut.nom, liste);
+  for (const o of product.attributeOptions) {
+    const list = byName.get(o.option.attribute.name) ?? [];
+    list.push(o.option.value);
+    byName.set(o.option.attribute.name, list);
   }
 
-  return [...parNom.entries()]
-    .map(([nom, valeurs]) => ({ nom, valeur: valeurs.join(', ') }))
-    .sort((a, b) => a.nom.localeCompare(b.nom));
+  return [...byName.entries()]
+    .map(([name, values]) => ({ name, value: values.join(', ') }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Prix formatés en euros, avec les décimales renvoyées par l'API. */
-export function euros(montant: string | null): string {
-  if (montant === null) return '—';
-  return `${Number(montant).toFixed(2).replace('.', ',')} €`;
+export function euros(amount: string | null): string {
+  if (amount === null) return '—';
+  return `${Number(amount).toFixed(2).replace('.', ',')} €`;
 }
 
-export type StatutContrat = 'ACTIF' | 'EXPIRE' | 'CLOS';
+export type ContractStatus = 'ACTIVE' | 'EXPIRED' | 'CLOSED';
 
-export const LIBELLES_STATUT_CONTRAT: Record<StatutContrat, string> = {
-  ACTIF: 'Actif',
-  EXPIRE: 'Expiré',
-  CLOS: 'Clos',
+export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
+  ACTIVE: 'Actif',
+  EXPIRED: 'Expiré',
+  CLOSED: 'Clos',
 };
 
-export interface ClientDeposant {
+export interface Depositor {
   id: string;
-  nom: string;
-  prenom: string | null;
+  lastName: string;
+  firstName: string | null;
   email: string | null;
-  telephone: string | null;
-  adresse: string | null;
+  phone: string | null;
+  address: string | null;
   iban: string | null;
-  commissionDefaut: string;
+  defaultCommission: string;
   createdAt: string;
-  _count?: { contrats: number };
+  _count?: { contracts: number };
 }
 
-export interface ContratDepot {
+export interface DepositContract {
   id: string;
-  clientId: string;
-  dateDebut: string;
-  dateFin: string;
+  depositorId: string;
+  startDate: string;
+  endDate: string;
   commission: string;
   notifyBeforeDays: number;
-  statut: StatutContrat;
-  notifieLe: string | null;
-  client: { id: string; nom: string; prenom: string | null; commissionDefaut: string };
-  _count: { produits: number };
-  produits?: ProduitResume[];
+  status: ContractStatus;
+  notifiedAt: string | null;
+  depositor: { id: string; lastName: string; firstName: string | null; defaultCommission: string };
+  _count: { products: number };
+  products?: ProductSummary[];
 }
 
-export interface LigneReleve {
-  produitId: string;
+export interface StatementLine {
+  productId: string;
   reference: string | null;
-  nom: string;
-  dateVente: string | null;
-  statut: { id: string; nom: string; couleur: string };
-  prixVendu: number;
+  name: string;
+  soldAt: string | null;
+  status: { id: string; name: string; color: string };
+  soldPrice: number;
   commission: number;
-  partBoutique: number;
-  partDeposant: number;
-  deposantPaye: boolean;
+  shopShare: number;
+  depositorShare: number;
+  depositorPaid: boolean;
 }
 
-export interface Releve {
-  client: {
+export interface Statement {
+  depositor: {
     id: string;
-    nom: string;
-    prenom: string | null;
+    lastName: string;
+    firstName: string | null;
     iban: string | null;
-    commissionDefaut: string;
+    defaultCommission: string;
   };
-  lignes: LigneReleve[];
-  totaux: {
-    produitsVendus: number;
-    totalVendu: number;
-    partBoutique: number;
-    partDeposant: number;
-    dejaPaye: number;
-    restantDu: number;
+  lines: StatementLine[];
+  totals: {
+    soldCount: number;
+    soldTotal: number;
+    shopShare: number;
+    depositorShare: number;
+    alreadyPaid: number;
+    outstanding: number;
   };
 }
 
@@ -313,48 +310,48 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
-  contratDepotId: string | null;
-  contratDepot: {
+  depositContractId: string | null;
+  depositContract: {
     id: string;
-    dateFin: string;
-    client: { id: string; nom: string; prenom: string | null };
+    endDate: string;
+    depositor: { id: string; lastName: string; firstName: string | null };
   } | null;
 }
 
 export interface Notifications {
   notifications: Notification[];
-  nonLues: number;
+  unread: number;
 }
 
 /** Montant en euros, à partir d'un nombre déjà arrondi par l'API. */
-export function eurosNombre(montant: number): string {
-  return `${montant.toFixed(2).replace('.', ',')} €`;
+export function eurosNumber(amount: number): string {
+  return `${amount.toFixed(2).replace('.', ',')} €`;
 }
 
 /** Nombre de jours restants avant une échéance — négatif si dépassée. */
-export function joursAvant(date: string): number {
-  const fin = new Date(date);
-  const maintenant = new Date();
-  return Math.ceil((fin.getTime() - maintenant.getTime()) / 86400000);
+export function daysUntil(date: string): number {
+  const end = new Date(date);
+  const now = new Date();
+  return Math.ceil((end.getTime() - now.getTime()) / 86400000);
 }
 
-export interface TableauDeBord {
-  periode: { du: string; au: string };
-  ventes: { nombre: number; chiffreAffaires: number; marge: number; panierMoyen: number };
-  parJour: { jour: string; ca: number; nombre: number }[];
-  topCategories: { id: string; nom: string; ca: number; nombre: number }[];
-  topProduits: { id: string; nom: string; reference: string | null; ca: number }[];
+export interface Dashboard {
+  period: { from: string; to: string };
+  sales: { count: number; revenue: number; margin: number; averageBasket: number };
+  byDay: { day: string; revenue: number; count: number }[];
+  topCategories: { id: string; name: string; revenue: number; count: number }[];
+  topProducts: { id: string; name: string; reference: string | null; revenue: number }[];
   stock: {
-    parStatut: {
+    byStatus: {
       id: string;
-      nom: string;
-      couleur: string;
-      sortStock: boolean;
-      nombre: number;
-      valeur: number;
+      name: string;
+      color: string;
+      leavesStock: boolean;
+      count: number;
+      value: number;
     }[];
-    actifs: number;
-    valeurActive: number;
+    active: number;
+    activeValue: number;
   };
-  retours: { depotSurPeriode: number; rendus: number; taux: number };
+  returns: { consignmentOverPeriod: number; returned: number; rate: number };
 }

@@ -1,17 +1,17 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { CLE_SOURCE_BOUTIQUE, type SourceBoutique } from '../decorators/boutique-source.decorator';
-import { CLE_PERMISSION } from '../decorators/require-permission.decorator';
+import { SHOP_SOURCE_KEY, type SourceShop } from '../decorators/shop-source.decorator';
+import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
 import type { Permission } from '../permissions';
-import type { UtilisateurCourant } from '../types/utilisateur-courant';
+import type { CurrentUser } from '../types/current-user';
 import { PermissionsGuard } from './permissions.guard';
 
 /** Forme du `where` que le guard doit construire — c'est ce qu'on vérifie. */
-interface ArgsAccesBoutique {
+interface ArgsAccessShop {
   where: {
     userId: string;
-    boutiqueId: string;
-    boutique: { entrepriseId: string };
+    shopId: string;
+    shop: { companyId: string };
   };
   select?: unknown;
 }
@@ -22,12 +22,12 @@ interface ArgsAccesBoutique {
  * qui décide de tous les accès employés du reste de l'application.
  */
 describe('PermissionsGuard', () => {
-  const EMPLOYE: UtilisateurCourant = {
+  const EMPLOYEE: CurrentUser = {
     userId: 'u1',
-    entrepriseId: 'e1',
-    estGerant: false,
+    companyId: 'e1',
+    isManager: false,
   };
-  const GERANT: UtilisateurCourant = { ...EMPLOYE, estGerant: true };
+  const GERANT: CurrentUser = { ...EMPLOYEE, isManager: true };
 
   function contexte(requete: Record<string, unknown>): ExecutionContext {
     return {
@@ -37,17 +37,17 @@ describe('PermissionsGuard', () => {
     } as unknown as ExecutionContext;
   }
 
-  function monter(options: {
+  function mount(options: {
     permission?: Permission;
-    source?: SourceBoutique;
+    source?: SourceShop;
     accesTrouve?: { permissions: unknown } | null;
     compteStockCentral?: number;
   }) {
     const reflector = {
-      getAllAndOverride: (cle: string) =>
-        cle === CLE_PERMISSION
+      getAllAndOverride: (key: string) =>
+        key === PERMISSION_KEY
           ? options.permission
-          : cle === CLE_SOURCE_BOUTIQUE
+          : key === SHOP_SOURCE_KEY
             ? options.source
             : undefined,
     } as unknown as Reflector;
@@ -55,108 +55,108 @@ describe('PermissionsGuard', () => {
     // Typage explicite du mock : sans lui, `mock.calls[0][0]` est un `any` et
     // les assertions ci-dessous passeraient même si la forme du where changeait.
     const findFirst = jest
-      .fn<Promise<unknown>, [ArgsAccesBoutique]>()
+      .fn<Promise<unknown>, [ArgsAccessShop]>()
       .mockResolvedValue(options.accesTrouve ?? null);
     const count = jest
       .fn<Promise<number>, [unknown]>()
       .mockResolvedValue(options.compteStockCentral ?? 0);
-    const prisma = { accesBoutique: { findFirst, count } };
+    const prisma = { shopAccess: { findFirst, count } };
     return { guard: new PermissionsGuard(reflector, prisma as never), findFirst, count };
   }
 
   it('laisse passer une route sans permission exigée', async () => {
-    const { guard } = monter({});
-    await expect(guard.canActivate(contexte({ user: EMPLOYE }))).resolves.toBe(true);
+    const { guard } = mount({});
+    await expect(guard.canActivate(contexte({ user: EMPLOYEE }))).resolves.toBe(true);
   });
 
   it('laisse toujours passer le gérant, sans lire la table des accès', async () => {
-    const { guard, findFirst } = monter({ permission: 'produits.creer' });
+    const { guard, findFirst } = mount({ permission: 'products.create' });
     await expect(guard.canActivate(contexte({ user: GERANT }))).resolves.toBe(true);
     expect(findFirst).not.toHaveBeenCalled();
   });
 
   it('accepte un employé qui a la permission sur la boutique visée', async () => {
-    const { guard } = monter({
-      permission: 'produits.creer',
-      accesTrouve: { permissions: { 'produits.creer': true } },
+    const { guard } = mount({
+      permission: 'products.create',
+      accesTrouve: { permissions: { 'products.create': true } },
     });
-    const ctx = contexte({ user: EMPLOYE, params: { boutiqueId: 'b1' }, body: {}, query: {} });
+    const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
   });
 
   it('refuse un employé qui a un accès à la boutique mais pas cette permission', async () => {
-    const { guard } = monter({
-      permission: 'produits.supprimer',
-      accesTrouve: { permissions: { 'produits.voir': true } },
+    const { guard } = mount({
+      permission: 'products.delete',
+      accesTrouve: { permissions: { 'products.view': true } },
     });
-    const ctx = contexte({ user: EMPLOYE, params: { boutiqueId: 'b1' }, body: {}, query: {} });
+    const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
   it("refuse quand l'employé n'a aucun accès à la boutique visée", async () => {
-    const { guard } = monter({ permission: 'produits.voir', accesTrouve: null });
-    const ctx = contexte({ user: EMPLOYE, params: { boutiqueId: 'autre' }, body: {}, query: {} });
+    const { guard } = mount({ permission: 'products.view', accesTrouve: null });
+    const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'autre' }, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
-  it('scope la recherche sur l’entreprise de l’utilisateur, pas sur le seul boutiqueId', async () => {
-    const { guard, findFirst } = monter({
-      permission: 'produits.voir',
-      accesTrouve: { permissions: { 'produits.voir': true } },
+  it('scope la recherche sur l’entreprise de l’utilisateur, pas sur le seul shopId', async () => {
+    const { guard, findFirst } = mount({
+      permission: 'products.view',
+      accesTrouve: { permissions: { 'products.view': true } },
     });
     await guard.canActivate(
-      contexte({ user: EMPLOYE, params: { boutiqueId: 'b1' }, body: {}, query: {} }),
+      contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} }),
     );
-    expect(findFirst.mock.calls[0][0].where.boutique).toEqual({ entrepriseId: 'e1' });
+    expect(findFirst.mock.calls[0][0].where.shop).toEqual({ companyId: 'e1' });
   });
 
-  it('lit boutiqueId depuis le body quand il n’est pas dans les params', async () => {
-    const { guard, findFirst } = monter({
-      permission: 'produits.creer',
-      accesTrouve: { permissions: { 'produits.creer': true } },
+  it('lit shopId depuis le body quand il n’est pas dans les params', async () => {
+    const { guard, findFirst } = mount({
+      permission: 'products.create',
+      accesTrouve: { permissions: { 'products.create': true } },
     });
     await guard.canActivate(
-      contexte({ user: EMPLOYE, params: {}, body: { boutiqueId: 'depuis-body' }, query: {} }),
+      contexte({ user: EMPLOYEE, params: {}, body: { shopId: 'depuis-body' }, query: {} }),
     );
-    expect(findFirst.mock.calls[0][0].where.boutiqueId).toBe('depuis-body');
+    expect(findFirst.mock.calls[0][0].where.shopId).toBe('depuis-body');
   });
 
   describe('stock central (aucune boutique visée)', () => {
     it('accepte si la permission est détenue sur au moins une boutique', async () => {
-      const { guard } = monter({ permission: 'produits.creer', compteStockCentral: 1 });
-      const ctx = contexte({ user: EMPLOYE, params: {}, body: {}, query: {} });
+      const { guard } = mount({ permission: 'products.create', compteStockCentral: 1 });
+      const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
     });
 
     it('refuse si la permission n’est détenue nulle part', async () => {
-      const { guard } = monter({ permission: 'produits.creer', compteStockCentral: 0 });
-      const ctx = contexte({ user: EMPLOYE, params: {}, body: {}, query: {} });
+      const { guard } = mount({ permission: 'products.create', compteStockCentral: 0 });
+      const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     });
   });
 
-  describe('boutique déduite d’une ressource (@BoutiqueDepuisRessource)', () => {
+  describe('boutique déduite d’une ressource (@ShopFromResource)', () => {
     it('interroge le résolveur avec l’entreprise de l’utilisateur', async () => {
-      const resolveur = jest.fn().mockResolvedValue('b-du-produit');
-      const { guard, findFirst } = monter({
-        permission: 'produits.changerStatut',
-        source: { param: 'id', resolveur },
-        accesTrouve: { permissions: { 'produits.changerStatut': true } },
+      const resolver = jest.fn().mockResolvedValue('b-du-product');
+      const { guard, findFirst } = mount({
+        permission: 'products.changeStatus',
+        source: { param: 'id', resolver },
+        accesTrouve: { permissions: { 'products.changeStatus': true } },
       });
       await guard.canActivate(
-        contexte({ user: EMPLOYE, params: { id: 'p1' }, body: {}, query: {} }),
+        contexte({ user: EMPLOYEE, params: { id: 'p1' }, body: {}, query: {} }),
       );
-      expect(resolveur).toHaveBeenCalledWith(expect.anything(), 'p1', 'e1');
-      expect(findFirst.mock.calls[0][0].where.boutiqueId).toBe('b-du-produit');
+      expect(resolver).toHaveBeenCalledWith(expect.anything(), 'p1', 'e1');
+      expect(findFirst.mock.calls[0][0].where.shopId).toBe('b-du-product');
     });
 
     it('bascule sur la règle du stock central si la ressource n’a pas de boutique', async () => {
-      const { guard } = monter({
-        permission: 'produits.modifier',
-        source: { param: 'id', resolveur: jest.fn().mockResolvedValue(null) },
+      const { guard } = mount({
+        permission: 'products.update',
+        source: { param: 'id', resolver: jest.fn().mockResolvedValue(null) },
         compteStockCentral: 1,
       });
-      const ctx = contexte({ user: EMPLOYE, params: { id: 'p1' }, body: {}, query: {} });
+      const ctx = contexte({ user: EMPLOYEE, params: { id: 'p1' }, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
     });
   });

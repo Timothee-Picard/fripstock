@@ -10,7 +10,7 @@ import { useEffect } from 'react';
  * un écran technique illisible. Les cas prévus sont traités dans les pages ;
  * celui-ci rattrape le reste sans perdre la navigation.
  */
-export default function Erreur({
+export default function ErrorMessage({
   error,
   reset,
 }: {
