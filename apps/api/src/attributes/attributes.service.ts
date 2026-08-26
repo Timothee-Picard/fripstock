@@ -13,7 +13,7 @@ import type { SetOptionsDto } from './dto/set-options.dto';
 import type { UpdateAttributeDto } from './dto/update-attribute.dto';
 
 /** Seuls ces types portent une liste d'options. */
-const TYPES_A_OPTIONS: AttributeType[] = ['SELECT', 'MULTISELECT'];
+const TYPES_WITH_OPTIONS: AttributeType[] = ['SELECT', 'MULTISELECT'];
 
 @Injectable()
 export class AttributesService {
@@ -53,8 +53,8 @@ export class AttributesService {
   async create(currentUser: CurrentUser, dto: CreateAttributeDto) {
     await this.rejectDuplicateName(currentUser, dto.name);
 
-    const options = TYPES_A_OPTIONS.includes(dto.type) ? (dto.options ?? []) : [];
-    if (TYPES_A_OPTIONS.includes(dto.type) && options.length === 0) {
+    const options = TYPES_WITH_OPTIONS.includes(dto.type) ? (dto.options ?? []) : [];
+    if (TYPES_WITH_OPTIONS.includes(dto.type) && options.length === 0) {
       throw new BadRequestException(
         `Un attribut de type ${dto.type} a besoin d'au moins une option.`,
       );
@@ -112,16 +112,16 @@ export class AttributesService {
   async delete(currentUser: CurrentUser, id: string) {
     await this.requireAttribute(currentUser, id);
 
-    const [values, optionsUtilisees] = await Promise.all([
+    const [values, usedOptions] = await Promise.all([
       this.prisma.attributeValue.count({ where: { attributeDefinitionId: id } }),
       this.prisma.productAttributeOption.count({
         where: { option: { attributeDefinitionId: id } },
       }),
     ]);
-    const utilises = values + optionsUtilisees;
-    if (utilises > 0) {
+    const used = values + usedOptions;
+    if (used > 0) {
       throw new ConflictException(
-        `Cet attribut est renseigné sur ${utilises} produit(s). Videz ces valeurs d'abord.`,
+        `Cet attribut est renseigné sur ${used} produit(s). Videz ces valeurs d'abord.`,
       );
     }
 
@@ -136,7 +136,7 @@ export class AttributesService {
    */
   async setOptions(currentUser: CurrentUser, id: string, dto: SetOptionsDto) {
     const attribute = await this.requireAttribute(currentUser, id);
-    if (!TYPES_A_OPTIONS.includes(attribute.type)) {
+    if (!TYPES_WITH_OPTIONS.includes(attribute.type)) {
       throw new BadRequestException(
         `Un attribut de type ${attribute.type} ne porte pas d'options.`,
       );
@@ -145,42 +145,42 @@ export class AttributesService {
       throw new BadRequestException('Il faut conserver au moins une option.');
     }
 
-    const existantes = await this.prisma.attributeOption.findMany({
+    const existing = await this.prisma.attributeOption.findMany({
       where: { attributeDefinitionId: id },
       select: { id: true, value: true },
     });
-    const idsExistants = new Set(existantes.map((o) => o.id));
+    const existingIds = new Set(existing.map((o) => o.id));
 
     // Un id inconnu viendrait d'un autre attribut, voire d'une autre
     // entreprise : on refuse plutôt que de le rattacher silencieusement.
     for (const option of dto.options) {
-      if (option.id && !idsExistants.has(option.id)) {
+      if (option.id && !existingIds.has(option.id)) {
         throw new BadRequestException("Une option citée n'appartient pas à cet attribut.");
       }
     }
 
-    const conserves = new Set(dto.options.map((o) => o.id).filter(Boolean) as string[]);
-    const aDelete = existantes.filter((o) => !conserves.has(o.id));
+    const kept = new Set(dto.options.map((o) => o.id).filter(Boolean) as string[]);
+    const toDelete = existing.filter((o) => !kept.has(o.id));
 
-    if (aDelete.length > 0) {
-      const bloquantes = await this.prisma.productAttributeOption.findMany({
-        where: { attributeOptionId: { in: aDelete.map((o) => o.id) } },
+    if (toDelete.length > 0) {
+      const blocking = await this.prisma.productAttributeOption.findMany({
+        where: { attributeOptionId: { in: toDelete.map((o) => o.id) } },
         select: { attributeOptionId: true },
         distinct: ['attributeOptionId'],
       });
-      if (bloquantes.length > 0) {
-        const noms = aDelete
-          .filter((o) => bloquantes.some((b) => b.attributeOptionId === o.id))
+      if (blocking.length > 0) {
+        const names = toDelete
+          .filter((o) => blocking.some((b) => b.attributeOptionId === o.id))
           .map((o) => o.value);
         throw new ConflictException(
-          `Ces options sont utilisées par des produits : ${noms.join(', ')}.`,
+          `Ces options sont utilisées par des produits : ${names.join(', ')}.`,
         );
       }
     }
 
     await this.prisma.$transaction(async (tx) => {
-      if (aDelete.length > 0) {
-        await tx.attributeOption.deleteMany({ where: { id: { in: aDelete.map((o) => o.id) } } });
+      if (toDelete.length > 0) {
+        await tx.attributeOption.deleteMany({ where: { id: { in: toDelete.map((o) => o.id) } } });
       }
       for (const [position, option] of dto.options.entries()) {
         if (option.id) {

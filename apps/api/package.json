@@ -100,6 +100,17 @@
       "text-summary",
       "json-summary",
       "lcov"
-    ]
+    ],
+    "setupFiles": [
+      "<rootDir>/test/setup.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 100,
+        "functions": 100,
+        "statements": 100,
+        "branches": 85
+      }
+    }
   }
 }

@@ -17,7 +17,7 @@ const ALLOWED_TYPES: Record<string, string> = {
   'image/avif': 'avif',
 };
 
-export const TAILLE_MAX_OCTETS = 5 * 1024 * 1024;
+export const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
 /**
  * Signatures binaires des formats acceptés. Le `mimetype` transmis par le
@@ -38,7 +38,7 @@ export class UploadsService implements OnModuleInit {
   private readonly bucket: string;
 
   constructor() {
-    this.bucket = process.env.MINIO_BUCKET ?? 'produits';
+    this.bucket = process.env.MINIO_BUCKET ?? 'products';
     this.minio = new Client({
       endPoint: process.env.MINIO_ENDPOINT ?? 'minio',
       port: Number(process.env.MINIO_PORT ?? 9000),
@@ -72,13 +72,13 @@ export class UploadsService implements OnModuleInit {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Fichier vide.');
     }
-    if (file.size > TAILLE_MAX_OCTETS) {
+    if (file.size > MAX_SIZE_BYTES) {
       throw new BadRequestException(
-        `Image trop lourde (${Math.round(file.size / 1024 / 1024)} Mo). Maximum ${TAILLE_MAX_OCTETS / 1024 / 1024} Mo.`,
+        `Image trop lourde (${Math.round(file.size / 1024 / 1024)} Mo). Maximum ${MAX_SIZE_BYTES / 1024 / 1024} Mo.`,
       );
     }
 
-    const type = this.typeReel(file.buffer);
+    const type = this.realType(file.buffer);
     if (!type) {
       throw new BadRequestException(
         `Format non reconnu. Formats acceptés : ${Object.values(ALLOWED_TYPES).join(', ')}.`,
@@ -102,10 +102,10 @@ export class UploadsService implements OnModuleInit {
     try {
       const stat = await this.minio.statObject(this.bucket, key);
       const stream = await this.minio.getObject(this.bucket, key);
-      const declare: unknown = stat.metaData?.['content-type'];
+      const declared: unknown = stat.metaData?.['content-type'];
       return {
         stream,
-        type: typeof declare === 'string' ? declare : 'application/octet-stream',
+        type: typeof declared === 'string' ? declared : 'application/octet-stream',
       };
     } catch {
       throw new NotFoundException('Photo introuvable.');
@@ -122,7 +122,7 @@ export class UploadsService implements OnModuleInit {
     }
   }
 
-  private typeReel(buffer: Buffer): string | null {
+  private realType(buffer: Buffer): string | null {
     for (const { type, bytes, offset } of SIGNATURES) {
       if (bytes.every((o, i) => buffer[offset + i] === o)) return type;
     }

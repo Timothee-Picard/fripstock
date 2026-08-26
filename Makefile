@@ -110,10 +110,11 @@ check-db: ## Valide le schéma Prisma et détecte une dérive avec les migration
 	@echo "--> base"
 	@./scripts/check-db.sh
 
-check-test: ## Lance les tests des deux apps (vert s'il n'y en a pas encore)
+check-test: ## Lance les tests des deux apps, couverture comprise
 	@echo "--> tests api"
-	@./scripts/node-run.sh apps/api npx --no -- jest --passWithNoTests
-	@echo "--> tests web (aucune suite pour l'instant)"
+	@./scripts/node-run.sh apps/api npx --no -- jest --coverage --passWithNoTests
+	@echo "--> tests web"
+	@./scripts/node-run.sh apps/web npx --no -- vitest run --coverage
 
 check-build: ## Vérifie que les deux apps compilent
 	@echo "--> build api"

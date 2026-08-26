@@ -13,7 +13,7 @@ import type { Response } from 'express';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import type { CurrentUser } from '../common/types/current-user';
-import { TAILLE_MAX_OCTETS, UploadsService } from './uploads.service';
+import { MAX_SIZE_BYTES, UploadsService } from './uploads.service';
 
 @Controller('uploads')
 export class UploadsController {
@@ -25,7 +25,7 @@ export class UploadsController {
    */
   @Post('photo')
   @RequirePermission('products.create')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: TAILLE_MAX_OCTETS } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE_BYTES } }))
   async upload(@AuthUser() currentUser: CurrentUser, @UploadedFile() file: Express.Multer.File) {
     return { key: await this.uploads.savePhoto(currentUser.companyId, file) };
   }
@@ -40,11 +40,11 @@ export class UploadsController {
   async read(
     @AuthUser() currentUser: CurrentUser,
     @Param('key') key: string | string[],
-    @Res({ passthrough: true }) reponse: Response,
+    @Res({ passthrough: true }) response: Response,
   ) {
     const path = Array.isArray(key) ? key.join('/') : key;
     const { stream, type } = await this.uploads.read(currentUser.companyId, path);
-    reponse.set({
+    response.set({
       'Content-Type': type,
       // Immuable : la clé contient un UUID, le contenu ne change jamais.
       'Cache-Control': 'private, max-age=31536000, immutable',

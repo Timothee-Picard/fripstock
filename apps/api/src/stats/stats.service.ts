@@ -87,11 +87,11 @@ export class StatsService {
     // commission en dépôt-vente — où l'essentiel du prix revient au déposant.
     const margin = round(
       sold.reduce((total, p) => {
-        const encaisse = Number(p.soldPrice ?? 0);
+        const cashed = Number(p.soldPrice ?? 0);
         if (p.saleType === 'CONSIGNMENT') {
-          return total + (encaisse * Number(p.appliedCommission ?? 0)) / 100;
+          return total + (cashed * Number(p.appliedCommission ?? 0)) / 100;
         }
-        return total + (encaisse - Number(p.purchasePrice ?? 0));
+        return total + (cashed - Number(p.purchasePrice ?? 0));
       }, 0),
     );
 

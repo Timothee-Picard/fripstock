@@ -56,7 +56,7 @@ const DETAIL_INCLUDE = {
  * La requête est scopée à l'entreprise, sinon elle permettrait de sonder
  * l'existence de produits d'ailleurs.
  */
-export async function boutiqueDuProduct(
+export async function shopOfProduct(
   prisma: PrismaService,
   id: string,
   companyId: string,
@@ -206,7 +206,7 @@ export class ProductsService {
   ): Promise<Prisma.ProductWhereInput> {
     return {
       companyId: currentUser.companyId,
-      ...(await this.restrictionShops(currentUser, filters)),
+      ...(await this.shopRestriction(currentUser, filters)),
       ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
       ...(filters.statusId ? { statusId: filters.statusId } : {}),
       ...(filters.saleType ? { saleType: filters.saleType } : {}),
@@ -273,7 +273,7 @@ export class ProductsService {
     );
 
     const product = await this.prisma.$transaction(async (tx) => {
-      const cree = await tx.product.create({
+      const created = await tx.product.create({
         data: {
           companyId: currentUser.companyId,
           shopId: dto.shopId ?? null,
@@ -292,16 +292,16 @@ export class ProductsService {
           depositorPaid: dto.saleType === 'CONSIGNMENT' ? false : null,
         },
       });
-      await this.ecrireValues(tx, cree.id, values);
+      await this.writeValues(tx, created.id, values);
       await tx.statusHistory.create({
         data: {
-          productId: cree.id,
+          productId: created.id,
           statusId: status.id,
           changedByUserId: currentUser.userId,
           note: 'Création du produit',
         },
       });
-      return cree;
+      return created;
     });
 
     return this.detail(currentUser, product.id);
@@ -315,10 +315,16 @@ export class ProductsService {
     if (dto.shopId) await this.requireShop(currentUser, dto.shopId);
 
     const saleType = dto.saleType ?? product.saleType;
+    // Le contrat existant n'est repris que si le produit reste en dépôt-vente :
+    // sinon, basculer en achat-revente depuis le formulaire échouerait sur
+    // « un produit en achat-revente n'est rattaché à aucun contrat », alors que
+    // l'intention est justement de le détacher.
     const contract = await this.checkSaleType(
       currentUser,
       saleType,
-      dto.depositContractId ?? product.depositContractId ?? undefined,
+      saleType === 'CONSIGNMENT'
+        ? (dto.depositContractId ?? product.depositContractId ?? undefined)
+        : dto.depositContractId,
     );
 
     // Changer de catégorie peut rendre des attributs inapplicables : on
@@ -363,7 +369,7 @@ export class ProductsService {
       if (values) {
         await tx.attributeValue.deleteMany({ where: { productId: id } });
         await tx.productAttributeOption.deleteMany({ where: { productId: id } });
-        await this.ecrireValues(tx, id, values);
+        await this.writeValues(tx, id, values);
       }
     });
 
@@ -535,7 +541,7 @@ export class ProductsService {
    * Restriction de visibilité d'un employé : ses boutiques, plus le stock
    * central. Voir la règle « Produits non assignés » de CLAUDE.md.
    */
-  private async restrictionShops(
+  private async shopRestriction(
     currentUser: CurrentUser,
     filters: FilterProductsDto,
   ): Promise<Prisma.ProductWhereInput> {
@@ -681,7 +687,7 @@ export class ProductsService {
     return result;
   }
 
-  private async ecrireValues(
+  private async writeValues(
     tx: Prisma.TransactionClient,
     productId: string,
     values: NormalizedValue[],

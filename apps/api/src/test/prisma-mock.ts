@@ -24,6 +24,8 @@ const MODELS = [
 
 const METHODS = [
   'findFirst',
+  'findFirstOrThrow',
+  'findUniqueOrThrow',
   'findUnique',
   'findMany',
   'create',

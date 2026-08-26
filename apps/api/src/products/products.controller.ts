@@ -10,8 +10,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { FilterProductsDto } from './dto/filter-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import { PaymentDepositorDto } from './dto/depositor-payment.dto';
-import { boutiqueDuProduct, ProductsService } from './products.service';
+import { DepositorPaymentDto } from './dto/depositor-payment.dto';
+import { shopOfProduct, ProductsService } from './products.service';
 
 /**
  * Comment le PermissionsGuard retrouve la boutique, route par route :
@@ -42,11 +42,11 @@ export class ProductsController {
   async exportCsv(
     @AuthUser() currentUser: CurrentUser,
     @Query() filters: FilterProductsDto,
-    @Res({ passthrough: true }) reponse: Response,
+    @Res({ passthrough: true }) response: Response,
   ) {
     const csv = await this.products.exportCsv(currentUser, filters);
     const name = `stock-${new Date().toISOString().slice(0, 10)}.csv`;
-    reponse.set({
+    response.set({
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${name}"`,
     });
@@ -55,7 +55,7 @@ export class ProductsController {
 
   @Get(':id')
   @RequirePermission('products.view')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   detail(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.products.detail(currentUser, id);
   }
@@ -68,7 +68,7 @@ export class ProductsController {
 
   @Put(':id')
   @RequirePermission('products.update')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   update(
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
@@ -79,7 +79,7 @@ export class ProductsController {
 
   @Put(':id/assign-shop')
   @RequirePermission('products.update')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   assignShop(
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
@@ -91,7 +91,7 @@ export class ProductsController {
   /** Corrige une vente déjà enregistrée : prix encaissé, date, commission. */
   @Put(':id/sale')
   @RequirePermission('products.update')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   updateSale(
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
@@ -103,18 +103,18 @@ export class ProductsController {
   /** Marque la part du déposant comme réglée, ou revient dessus. */
   @Put(':id/depositor-payment')
   @RequirePermission('deposits.manage')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   depositorPayment(
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
-    @Body() dto: PaymentDepositorDto,
+    @Body() dto: DepositorPaymentDto,
   ) {
     return this.products.toggleDepositorPayment(currentUser, id, dto.paid);
   }
 
   @Put(':id/status')
   @RequirePermission('products.changeStatus')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   changeStatus(
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
@@ -125,7 +125,7 @@ export class ProductsController {
 
   @Delete(':id')
   @RequirePermission('products.delete')
-  @ShopFromResource('id', boutiqueDuProduct)
+  @ShopFromResource('id', shopOfProduct)
   delete(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.products.delete(currentUser, id);
   }

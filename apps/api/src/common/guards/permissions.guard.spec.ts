@@ -160,4 +160,33 @@ describe('PermissionsGuard', () => {
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
     });
   });
+
+  describe('cas limites', () => {
+    it("refuse une requête sans utilisateur : le guard JWT n'a pas dû passer", async () => {
+      const { guard } = mount({ permission: 'products.view' });
+      await expect(guard.canActivate(contexte({}))).rejects.toThrow('Authentification requise.');
+    });
+
+    it('retombe sur le stock central quand le paramètre de route est absent', async () => {
+      const resolver = jest.fn();
+      const { guard } = mount({
+        permission: 'products.view',
+        source: { param: 'id', resolver },
+        compteStockCentral: 1,
+      });
+      await expect(guard.canActivate(contexte({ user: EMPLOYEE, params: {} }))).resolves.toBe(true);
+      expect(resolver).not.toHaveBeenCalled();
+    });
+
+    it("retombe sur le stock central quand la ressource n'a pas de boutique", async () => {
+      const { guard } = mount({
+        permission: 'products.view',
+        source: { param: 'id', resolver: jest.fn().mockResolvedValue(undefined) },
+        compteStockCentral: 1,
+      });
+      await expect(
+        guard.canActivate(contexte({ user: EMPLOYEE, params: { id: 'p1' } })),
+      ).resolves.toBe(true);
+    });
+  });
 });

@@ -52,11 +52,11 @@ export class AuthService {
 
       // Flux de départ : sans lui, la nouvelle entreprise tomberait dans le
       // repli permissif et le schéma s'ouvrirait vide, sans rien à comprendre.
-      const crees = await tx.status.findMany({
+      const created = await tx.status.findMany({
         where: { companyId: company.id },
         select: { id: true, name: true },
       });
-      const byName = new Map(crees.map((s) => [s.name, s.id]));
+      const byName = new Map(created.map((s) => [s.name, s.id]));
       await tx.statusTransition.createMany({
         data: BASE_TRANSITIONS.map(([source, target]) => ({
           sourceId: byName.get(source)!,
@@ -85,7 +85,7 @@ export class AuthService {
 
     // Message identique dans les deux cas : distinguer "email inconnu" de
     // "mot de passe faux" permettrait d'énumérer les comptes existants.
-    const echec = new UnauthorizedException('Email ou mot de passe incorrect.');
+    const failure = new UnauthorizedException('Email ou mot de passe incorrect.');
     if (!user) {
       // Hachage à vide malgré tout, pour que la réponse mette le même temps
       // qu'avec un email connu.
@@ -93,10 +93,10 @@ export class AuthService {
         dto.password,
         '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva',
       );
-      throw echec;
+      throw failure;
     }
-    const valide = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!valide) throw echec;
+    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!valid) throw failure;
 
     return this.issueToken(user.id, user.companyId, user.isManager);
   }
@@ -164,19 +164,19 @@ export class AuthService {
     });
 
     const email = normalizeEmail(dto.email);
-    const changeEmail = email !== user.email;
+    const emailChanged = email !== user.email;
 
-    if (changeEmail) {
+    if (emailChanged) {
       if (!dto.currentPassword) {
         throw new BadRequestException(
           'Le mot de passe actuel est requis pour changer votre adresse email.',
         );
       }
-      const valide = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-      if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
+      const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+      if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect.');
 
-      const pris = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
-      if (pris) throw new ConflictException('Un compte existe déjà avec cet email.');
+      const taken = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (taken) throw new ConflictException('Un compte existe déjà avec cet email.');
     }
 
     await this.prisma.user.update({
@@ -196,8 +196,8 @@ export class AuthService {
       where: { id: currentUser.userId, companyId: currentUser.companyId },
     });
 
-    const valide = await bcrypt.compare(dto.currentPassword, user.passwordHash);
-    if (!valide) throw new UnauthorizedException('Mot de passe actuel incorrect.');
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect.');
 
     if (await bcrypt.compare(dto.newPassword, user.passwordHash)) {
       throw new BadRequestException("Le nouveau mot de passe est identique à l'ancien.");

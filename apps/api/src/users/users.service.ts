@@ -96,13 +96,13 @@ export class UsersService {
           data: dto.accesses.map((a) => ({
             userId: target.id,
             shopId: a.shopId,
-            permissions: enMap(a.permissions),
+            permissions: toPermissionMap(a.permissions),
           })),
         });
       }
     });
 
-    return this.list(currentUser).then((tous) => tous.find((u) => u.id === target.id));
+    return this.list(currentUser).then((all) => all.find((u) => u.id === target.id));
   }
 
   async delete(currentUser: CurrentUser, userId: string) {
@@ -129,7 +129,7 @@ export class UsersService {
 }
 
 /** `['products.view']` → `{ 'products.view': true }`, le format stocké en base. */
-function enMap(permissions: Permission[]): PermissionMap {
+function toPermissionMap(permissions: Permission[]): PermissionMap {
   const map: PermissionMap = {};
   for (const p of permissions) map[p] = true;
   return readPermissions(map);
