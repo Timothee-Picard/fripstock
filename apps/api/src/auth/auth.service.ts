@@ -10,6 +10,7 @@ import { normaliserEmail } from '../common/email';
 import { lirePermissions, PERMISSIONS, type Permission } from '../common/permissions';
 import type { AccesBoutiqueResume, UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { PrismaService } from '../prisma/prisma.service';
+import { STATUTS_DE_BASE, TRANSITIONS_DE_BASE } from '../statuts/statuts.defaut';
 import type { ChangerMotDePasseDto } from './dto/changer-mot-de-passe.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { ModifierProfilDto } from './dto/modifier-profil.dto';
@@ -17,58 +18,6 @@ import type { RegisterDto } from './dto/register.dto';
 import type { ChargeJwt } from './jwt.strategy';
 
 const COUT_BCRYPT = 10;
-
-/** Statuts de base créés à l'inscription. Voir la section "Statuts" de CLAUDE.md. */
-const STATUTS_DE_BASE = [
-  {
-    nom: 'En stock',
-    couleur: '#6b7280',
-    estDefaut: true,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'En rayon',
-    couleur: '#3b82f6',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'Réservé',
-    couleur: '#f59e0b',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'Vendu',
-    couleur: '#10b981',
-    estDefaut: false,
-    estVente: true,
-    bloqueVente: false,
-    sortStock: true,
-  },
-  {
-    nom: 'Rendu au client',
-    couleur: '#8b5cf6',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: true,
-    sortStock: true,
-  },
-  {
-    nom: 'Retiré',
-    couleur: '#ef4444',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: true,
-    sortStock: true,
-  },
-];
 
 @Injectable()
 export class AuthService {
@@ -92,11 +41,26 @@ export class AuthService {
 
     const gerant = await this.prisma.$transaction(async (tx) => {
       const entreprise = await tx.entreprise.create({ data: { nom: dto.nomEntreprise } });
+
       await tx.statut.createMany({
         data: STATUTS_DE_BASE.map((statut, ordre) => ({
           ...statut,
           ordre,
           entrepriseId: entreprise.id,
+        })),
+      });
+
+      // Flux de départ : sans lui, la nouvelle entreprise tomberait dans le
+      // repli permissif et le schéma s'ouvrirait vide, sans rien à comprendre.
+      const crees = await tx.statut.findMany({
+        where: { entrepriseId: entreprise.id },
+        select: { id: true, nom: true },
+      });
+      const parNom = new Map(crees.map((s) => [s.nom, s.id]));
+      await tx.transitionStatut.createMany({
+        data: TRANSITIONS_DE_BASE.map(([source, cible]) => ({
+          sourceId: parNom.get(source)!,
+          cibleId: parNom.get(cible)!,
         })),
       });
       return tx.user.create({

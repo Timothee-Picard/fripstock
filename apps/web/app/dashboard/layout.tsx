@@ -74,7 +74,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 p-6">{children}</main>
+        {/* flex-col : une page peut se déclarer flex-1 pour occuper toute la
+            hauteur disponible (voir l'écran Statuts). Les autres gardent leur
+            hauteur naturelle. */}
+        <main className="flex min-w-0 flex-1 flex-col p-6">{children}</main>
       </div>
     </div>
   );

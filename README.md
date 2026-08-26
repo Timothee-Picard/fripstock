@@ -210,12 +210,20 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 `/dashboard/statuts` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
 Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule.
 
-**Le schéma du flux** (canevas `@xyflow/react`) définit quels passages sont possibles d'un
-statut à l'autre : on déplace les statuts, et on tire un trait de l'un vers l'autre pour
-autoriser ce passage.
+**L'écran est un canevas plein écran** (`@xyflow/react`) avec une barre d'outils
+contextuelle : on sélectionne un statut pour le renommer, le recolorer, le désigner par
+défaut ou le supprimer ; on sélectionne une flèche pour la retirer. Ajouter un statut se
+fait par le bouton de la barre.
 
-Le repli est volontairement permissif : **tant qu'aucune flèche n'est tracée, tous les
-passages restent permis**. Imposer un graphe vide bloquerait le stock de toutes les
+On déplace les statuts au glisser-déposer, et on tire un trait du point droit de l'un vers
+le point gauche d'un autre pour autoriser ce passage.
+
+Une nouvelle entreprise reçoit **un flux de départ déjà tracé** (15 transitions) et des
+positions cohérentes : le parcours normal de gauche à droite, les sorties en dessous. Le
+schéma ne s'ouvre donc jamais vide.
+
+Le repli reste permissif si le gérant efface tout : **tant qu'aucune flèche n'est tracée,
+tous les passages redeviennent permis**. Imposer un graphe vide bloquerait le stock de toutes les
 entreprises existantes, et un gérant qui oublie une flèche coincerait la sienne. Dès la
 première flèche enregistrée, seuls les chemins tracés sont acceptés — et un statut sans
 flèche sortante devient un point d'arrivée.

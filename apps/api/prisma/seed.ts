@@ -10,6 +10,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
 import type { PermissionMap } from '../src/common/permissions';
+import { STATUTS_DE_BASE, TRANSITIONS_DE_BASE } from '../src/statuts/statuts.defaut';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { TypeAttribut, TypeVente } from '../src/generated/prisma/enums';
 
@@ -48,61 +49,6 @@ const TEMPLATES: { nom: string; type: TypeAttribut; options: string[] }[] = [
     options: ['Coton', 'Laine', 'Cuir', 'Jean', 'Lin', 'Synthétique'],
   },
   { nom: 'Marque', type: 'TEXT', options: [] },
-];
-
-/**
- * Les six statuts de base. Les flags — et non le libellé, que le gérant peut
- * renommer — pilotent la logique métier. Voir CLAUDE.md, section "Statuts".
- */
-const STATUTS = [
-  {
-    nom: 'En stock',
-    couleur: '#6b7280',
-    estDefaut: true,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'En rayon',
-    couleur: '#3b82f6',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'Réservé',
-    couleur: '#f59e0b',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: false,
-    sortStock: false,
-  },
-  {
-    nom: 'Vendu',
-    couleur: '#10b981',
-    estDefaut: false,
-    estVente: true,
-    bloqueVente: false,
-    sortStock: true,
-  },
-  {
-    nom: 'Rendu au client',
-    couleur: '#8b5cf6',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: true,
-    sortStock: true,
-  },
-  {
-    nom: 'Retiré',
-    couleur: '#ef4444',
-    estDefaut: false,
-    estVente: false,
-    bloqueVente: true,
-    sortStock: true,
-  },
 ];
 
 /** Quels attributs s'appliquent à quelle catégorie : un sac n'a pas de taille. */
@@ -210,7 +156,7 @@ async function main() {
 
   // --- Statuts ------------------------------------------------------------
   const statuts = new Map<string, string>();
-  for (const [ordre, s] of STATUTS.entries()) {
+  for (const [ordre, s] of STATUTS_DE_BASE.entries()) {
     const statut = await prisma.statut.upsert({
       where: { entrepriseId_nom: { entrepriseId: entreprise.id, nom: s.nom } },
       update: { ...s, ordre },
@@ -218,7 +164,18 @@ async function main() {
     });
     statuts.set(s.nom, statut.id);
   }
-  console.log(`  ${STATUTS.length} statuts`);
+
+  // Flux de départ, remis d'aplomb à chaque passage comme le reste du seed.
+  await prisma.transitionStatut.deleteMany({
+    where: { source: { entrepriseId: entreprise.id } },
+  });
+  await prisma.transitionStatut.createMany({
+    data: TRANSITIONS_DE_BASE.map(([source, cible]) => ({
+      sourceId: statuts.get(source)!,
+      cibleId: statuts.get(cible)!,
+    })),
+  });
+  console.log(`  ${STATUTS_DE_BASE.length} statuts et ${TRANSITIONS_DE_BASE.length} transitions`);
 
   // --- Attributs de l'entreprise, clonés depuis les templates -------------
   const attributs = new Map<string, string>();
