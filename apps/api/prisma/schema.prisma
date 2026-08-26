@@ -230,13 +230,42 @@ model Statut {
   sortStock    Boolean  @default(false) @map("sort_stock")
   createdAt    DateTime @default(now()) @map("created_at")
 
-  entreprise Entreprise         @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
-  produits   Produit[]
-  historique HistoriqueStatut[]
+  // Position sur le schéma du flux (écran Statuts). Nulles tant que le gérant
+  // n'a rien déplacé : l'écran dispose alors les statuts automatiquement.
+  positionX Float? @map("position_x")
+  positionY Float? @map("position_y")
+
+  entreprise           Entreprise         @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+  produits             Produit[]
+  historique           HistoriqueStatut[]
+  transitionsSortantes TransitionStatut[] @relation("TransitionSource")
+  transitionsEntrantes TransitionStatut[] @relation("TransitionCible")
 
   @@unique([entrepriseId, nom])
   @@index([entrepriseId])
   @@map("statut")
+}
+
+/// Transition autorisée d'un statut vers un autre — les flèches du schéma.
+///
+/// Tant qu'une entreprise n'en a tracé AUCUNE, tous les changements restent
+/// permis : imposer un graphe vide bloquerait tout le stock. Dès la première
+/// flèche, seules les transitions tracées sont acceptées.
+///
+/// Pas de entrepriseId : le cloisonnement passe par `source`. Voir la règle de
+/// scoping via relation parente dans CLAUDE.md.
+model TransitionStatut {
+  id       String @id @default(cuid())
+  sourceId String @map("source_id")
+  cibleId  String @map("cible_id")
+
+  source Statut @relation("TransitionSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  cible  Statut @relation("TransitionCible", fields: [cibleId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, cibleId])
+  @@index([sourceId])
+  @@index([cibleId])
+  @@map("transition_statut")
 }
 
 // ---------------------------------------------------------------------------

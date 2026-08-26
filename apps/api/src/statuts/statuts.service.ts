@@ -7,17 +7,36 @@ import {
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreerStatutDto } from './dto/creer-statut.dto';
+import type { EnregistrerFluxDto } from './dto/enregistrer-flux.dto';
 import type { ModifierStatutDto } from './dto/modifier-statut.dto';
 
 @Injectable()
 export class StatutsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  lister(courant: UtilisateurCourant) {
-    return this.prisma.statut.findMany({
+  /**
+   * Liste des statuts, avec pour chacun les cibles qu'il peut atteindre.
+   *
+   * Le front s'en sert pour ne proposer que les changements possibles ; l'API
+   * refait la vérification de son côté, l'affichage n'étant qu'un confort.
+   */
+  async lister(courant: UtilisateurCourant) {
+    const statuts = await this.prisma.statut.findMany({
       where: { entrepriseId: courant.entrepriseId },
       orderBy: [{ ordre: 'asc' }, { nom: 'asc' }],
+      include: { transitionsSortantes: { select: { cibleId: true } } },
     });
+
+    // Aucune flèche tracée = flux libre : toutes les cibles sont atteignables.
+    const fluxDefini = statuts.some((s) => s.transitionsSortantes.length > 0);
+
+    return statuts.map(({ transitionsSortantes, ...statut }) => ({
+      ...statut,
+      fluxDefini,
+      ciblesAutorisees: fluxDefini
+        ? transitionsSortantes.map((t) => t.cibleId)
+        : statuts.filter((s) => s.id !== statut.id).map((s) => s.id),
+    }));
   }
 
   async creer(courant: UtilisateurCourant, dto: CreerStatutDto) {
@@ -97,6 +116,89 @@ export class StatutsService {
 
     await this.prisma.statut.delete({ where: { id } });
     return { supprime: true };
+  }
+
+  /**
+   * Enregistre le schéma du flux : positions des statuts et flèches autorisées.
+   *
+   * Remplacement intégral dans une transaction — c'est l'état du canevas au
+   * moment où le gérant enregistre, pas une série de modifications.
+   */
+  async enregistrerFlux(courant: UtilisateurCourant, dto: EnregistrerFluxDto) {
+    const statuts = await this.prisma.statut.findMany({
+      where: { entrepriseId: courant.entrepriseId },
+      select: { id: true },
+    });
+    const connus = new Set(statuts.map((s) => s.id));
+
+    // Un identifiant inconnu viendrait d'une autre entreprise : on refuse
+    // plutôt que de créer une flèche par-dessus la frontière.
+    for (const p of dto.positions) {
+      if (!connus.has(p.id)) {
+        throw new BadRequestException("Un statut cité n'appartient pas à cette entreprise.");
+      }
+    }
+    for (const t of dto.transitions) {
+      if (!connus.has(t.sourceId) || !connus.has(t.cibleId)) {
+        throw new BadRequestException("Un statut cité n'appartient pas à cette entreprise.");
+      }
+      if (t.sourceId === t.cibleId) {
+        throw new BadRequestException('Un statut ne peut pas mener à lui-même.');
+      }
+    }
+
+    // Les doublons viendraient de deux flèches superposées sur le canevas.
+    const uniques = new Map(dto.transitions.map((t) => [`${t.sourceId}->${t.cibleId}`, t]));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const p of dto.positions) {
+        await tx.statut.update({
+          where: { id: p.id },
+          data: { positionX: p.x, positionY: p.y },
+        });
+      }
+      await tx.transitionStatut.deleteMany({
+        where: { source: { entrepriseId: courant.entrepriseId } },
+      });
+      if (uniques.size > 0) {
+        await tx.transitionStatut.createMany({
+          data: [...uniques.values()].map((t) => ({
+            sourceId: t.sourceId,
+            cibleId: t.cibleId,
+          })),
+        });
+      }
+    });
+
+    return this.lister(courant);
+  }
+
+  /**
+   * Vérifie qu'un produit peut passer d'un statut à un autre.
+   *
+   * Tant qu'aucune flèche n'est tracée dans l'entreprise, tout est permis :
+   * exiger un graphe vide bloquerait le stock de toutes les entreprises
+   * existantes, et un gérant qui oublie une flèche coincerait la sienne.
+   */
+  async verifierTransition(entrepriseId: string, sourceId: string, cibleId: string) {
+    const total = await this.prisma.transitionStatut.count({
+      where: { source: { entrepriseId } },
+    });
+    if (total === 0) return;
+
+    const autorisee = await this.prisma.transitionStatut.findFirst({
+      where: { sourceId, cibleId, source: { entrepriseId } },
+      select: { id: true },
+    });
+    if (!autorisee) {
+      const [source, cible] = await Promise.all([
+        this.prisma.statut.findUnique({ where: { id: sourceId }, select: { nom: true } }),
+        this.prisma.statut.findUnique({ where: { id: cibleId }, select: { nom: true } }),
+      ]);
+      throw new BadRequestException(
+        `Le flux de votre entreprise n'autorise pas le passage de « ${source?.nom ?? '?'} » à « ${cible?.nom ?? '?'} ».`,
+      );
+    }
   }
 
   /** Statut par défaut de l'entreprise, exigé à la création d'un produit. */

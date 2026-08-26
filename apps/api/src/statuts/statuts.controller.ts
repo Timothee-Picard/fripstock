@@ -3,6 +3,7 @@ import { Utilisateur } from '../common/decorators/current-user.decorator';
 import { GerantUniquement } from '../common/decorators/gerant.decorator';
 import type { UtilisateurCourant } from '../common/types/utilisateur-courant';
 import { CreerStatutDto } from './dto/creer-statut.dto';
+import { EnregistrerFluxDto } from './dto/enregistrer-flux.dto';
 import { ModifierStatutDto } from './dto/modifier-statut.dto';
 import { StatutsService } from './statuts.service';
 
@@ -18,6 +19,16 @@ export class StatutsController {
   @Get()
   lister(@Utilisateur() courant: UtilisateurCourant) {
     return this.statuts.lister(courant);
+  }
+
+  /**
+   * Enregistre le schéma du flux — positions et flèches — en un seul appel.
+   * Route littérale déclarée avant @Put(':id') pour ne pas être avalée.
+   */
+  @Put('flux')
+  @GerantUniquement()
+  enregistrerFlux(@Utilisateur() courant: UtilisateurCourant, @Body() dto: EnregistrerFluxDto) {
+    return this.statuts.enregistrerFlux(courant, dto);
   }
 
   @Post()

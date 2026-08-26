@@ -114,3 +114,25 @@ export async function supprimerStatut(_etat: EtatStatut, donnees: FormData): Pro
   rafraichir();
   return { succes: 'Statut supprimé.' };
 }
+
+/**
+ * Enregistre le schéma du flux : positions des statuts et flèches autorisées.
+ *
+ * Envoi intégral plutôt qu'une modification à la fois — c'est l'état du canevas
+ * au moment où le gérant enregistre.
+ */
+export async function enregistrerFlux(
+  positions: { id: string; x: number; y: number }[],
+  transitions: { sourceId: string; cibleId: string }[],
+): Promise<EtatStatut> {
+  try {
+    await appelApi('/statuts/flux', {
+      method: 'PUT',
+      body: JSON.stringify({ positions, transitions }),
+    });
+  } catch (erreur) {
+    return message(erreur, 'Enregistrement du flux impossible.');
+  }
+  rafraichir();
+  return { succes: 'Flux enregistré.' };
+}

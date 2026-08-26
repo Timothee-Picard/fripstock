@@ -146,6 +146,12 @@ export interface Statut {
   estVente: boolean;
   bloqueVente: boolean;
   sortStock: boolean;
+  positionX: number | null;
+  positionY: number | null;
+  /** `false` tant qu'aucune flèche n'est tracée : tout est alors permis. */
+  fluxDefini: boolean;
+  /** Statuts atteignables depuis celui-ci. */
+  ciblesAutorisees: string[];
 }
 
 export interface ProduitResume {

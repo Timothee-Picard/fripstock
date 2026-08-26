@@ -1,3 +1,4 @@
+import { SchemaFlux } from './flux';
 import { FormulaireCreation, LigneStatut } from './formulaires';
 import { BadgeStatut } from '@/components/badge-statut';
 import { appelApi } from '@/lib/api';
@@ -38,6 +39,8 @@ export default async function PageStatuts() {
           de ce que l&apos;application autorise.
         </p>
       </div>
+
+      <SchemaFlux statuts={statuts} />
 
       <FormulaireCreation />
 

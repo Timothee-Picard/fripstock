@@ -208,7 +208,22 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 ### Statuts
 
 `/dashboard/statuts` : créer, renommer, recolorer, réordonner, désigner celui par défaut.
-Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule. Les trois flags comportementaux (`estVente`, `bloqueVente`,
+Réservé au gérant, sans permission fine — un employé y voit la liste en lecture seule.
+
+**Le schéma du flux** (canevas `@xyflow/react`) définit quels passages sont possibles d'un
+statut à l'autre : on déplace les statuts, et on tire un trait de l'un vers l'autre pour
+autoriser ce passage.
+
+Le repli est volontairement permissif : **tant qu'aucune flèche n'est tracée, tous les
+passages restent permis**. Imposer un graphe vide bloquerait le stock de toutes les
+entreprises existantes, et un gérant qui oublie une flèche coincerait la sienne. Dès la
+première flèche enregistrée, seuls les chemins tracés sont acceptés — et un statut sans
+flèche sortante devient un point d'arrivée.
+
+Les règles de flags s'appliquent **par-dessus** le flux, jamais à la place : tracer une
+flèche vers un statut de vente ne permet pas de vendre un produit déjà « rendu au client ».
+Les listes de changement rapide ne proposent que les cibles atteignables, mais l'API refait
+les deux contrôles — l'affichage n'est qu'un confort. Les trois flags comportementaux (`estVente`, `bloqueVente`,
 `sortStock`) se fixent à la création et **ne sont plus modifiables** : des produits
 s'appuient dessus, les basculer sous eux réécrirait leur histoire métier.
 

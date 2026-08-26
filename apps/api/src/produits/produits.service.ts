@@ -277,6 +277,10 @@ export class ProduitsService {
     const actuel = await this.prisma.statut.findUniqueOrThrow({ where: { id: produit.statutId } });
     const cible = await this.exigerStatut(courant, dto.statutId);
 
+    // Le flux de l'entreprise, s'il est défini, dit quelles transitions sont
+    // permises. Les règles de flags s'appliquent par-dessus.
+    await this.statuts.verifierTransition(courant.entrepriseId, actuel.id, cible.id);
+
     // Un produit rendu ou retiré ne redevient jamais vendable.
     if (actuel.bloqueVente && cible.estVente) {
       throw new ForbiddenException(
