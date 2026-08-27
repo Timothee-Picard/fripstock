@@ -153,10 +153,31 @@ export class DepositContractsService {
 
     const products = await this.prisma.product.findMany({
       where: { id: { in: dto.productIds }, companyId: currentUser.companyId },
-      include: { status: { select: { isSale: true, name: true } } },
+      include: {
+        status: { select: { isSale: true, name: true } },
+        depositContract: {
+          select: { id: true, depositor: { select: { lastName: true, firstName: true } } },
+        },
+      },
     });
     if (products.length !== dto.productIds.length) {
       throw new BadRequestException("Un produit cité n'appartient pas à votre entreprise.");
+    }
+
+    // Un produit n'appartient qu'à un contrat à la fois. Le déplacer en silence
+    // le retirerait du relevé du premier déposant sans que personne ne le voie.
+    const ailleurs = products.filter((p) => p.depositContractId && p.depositContractId !== id);
+    if (ailleurs.length > 0) {
+      const details = ailleurs
+        .map((p) => {
+          const d = p.depositContract!.depositor;
+          const nom = [d.firstName, d.lastName].filter(Boolean).join(' ');
+          return `${p.name} (${nom})`;
+        })
+        .join(', ');
+      throw new ConflictException(
+        `Déjà sur un autre contrat de dépôt : ${details}. Détachez-les d'abord.`,
+      );
     }
 
     const sold = products.filter((p) => p.status.isSale);

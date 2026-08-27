@@ -26,9 +26,9 @@ export default async function DepositContractPage({ params }: { params: Promise<
   const contract = fiche.data;
   const stock = inventaire.data ?? { products: [], total: 0, page: 1, perPage: 0, pages: 1 };
 
-  // Rattachables : ni vendus, ni déjà sur ce contrat.
-  const alreadyOn = new Set(contract.products.map((p) => p.id));
-  const candidates = stock.products.filter((p) => !alreadyOn.has(p.id) && !p.status.isSale);
+  // Rattachables : ni vendus, ni déjà sur un contrat — un produit n'appartient
+  // qu'à un contrat à la fois, et l'API refuse de le déplacer en silence.
+  const candidates = stock.products.filter((p) => !p.depositContractId && !p.status.isSale);
 
   const days = daysUntil(contract.endDate);
   const depositorName = contract.depositor.firstName

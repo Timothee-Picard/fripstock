@@ -164,6 +164,8 @@ export interface ProductSummary {
   saleType: SaleType;
   soldAt: string | null;
   createdAt: string;
+  /** Contrat de dépôt qui le porte, s'il y en a un. Un produit n'en a qu'un. */
+  depositContractId: string | null;
   category: { id: string; name: string };
   shop: { id: string; name: string } | null;
   status: Status;

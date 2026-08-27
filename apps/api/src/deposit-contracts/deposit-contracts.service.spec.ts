@@ -232,7 +232,13 @@ describe('DepositContractsService', () => {
   });
 
   describe('attachProducts', () => {
-    const enStock = { id: 'p1', name: 'Sac', status: { isSale: false, name: 'En stock' } };
+    const enStock = {
+      id: 'p1',
+      name: 'Sac',
+      status: { isSale: false, name: 'En stock' },
+      depositContractId: null,
+      depositContract: null,
+    };
 
     beforeEach(() => {
       prisma.depositContract.findFirst.mockResolvedValue({ ...contract, products: [] });
@@ -250,6 +256,35 @@ describe('DepositContractsService', () => {
           depositorPaid: false,
         },
       });
+    });
+
+    it('refuse un produit déjà sur un autre contrat, en nommant le déposant', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        {
+          ...enStock,
+          name: 'Robe',
+          depositContractId: 'c2',
+          depositContract: {
+            id: 'c2',
+            depositor: { lastName: 'Durand', firstName: 'Jean' },
+          },
+        },
+      ]);
+      await expect(service.attachProducts(manager, 'c1', { productIds: ['p1'] })).rejects.toThrow(
+        'Déjà sur un autre contrat de dépôt : Robe (Jean Durand). Détachez-les d’abord.'.replace(
+          '’',
+          "'",
+        ),
+      );
+      expect(prisma.product.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('accepte un produit déjà sur ce contrat — rattacher deux fois ne casse rien', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        { ...enStock, depositContractId: 'c1', depositContract: { id: 'c1', depositor: {} } },
+      ]);
+      await service.attachProducts(manager, 'c1', { productIds: ['p1'] });
+      expect(prisma.product.updateMany).toHaveBeenCalled();
     });
 
     it("refuse un produit qui n'appartient pas à l'entreprise", async () => {

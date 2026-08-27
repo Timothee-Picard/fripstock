@@ -131,7 +131,9 @@ export function AttachForm({
       <h2 className="text-sm font-medium text-slate-900">Rattacher des produits</h2>
       <p className="text-sm text-slate-600">
         Les produits cochés passent en dépôt-vente : leur prix d&apos;achat est effacé,
-        l&apos;article appartenant au déposant. Un produit déjà vendu n&apos;est plus rattachable.
+        l&apos;article appartenant au déposant. Seuls les produits libres apparaissent ici — ni
+        vendus, ni déjà sur un autre contrat. Leur référence, elle, ne change pas : elle est écrite
+        sur l&apos;étiquette.
       </p>
 
       {state.error ? <Alert>{state.error}</Alert> : null}
