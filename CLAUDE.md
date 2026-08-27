@@ -173,6 +173,7 @@ attributes.manage
 depositors.manage
 deposits.manage
 stats.view
+stock.view
 export.csv
 ```
 
@@ -184,11 +185,27 @@ donc aucune ligne `ShopAccess` ne les couvre. Règle : un utilisateur qui possè
 permission dans **au moins une** boutique de son entreprise l'a aussi sur le stock central
 (un employé doit pouvoir créer un produit avant de savoir dans quelle boutique il ira).
 
-**Statistiques** : sans boutique précisée, un employé ne voit que les chiffres des
-boutiques où il détient `stats.view`, plus le stock central. La permission accordée sur
-une boutique ne doit pas livrer le chiffre d'affaires des autres. Le sélecteur de
-boutique de l'en-tête écrit son choix dans l'URL (`?shopId=`), lue côté serveur —
-l'API applique la restriction de son côté, elle ne fait pas confiance à l'écran.
+**Tableau de bord** : il n'est gouverné par aucune permission unique — la route
+`/stats/dashboard` ne porte donc **pas** de `@RequirePermission`. Trois droits y ouvrent
+des blocs distincts, et le service n'envoie que ceux auxquels l'utilisateur a droit :
+
+| Bloc                                             | Droit                                       | Contenu                                                          |
+| ------------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------- |
+| `sales`, `byDay`, `topCategories`, `topProducts` | `stats.view`                                | Chiffre d'affaires, marge, panier moyen, courbe, classements     |
+| `stock`, `returns`                               | `stock.view`                                | Stock actif et sa valeur, répartition par statut, taux de retour |
+| `today`                                          | `stats.view` **ou** `products.changeStatus` | Recette du jour. `today.margin` n'est joint qu'avec `stats.view` |
+
+Les deux droits sont indépendants : quelqu'un peut gérer le stock sans connaître les
+marges, et tenir la caisse sans voir ni l'un ni l'autre. Un bloc absent de la réponse
+n'est pas une panne, c'est un droit qui manque — ne jamais le renvoyer « pour que
+l'interface le masque », la réponse HTTP est lisible par son destinataire.
+
+Sans boutique précisée, un employé ne voit que les boutiques où il détient le droit
+concerné, plus le stock central : une permission accordée sur une boutique ne doit pas
+livrer les chiffres des autres. Avec `?shopId=`, le droit doit être détenu **sur cette
+boutique-là** — le garde de route ne peut plus s'en charger. Le sélecteur de boutique de
+l'en-tête écrit son choix dans l'URL, lue côté serveur ; l'API applique la restriction de
+son côté, elle ne fait pas confiance à l'écran.
 
 **Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
 clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.

@@ -18,17 +18,17 @@ vi.mock('recharts', async () => {
 
 const { CategoryBars, SalesCurve, StockPie } = await import('./dashboard-charts');
 
-const byDay: Dashboard['byDay'] = [
+const byDay: NonNullable<Dashboard['byDay']> = [
   { day: '2026-08-10', revenue: 30, count: 2 },
   { day: '2026-08-11', revenue: 50, count: 1 },
 ];
 
-const categories: Dashboard['topCategories'] = [
+const categories: NonNullable<Dashboard['topCategories']> = [
   { id: 'c1', name: 'Robe', revenue: 80, count: 3 },
   { id: 'c2', name: 'Sac', revenue: 20, count: 1 },
 ];
 
-const byStatus: Dashboard['stock']['byStatus'] = [
+const byStatus: NonNullable<Dashboard['stock']>['byStatus'] = [
   { id: 's1', name: 'En stock', color: '#111111', leavesStock: false, count: 4, value: 100 },
   { id: 's2', name: 'Vendu', color: '#222222', leavesStock: true, count: 2, value: 60 },
 ];

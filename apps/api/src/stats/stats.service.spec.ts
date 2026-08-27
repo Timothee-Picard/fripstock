@@ -27,10 +27,15 @@ describe('StatsService', () => {
   let prisma: PrismaMock;
   let service: StatsService;
 
-  /** Les quatre requêtes du tableau de bord, dans l'ordre du Promise.all. */
+  /**
+   * Les requêtes du tableau de bord, dans l'ordre du Promise.all.
+   *
+   * Elles ne sont pas toutes lancées : un bloc auquel l'utilisateur n'a pas
+   * droit ne déclenche aucune requête, et décale donc les suivantes.
+   */
   function arrange(
     sold: unknown[],
-    stock: unknown[],
+    stock: unknown[] = [],
     consignment: unknown[] = [],
     today: unknown[] = [],
   ) {
@@ -41,6 +46,36 @@ describe('StatsService', () => {
       .mockResolvedValueOnce(today);
   }
 
+  /**
+   * Tableau de bord d'un gérant, tous blocs présents.
+   *
+   * Depuis que chaque bloc dépend d'un droit, le type les déclare optionnels.
+   * Le gérant les a tous : on le vérifie une fois ici, plutôt que de parsemer
+   * les tests d'assertions non nulles qui masqueraient une vraie disparition.
+   */
+  async function complet(filters: Parameters<StatsService['dashboard']>[1] = {}) {
+    const d = await service.dashboard(manager, filters);
+    const manquants = [
+      'sales',
+      'byDay',
+      'topCategories',
+      'topProducts',
+      'stock',
+      'returns',
+      'today',
+    ].filter((cle) => !(cle in d));
+    if (manquants.length > 0) {
+      throw new Error(`blocs absents pour un gérant : ${manquants.join(', ')}`);
+    }
+    return d as Required<typeof d>;
+  }
+
+  /** Droits d'un employé sur une boutique, tels que lus dans `ShopAccess`. */
+  const acces = (shopId: string, ...permissions: string[]) => ({
+    shopId,
+    permissions: Object.fromEntries(permissions.map((cle) => [cle, true])),
+  });
+
   beforeEach(() => {
     prisma = createPrismaMock();
     service = new StatsService(asPrisma(prisma));
@@ -49,17 +84,14 @@ describe('StatsService', () => {
   describe('période', () => {
     it('remonte 30 jours en arrière par défaut', async () => {
       arrange([], []);
-      const { period } = await service.dashboard(manager, {});
+      const { period } = await complet();
       const jours = (new Date(period.to).getTime() - new Date(period.from).getTime()) / 86400000;
       expect(Math.round(jours)).toBe(30);
     });
 
     it('respecte les bornes fournies', async () => {
       arrange([], []);
-      const { period } = await service.dashboard(manager, {
-        from: '2026-01-01',
-        to: '2026-02-01',
-      });
+      const { period } = await complet({ from: '2026-01-01', to: '2026-02-01' });
       expect(period.from).toBe(new Date('2026-01-01').toISOString());
       expect(period.to).toBe(new Date('2026-02-01').toISOString());
     });
@@ -74,46 +106,103 @@ describe('StatsService', () => {
   describe('portée par boutique', () => {
     it('ne filtre pas pour un gérant : il voit toute son entreprise', async () => {
       arrange([], []);
-      await service.dashboard(manager, {});
+      await complet();
       expect(prisma.product.findMany.mock.calls[1][0].where).toEqual({ companyId: COMPANY_ID });
       expect(prisma.shopAccess.findMany).not.toHaveBeenCalled();
     });
 
-    it("limite l'employé aux boutiques où il a stats.view", async () => {
+    it("limite l'employé aux boutiques où il détient le droit", async () => {
       prisma.shopAccess.findMany.mockResolvedValue([
-        { shopId: 'b1', permissions: { 'products.view': true } },
-        { shopId: 'b2', permissions: { 'stats.view': true } },
+        acces('b1', 'products.view'),
+        acces('b2', 'stats.view', 'stock.view'),
       ]);
       arrange([], []);
       await service.dashboard(employee, {});
       // b1 est écartée : il y travaille, mais n'a pas le droit d'en voir les
       // chiffres. Sans ce filtre, une permission sur b2 livrait tout.
-      expect(prisma.product.findMany.mock.calls[1][0].where).toEqual({
-        companyId: COMPANY_ID,
-        OR: [{ shopId: null }, { shopId: { in: ['b2'] } }],
-      });
+      expect(prisma.product.findMany.mock.calls[0][0].where.OR).toEqual([
+        { shopId: null },
+        { shopId: { in: ['b2'] } },
+      ]);
     });
 
-    it('laisse le stock central visible, il n’est à aucune boutique', async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([]);
-      arrange([], []);
+    it('joint le stock central, qui n’est à aucune boutique', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stock.view')]);
+      arrange([]);
       await service.dashboard(employee, {});
-      const where = prisma.product.findMany.mock.calls[1][0].where as {
-        OR: { shopId: unknown }[];
-      };
-      expect(where.OR[0]).toEqual({ shopId: null });
-      expect(where.OR[1]).toEqual({ shopId: { in: [] } });
+      expect(prisma.product.findMany.mock.calls[0][0].where.OR[0]).toEqual({ shopId: null });
     });
 
-    it('applique la même restriction aux quatre requêtes', async () => {
+    it('applique la même restriction à toutes les requêtes', async () => {
       prisma.shopAccess.findMany.mockResolvedValue([
-        { shopId: 'b2', permissions: { 'stats.view': true } },
+        acces('b2', 'stats.view', 'stock.view', 'products.changeStatus'),
       ]);
       arrange([], []);
       await service.dashboard(employee, {});
+      expect(prisma.product.findMany).toHaveBeenCalledTimes(4);
       for (const appel of prisma.product.findMany.mock.calls) {
         expect(appel[0].where.OR).toEqual([{ shopId: null }, { shopId: { in: ['b2'] } }]);
       }
+    });
+  });
+
+  describe('droits sur les blocs', () => {
+    it('donne tout au gérant', async () => {
+      arrange([], []);
+      await expect(complet()).resolves.toBeDefined();
+    });
+
+    it("ne renvoie que l'état du stock à qui n'a que stock.view", async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stock.view')]);
+      arrange([], []);
+      const d = await service.dashboard(employee, {});
+      expect(d.stock).toBeDefined();
+      expect(d.returns).toBeDefined();
+      // Le chiffre d'affaires n'est pas masqué par l'interface : il n'est
+      // jamais calculé, donc jamais dans la réponse.
+      expect(d.sales).toBeUndefined();
+      expect(d.today).toBeUndefined();
+    });
+
+    it("ne renvoie que les chiffres de vente à qui n'a que stats.view", async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stats.view')]);
+      arrange([], []);
+      const d = await service.dashboard(employee, {});
+      expect(d.sales).toBeDefined();
+      expect(d.stock).toBeUndefined();
+      expect(d.returns).toBeUndefined();
+    });
+
+    it('ouvre la recette du jour à qui tient le comptoir, sans la marge', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.changeStatus')]);
+      arrange([vendu({ soldPrice: '50', purchasePrice: '10' })]);
+      const d = await service.dashboard(employee, {});
+      expect(d.today).toMatchObject({ count: 1, revenue: 50 });
+      // La marge dirait le prix d'achat : elle reste au gérant.
+      expect(d.today && 'margin' in d.today).toBe(false);
+      expect(d.sales).toBeUndefined();
+    });
+
+    it('donne la marge du jour dès que stats.view est détenu', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stats.view')]);
+      arrange([], [vendu({ soldPrice: '50', purchasePrice: '10' })]);
+      const d = await service.dashboard(employee, {});
+      expect(d.today?.margin).toBe(40);
+    });
+
+    it('ne renvoie que la période à qui n’a aucun de ces droits', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.view')]);
+      const d = await service.dashboard(employee, {});
+      expect(Object.keys(d)).toEqual(['period']);
+      expect(prisma.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('exige le droit sur la boutique demandée, pas seulement ailleurs', async () => {
+      prisma.shop.count.mockResolvedValue(1);
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stats.view')]);
+      const d = await service.dashboard(employee, { shopId: 'b3' });
+      // Il a bien stats.view — mais sur b2. Demander b3 ne doit rien ouvrir.
+      expect(d.sales).toBeUndefined();
     });
   });
 
@@ -139,7 +228,7 @@ describe('StatsService', () => {
   describe('ventes', () => {
     it('additionne le chiffre d’affaires et le nombre de ventes', async () => {
       arrange([vendu(), vendu({ id: 'p2', soldPrice: '30' })], []);
-      const { sales } = await service.dashboard(manager, {});
+      const { sales } = await complet();
       expect(sales.count).toBe(2);
       expect(sales.revenue).toBe(80);
       expect(sales.averageBasket).toBe(40);
@@ -147,25 +236,25 @@ describe('StatsService', () => {
 
     it('évite la division par zéro quand rien n’est vendu', async () => {
       arrange([], []);
-      const { sales } = await service.dashboard(manager, {});
+      const { sales } = await complet();
       expect(sales).toEqual({ count: 0, revenue: 0, margin: 0, averageBasket: 0 });
     });
 
     it('en achat-revente, la marge est le prix vendu moins le prix d’achat', async () => {
       arrange([vendu({ soldPrice: '50', purchasePrice: '10' })], []);
-      const { sales } = await service.dashboard(manager, {});
+      const { sales } = await complet();
       expect(sales.margin).toBe(40);
     });
 
     it('en dépôt-vente, la marge est la seule commission', async () => {
       arrange([vendu({ saleType: 'CONSIGNMENT', soldPrice: '100', appliedCommission: '40' })], []);
-      const { sales } = await service.dashboard(manager, {});
+      const { sales } = await complet();
       expect(sales.margin).toBe(40);
     });
 
     it('ne compte que les statuts porteurs de isSale', async () => {
       arrange([], []);
-      await service.dashboard(manager, {});
+      await complet();
       expect(prisma.product.findMany.mock.calls[0][0].where.status).toEqual({ isSale: true });
     });
   });
@@ -180,7 +269,7 @@ describe('StatsService', () => {
         ],
         [],
       );
-      const { byDay } = await service.dashboard(manager, {});
+      const { byDay } = await complet();
       expect(byDay).toEqual([
         { day: '2026-08-10', revenue: 30, count: 2 },
         { day: '2026-08-11', revenue: 5, count: 1 },
@@ -195,7 +284,7 @@ describe('StatsService', () => {
         ],
         [],
       );
-      const { topCategories } = await service.dashboard(manager, {});
+      const { topCategories } = await complet();
       expect(topCategories.map((c) => c.name)).toEqual(['Robe', 'Sac']);
     });
 
@@ -204,7 +293,7 @@ describe('StatsService', () => {
         Array.from({ length: 7 }, (_, i) => vendu({ id: `p${i}`, soldPrice: String(i) })),
         [],
       );
-      const { topProducts } = await service.dashboard(manager, {});
+      const { topProducts } = await complet();
       expect(topProducts).toHaveLength(5);
       expect(topProducts[0].revenue).toBe(6);
     });
@@ -216,7 +305,7 @@ describe('StatsService', () => {
         [],
         [enStock({ quantity: 2, salePrice: '10' }), enStock({ quantity: 1, salePrice: '5' })],
       );
-      const { stock } = await service.dashboard(manager, {});
+      const { stock } = await complet();
       expect(stock.byStatus[0].count).toBe(3);
       expect(stock.byStatus[0].value).toBe(25);
     });
@@ -233,7 +322,7 @@ describe('StatsService', () => {
           }),
         ],
       );
-      const { stock } = await service.dashboard(manager, {});
+      const { stock } = await complet();
       expect(stock.active).toBe(1);
       expect(stock.activeValue).toBe(20);
       // Le statut sortant reste listé, il n'est simplement pas compté comme actif.
@@ -242,7 +331,7 @@ describe('StatsService', () => {
 
     it('traite un prix de vente absent comme zéro', async () => {
       arrange([], [enStock({ salePrice: null })]);
-      const { stock } = await service.dashboard(manager, {});
+      const { stock } = await complet();
       expect(stock.activeValue).toBe(0);
     });
   });
@@ -250,14 +339,14 @@ describe('StatsService', () => {
   describe('journée en cours', () => {
     it('compte les ventes du jour, indépendamment de la période choisie', async () => {
       arrange([], [], [], [vendu(), vendu({ id: 'p2', soldPrice: '30' })]);
-      const { today } = await service.dashboard(manager, { from: '2020-01-01' });
+      const { today } = await complet({ from: '2020-01-01' });
       expect(today.count).toBe(2);
       expect(today.revenue).toBe(80);
     });
 
     it('calcule la marge du jour comme celle de la période', async () => {
       arrange([], [], [], [vendu({ soldPrice: '50', purchasePrice: '10' })]);
-      const { today } = await service.dashboard(manager, {});
+      const { today } = await complet();
       expect(today.margin).toBe(40);
     });
 
@@ -268,13 +357,13 @@ describe('StatsService', () => {
         [],
         [vendu({ saleType: 'CONSIGNMENT', soldPrice: '100', appliedCommission: '40' })],
       );
-      const { today } = await service.dashboard(manager, {});
+      const { today } = await complet();
       expect(today.margin).toBe(40);
     });
 
     it('rend une journée à zéro plutôt que rien', async () => {
       arrange([], []);
-      const { today } = await service.dashboard(manager, {});
+      const { today } = await complet();
       expect(today).toMatchObject({ count: 0, revenue: 0, margin: 0 });
       expect(today.date).toEqual(expect.any(String));
     });
@@ -310,13 +399,13 @@ describe('StatsService', () => {
           { status: { blocksSale: false } },
         ],
       );
-      const { returns } = await service.dashboard(manager, {});
+      const { returns } = await complet();
       expect(returns).toEqual({ consignmentOverPeriod: 4, returned: 1, rate: 25 });
     });
 
     it('rend un taux nul quand aucun dépôt n’a été créé', async () => {
       arrange([], [], []);
-      const { returns } = await service.dashboard(manager, {});
+      const { returns } = await complet();
       expect(returns).toEqual({ consignmentOverPeriod: 0, returned: 0, rate: 0 });
     });
   });

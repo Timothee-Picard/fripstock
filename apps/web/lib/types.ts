@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'depositors.manage',
   'deposits.manage',
   'stats.view',
+  'stock.view',
   'export.csv',
 ] as const;
 
@@ -25,7 +26,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
   'deposits.manage': 'Gérer les dépôts',
-  'stats.view': 'Voir les statistiques',
+  'stats.view': 'Voir les chiffres de vente',
+  'stock.view': "Voir l'état du stock",
   'export.csv': 'Exporter en CSV',
 };
 
@@ -347,15 +349,31 @@ export function daysUntil(date: string): number {
   return Math.ceil((end.getTime() - now.getTime()) / 86400000);
 }
 
+/**
+ * Tableau de bord.
+ *
+ * Presque tout y est optionnel : l'API n'envoie que les blocs auxquels
+ * l'utilisateur a droit — `stats.view` pour l'argent, `stock.view` pour
+ * l'inventaire — plutôt que de tout envoyer et laisser l'interface masquer.
+ * Un bloc absent n'est donc pas une erreur, c'est un droit qui manque.
+ */
 export interface Dashboard {
   period: { from: string; to: string };
-  /** Journée en cours, indépendante de la période choisie. */
-  today: { date: string; count: number; revenue: number; margin: number };
-  sales: { count: number; revenue: number; margin: number; averageBasket: number };
-  byDay: { day: string; revenue: number; count: number }[];
-  topCategories: { id: string; name: string; revenue: number; count: number }[];
-  topProducts: { id: string; name: string; reference: string | null; revenue: number }[];
-  stock: {
+  /**
+   * Journée en cours, indépendante de la période choisie. Ouverte aussi à qui
+   * tient le comptoir — mais la marge, elle, reste réservée à `stats.view`.
+   */
+  today?: {
+    date: string /** Jour calendaire AAAA-MM-JJ. */;
+    count: number;
+    revenue: number;
+    margin?: number;
+  };
+  sales?: { count: number; revenue: number; margin: number; averageBasket: number };
+  byDay?: { day: string; revenue: number; count: number }[];
+  topCategories?: { id: string; name: string; revenue: number; count: number }[];
+  topProducts?: { id: string; name: string; reference: string | null; revenue: number }[];
+  stock?: {
     byStatus: {
       id: string;
       name: string;
@@ -367,5 +385,5 @@ export interface Dashboard {
     active: number;
     activeValue: number;
   };
-  returns: { consignmentOverPeriod: number; returned: number; rate: number };
+  returns?: { consignmentOverPeriod: number; returned: number; rate: number };
 }

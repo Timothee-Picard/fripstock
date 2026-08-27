@@ -17,8 +17,11 @@ describe('StatsController', () => {
     expect(route(StatsController, name)).toMatchObject({ method, path });
   });
 
-  it.each([['dashboard', 'stats.view']])('%s exige la permission %s', (name, permission) => {
-    expect(route(StatsController, name).permission).toBe(permission);
+  it("n'exige aucune permission de route : le découpage est dans le service", () => {
+    // Trois droits ouvrent des blocs différents du tableau de bord. Un garde de
+    // route ne saurait en exiger qu'un — et le remettre ici refermerait la page
+    // à l'employé qui n'a que `stock.view`.
+    expect(route(StatsController, 'dashboard').permission).toBeUndefined();
   });
 
   describe('délégation', () => {

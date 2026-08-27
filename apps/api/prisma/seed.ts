@@ -27,13 +27,23 @@ const EMPLOYEE_EMAIL = 'employe@fripstock.test';
 const DEMO_PASSWORD = 'fripstock';
 
 /**
- * Deliberately partial permissions: the demo employee may view and create
- * products, nothing else. Everything else must answer 403, which is what makes
- * the restriction testable without hand-crafting an account.
+ * Deliberately partial permissions, and deliberately different from one shop to
+ * the next: the demo employee tends the stock here and the till there.
+ *
+ * That split is the point. He never holds `stats.view`, so the dashboard owes
+ * him the day's takings and the state of the stock — never the margin, the
+ * revenue or the average basket. A single all-or-nothing account would make
+ * that regression invisible.
  */
-const DEMO_EMPLOYEE_PERMISSIONS: PermissionMap = {
+const DEMO_STOCK_PERMISSIONS: PermissionMap = {
   'products.view': true,
   'products.create': true,
+  'stock.view': true,
+};
+
+const DEMO_TILL_PERMISSIONS: PermissionMap = {
+  'products.view': true,
+  'products.changeStatus': true,
 };
 
 /** Global library, shared by every company, read-only. */
@@ -222,11 +232,8 @@ async function main() {
   // rester invisible pour lui, et le stock central lui reste ouvert dès qu'il
   // détient la permission quelque part (voir CLAUDE.md).
   const ACCES_EMPLOYE: { shop: string; permissions: PermissionMap }[] = [
-    { shop: BOUTIQUES[0].name, permissions: DEMO_EMPLOYEE_PERMISSIONS },
-    {
-      shop: BOUTIQUES[1].name,
-      permissions: { 'products.view': true, 'products.changeStatus': true, 'stats.view': true },
-    },
+    { shop: BOUTIQUES[0].name, permissions: DEMO_STOCK_PERMISSIONS },
+    { shop: BOUTIQUES[1].name, permissions: DEMO_TILL_PERMISSIONS },
   ];
   for (const acces of ACCES_EMPLOYE) {
     const shopId = shops.get(acces.shop)!;

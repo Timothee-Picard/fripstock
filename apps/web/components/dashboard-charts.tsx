@@ -43,20 +43,29 @@ const GRILLE = '#e2e8f0';
  * au passage du code en anglais. Les déclarer ici, contraintes par le type du
  * tableau de bord, fait échouer la compilation au prochain renommage.
  */
+/**
+ * Les blocs du tableau de bord sont optionnels — l'API n'envoie que ceux
+ * auxquels l'utilisateur a droit. Un graphique, lui, n'est monté que si son
+ * bloc existe : `NonNullable` évite d'avoir à le redire à chaque accès.
+ */
+type ByDay = NonNullable<Dashboard['byDay']>;
+type TopCategories = NonNullable<Dashboard['topCategories']>;
+type Stock = NonNullable<Dashboard['stock']>;
+
 const PAR_JOUR = {
   x: 'day',
   y: 'revenue',
-} as const satisfies Record<string, keyof Dashboard['byDay'][number]>;
+} as const satisfies Record<string, keyof ByDay[number]>;
 
 const CATEGORIES = {
   label: 'name',
   value: 'revenue',
-} as const satisfies Record<string, keyof Dashboard['topCategories'][number]>;
+} as const satisfies Record<string, keyof TopCategories[number]>;
 
 const PAR_STATUT = {
   label: 'name',
   value: 'count',
-} as const satisfies Record<string, keyof Dashboard['stock']['byStatus'][number]>;
+} as const satisfies Record<string, keyof Stock['byStatus'][number]>;
 
 function jourCourt(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
@@ -68,7 +77,7 @@ function jourCourt(iso: string): string {
  * Une ligne et non des barres : sur une période d'un mois, l'œil suit une
  * tendance, il ne compare pas trente valeurs deux à deux.
  */
-export function SalesCurve({ data }: { data: Dashboard['byDay'] }) {
+export function SalesCurve({ data }: { data: ByDay }) {
   if (data.length === 0) {
     return <p className="py-12 text-center text-sm text-slate-600">Aucune vente sur la période.</p>;
   }
@@ -101,7 +110,7 @@ export function SalesCurve({ data }: { data: Dashboard['byDay'] }) {
  * Les couleurs viennent de la base : ce sont celles que le gérant a choisies
  * pour ses statuts, donc celles qu'il reconnaît sur les fiches produit.
  */
-export function StockPie({ data }: { data: Dashboard['stock']['byStatus'] }) {
+export function StockPie({ data }: { data: Stock['byStatus'] }) {
   const withStock = data.filter((s) => s.count > 0);
   if (withStock.length === 0) {
     return <p className="py-12 text-center text-sm text-slate-600">Aucun produit en stock.</p>;
@@ -144,7 +153,7 @@ export function StockPie({ data }: { data: Dashboard['stock']['byStatus'] }) {
 }
 
 /** Catégories par chiffre d'affaires — barres horizontales, libellés lisibles. */
-export function CategoryBars({ data }: { data: Dashboard['topCategories'] }) {
+export function CategoryBars({ data }: { data: TopCategories }) {
   if (data.length === 0) {
     return <p className="py-12 text-center text-sm text-slate-600">Aucune vente sur la période.</p>;
   }

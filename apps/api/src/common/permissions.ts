@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'depositors.manage',
   'deposits.manage',
   'stats.view',
+  'stock.view',
   'export.csv',
 ] as const;
 
@@ -40,7 +41,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
   'deposits.manage': 'Gérer les dépôts',
-  'stats.view': 'Voir les statistiques',
+  'stats.view': 'Voir les chiffres de vente',
+  'stock.view': "Voir l'état du stock",
   'export.csv': 'Exporter en CSV',
 };
 

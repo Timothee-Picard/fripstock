@@ -1,6 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AuthUser } from '../common/decorators/current-user.decorator';
-import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import type { CurrentUser } from '../common/types/current-user';
 import { PeriodDto } from './dto/period.dto';
 import { StatsService } from './stats.service';
@@ -10,13 +9,17 @@ export class StatsController {
   constructor(private readonly stats: StatsService) {}
 
   /**
-   * `shopId` en query : le PermissionsGuard s'en sert pour vérifier
-   * `stats.view` sur la boutique visée. Sans lui, c'est la règle du stock
-   * central qui s'applique — la permission sur au moins une boutique suffit,
-   * et les chiffres portent alors sur toute l'entreprise.
+   * Volontairement sans @RequirePermission : le tableau de bord n'est plus
+   * gouverné par un droit unique.
+   *
+   * Trois droits y ouvrent des blocs différents — `stats.view` pour les
+   * chiffres d'argent, `stock.view` pour l'état du stock,
+   * `products.changeStatus` pour la recette du jour — et un garde de route ne
+   * saurait en exiger qu'un seul. C'est le service qui découpe, et qui n'envoie
+   * que les blocs autorisés : un employé sans aucun de ces droits reçoit la
+   * seule période.
    */
   @Get('dashboard')
-  @RequirePermission('stats.view')
   dashboard(@AuthUser() currentUser: CurrentUser, @Query() filters: PeriodDto) {
     return this.stats.dashboard(currentUser, filters);
   }
