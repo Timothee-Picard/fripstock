@@ -17,6 +17,11 @@ const notifications = await import('./notifications/actions');
 
 beforeEach(() => resetMocks({ id: 'c1' }));
 
+/** Articles du dernier corps envoyé à l'API. */
+function body_products(): Record<string, unknown>[] {
+  return (dernierAppel().body?.products ?? []) as Record<string, unknown>[];
+}
+
 describe('déposants', () => {
   it('envoie lastName, le nom du champ côté API', async () => {
     await deposants.createDepositor({}, form({ lastName: 'Martin', firstName: 'Sophie' }));
@@ -101,6 +106,138 @@ describe('contrats de dépôt', () => {
     const { body } = dernierAppel();
     expect(String(body?.startDate)).toContain('2026-01-01');
     expect(String(body?.endDate)).toContain('2026-06-01');
+  });
+
+  describe('articles saisis avec le contrat', () => {
+    /** Le tableau poste un `lineId` par ligne, plus ses cellules. */
+    function ligne(id: string, champs: Record<string, string | string[]>) {
+      const out: Record<string, string | string[]> = {};
+      for (const [k, v] of Object.entries(champs)) out[`line:${id}:${k}`] = v;
+      return out;
+    }
+
+    const conditions = {
+      depositorId: 'd1',
+      startDate: '2026-01-01',
+      endDate: '2026-06-01',
+    };
+
+    it('joint les articles au corps du contrat', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            lineId: ['a', 'b'],
+            ...ligne('a', { name: 'Robe Zara', categoryId: 'c1', salePrice: '15' }),
+            ...ligne('b', { name: 'Sac cuir', categoryId: 'c2', salePrice: '45,50' }),
+          }),
+        ),
+      );
+      const { body } = dernierAppel();
+      expect(body?.products).toEqual([
+        expect.objectContaining({ name: 'Robe Zara', categoryId: 'c1', salePrice: 15 }),
+        expect.objectContaining({ name: 'Sac cuir', categoryId: 'c2', salePrice: 45.5 }),
+      ]);
+    });
+
+    it('ignore les lignes laissées vides — le tableau en garde toujours une', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            lineId: ['a', 'b'],
+            ...ligne('a', { name: 'Robe', categoryId: 'c1' }),
+            ...ligne('b', { name: '  ', categoryId: 'c1' }),
+          }),
+        ),
+      );
+      expect(body_products().length).toBe(1);
+    });
+
+    it("n'envoie pas de tableau d'articles quand aucun n'est saisi", async () => {
+      await attraperRedirection(contrats.createContract({}, form(conditions)));
+      expect(dernierAppel().body).not.toHaveProperty('products');
+    });
+
+    it('applique la boutique du contrat à chaque article', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            shopId: 'b1',
+            lineId: ['a'],
+            ...ligne('a', { name: 'Robe', categoryId: 'c1' }),
+          }),
+        ),
+      );
+      expect(body_products()[0]).toMatchObject({ shopId: 'b1' });
+    });
+
+    it('laisse au stock central quand aucune boutique n’est choisie', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({ ...conditions, lineId: ['a'], ...ligne('a', { name: 'Robe', categoryId: 'c1' }) }),
+        ),
+      );
+      expect(body_products()[0]).toMatchObject({ shopId: null });
+    });
+
+    it('omet les cellules laissées vides plutôt que d’envoyer des chaînes vides', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            lineId: ['a'],
+            ...ligne('a', { name: 'Robe', categoryId: 'c1', reference: '', description: '  ' }),
+          }),
+        ),
+      );
+      const article = body_products()[0];
+      expect(article).not.toHaveProperty('reference');
+      expect(article).not.toHaveProperty('description');
+    });
+
+    it('rassemble les attributs de la ligne, valeur seule ou liste', async () => {
+      await attraperRedirection(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            lineId: ['a'],
+            ...ligne('a', {
+              name: 'Robe',
+              categoryId: 'c1',
+              'attr:at1': 'o-beige',
+              'attr:at2': ['o-s', 'o-m'],
+              'attr:at3': '',
+            }),
+          }),
+        ),
+      );
+      expect(body_products()[0].attributes).toEqual([
+        { attributeDefinitionId: 'at1', value: 'o-beige' },
+        { attributeDefinitionId: 'at2', value: ['o-s', 'o-m'] },
+      ]);
+    });
+
+    it('remonte l’erreur de l’API en situant la ligne fautive', async () => {
+      apiFetch.mockRejectedValue(
+        new ApiError(400, "Article 2 (Sac) : Cette catégorie n'appartient pas à votre entreprise."),
+      );
+      await expect(
+        contrats.createContract(
+          {},
+          form({ ...conditions, lineId: ['a'], ...ligne('a', { name: 'Sac', categoryId: 'x' }) }),
+        ),
+      ).resolves.toEqual({
+        error: "Article 2 (Sac) : Cette catégorie n'appartient pas à votre entreprise.",
+      });
+    });
   });
 
   it('rattache des produits en une fois', async () => {

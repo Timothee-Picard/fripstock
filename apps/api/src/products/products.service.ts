@@ -68,6 +68,16 @@ export async function shopOfProduct(
   return product?.shopId ?? null;
 }
 
+/**
+ * Client Prisma, transactionnel ou non.
+ *
+ * Les validations et l'écriture d'un produit doivent pouvoir tourner dans une
+ * transaction déjà ouverte : c'est ce qui permet de créer un contrat de dépôt
+ * et ses articles en une passe, sans laisser un contrat orphelin derrière une
+ * ligne refusée.
+ */
+type Db = PrismaService | Prisma.TransactionClient;
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -258,61 +268,70 @@ export class ProductsService {
   }
 
   async create(currentUser: CurrentUser, dto: CreateProductDto) {
-    await this.requireCategory(currentUser, dto.categoryId);
-    if (dto.shopId) await this.requireShop(currentUser, dto.shopId);
+    const product = await this.prisma.$transaction((tx) => this.createWith(tx, currentUser, dto));
+    return this.detail(currentUser, product.id);
+  }
+
+  /**
+   * Crée un produit dans une transaction déjà ouverte.
+   *
+   * Exposé pour la création d'un contrat de dépôt avec ses articles : le
+   * contrat et ses lignes sont écrits ensemble, ou pas du tout.
+   */
+  async createWith(tx: Prisma.TransactionClient, currentUser: CurrentUser, dto: CreateProductDto) {
+    await this.requireCategory(tx, currentUser, dto.categoryId);
+    if (dto.shopId) await this.requireShop(tx, currentUser, dto.shopId);
 
     const status = dto.statusId
-      ? await this.requireStatus(currentUser, dto.statusId)
+      ? await this.requireStatus(tx, currentUser, dto.statusId)
       : await this.statuses.defaults(currentUser.companyId);
 
-    const contract = await this.checkSaleType(currentUser, dto.saleType, dto.depositContractId);
+    const contract = await this.checkSaleType(tx, currentUser, dto.saleType, dto.depositContractId);
     const values = await this.normalizeAttributes(
+      tx,
       currentUser,
       dto.categoryId,
       dto.attributes ?? [],
     );
 
-    const product = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.product.create({
-        data: {
-          companyId: currentUser.companyId,
-          shopId: dto.shopId ?? null,
-          categoryId: dto.categoryId,
-          statusId: status.id,
-          name: dto.name,
-          reference: dto.reference ?? null,
-          description: dto.description ?? null,
-          internalNote: dto.internalNote ?? null,
-          photoUrl: dto.photoUrl ?? null,
-          purchasePrice: dto.saleType === 'RESALE' ? (dto.purchasePrice ?? null) : null,
-          salePrice: dto.salePrice ?? null,
-          quantity: dto.quantity ?? 1,
-          saleType: dto.saleType,
-          depositContractId: contract?.id ?? null,
-          depositorPaid: dto.saleType === 'CONSIGNMENT' ? false : null,
-        },
-      });
-      await this.writeValues(tx, created.id, values);
-      await tx.statusHistory.create({
-        data: {
-          productId: created.id,
-          statusId: status.id,
-          changedByUserId: currentUser.userId,
-          note: 'Création du produit',
-        },
-      });
-      return created;
+    const created = await tx.product.create({
+      data: {
+        companyId: currentUser.companyId,
+        shopId: dto.shopId ?? null,
+        categoryId: dto.categoryId,
+        statusId: status.id,
+        name: dto.name,
+        reference: dto.reference ?? null,
+        description: dto.description ?? null,
+        internalNote: dto.internalNote ?? null,
+        photoUrl: dto.photoUrl ?? null,
+        purchasePrice: dto.saleType === 'RESALE' ? (dto.purchasePrice ?? null) : null,
+        salePrice: dto.salePrice ?? null,
+        quantity: dto.quantity ?? 1,
+        saleType: dto.saleType,
+        depositContractId: contract?.id ?? null,
+        depositorPaid: dto.saleType === 'CONSIGNMENT' ? false : null,
+      },
     });
 
-    return this.detail(currentUser, product.id);
+    await this.writeValues(tx, created.id, values);
+    await tx.statusHistory.create({
+      data: {
+        productId: created.id,
+        statusId: status.id,
+        changedByUserId: currentUser.userId,
+        note: 'Création du produit',
+      },
+    });
+    return created;
   }
 
   async update(currentUser: CurrentUser, id: string, dto: UpdateProductDto) {
     const product = await this.loadForWrite(currentUser, id);
 
     const categoryId = dto.categoryId ?? product.categoryId;
-    if (dto.categoryId) await this.requireCategory(currentUser, dto.categoryId);
-    if (dto.shopId) await this.requireShop(currentUser, dto.shopId);
+    if (dto.categoryId) await this.requireCategory(this.prisma, currentUser, dto.categoryId);
+    if (dto.shopId) await this.requireShop(this.prisma, currentUser, dto.shopId);
 
     const saleType = dto.saleType ?? product.saleType;
     // Le contrat existant n'est repris que si le produit reste en dépôt-vente :
@@ -320,6 +339,7 @@ export class ProductsService {
     // « un produit en achat-revente n'est rattaché à aucun contrat », alors que
     // l'intention est justement de le détacher.
     const contract = await this.checkSaleType(
+      this.prisma,
       currentUser,
       saleType,
       saleType === 'CONSIGNMENT'
@@ -332,6 +352,7 @@ export class ProductsService {
     const values =
       dto.attributes !== undefined || dto.categoryId !== undefined
         ? await this.normalizeAttributes(
+            this.prisma,
             currentUser,
             categoryId,
             dto.attributes ?? (await this.currentValues(id)),
@@ -378,7 +399,7 @@ export class ProductsService {
 
   async assignShop(currentUser: CurrentUser, id: string, dto: AssignShopDto) {
     await this.loadForWrite(currentUser, id);
-    if (dto.shopId) await this.requireShop(currentUser, dto.shopId);
+    if (dto.shopId) await this.requireShop(this.prisma, currentUser, dto.shopId);
 
     await this.prisma.product.update({
       where: { id },
@@ -396,7 +417,7 @@ export class ProductsService {
   async changeStatus(currentUser: CurrentUser, id: string, dto: ChangeStatusDto) {
     const product = await this.loadForWrite(currentUser, id);
     const current = await this.prisma.status.findUniqueOrThrow({ where: { id: product.statusId } });
-    const target = await this.requireStatus(currentUser, dto.statusId);
+    const target = await this.requireStatus(this.prisma, currentUser, dto.statusId);
 
     // Le flux de l'entreprise, s'il est défini, dit quelles transitions sont
     // permises. Les règles de flags s'appliquent par-dessus.
@@ -547,7 +568,7 @@ export class ProductsService {
   ): Promise<Prisma.ProductWhereInput> {
     if (filters.unassigned === 'true') return { shopId: null };
     if (filters.shopId) {
-      await this.requireShop(currentUser, filters.shopId);
+      await this.requireShop(this.prisma, currentUser, filters.shopId);
       return { shopId: filters.shopId };
     }
     if (currentUser.isManager) return {};
@@ -576,24 +597,24 @@ export class ProductsService {
     return product;
   }
 
-  private async requireCategory(currentUser: CurrentUser, id: string) {
-    const c = await this.prisma.category.findFirst({
+  private async requireCategory(db: Db, currentUser: CurrentUser, id: string) {
+    const c = await db.category.findFirst({
       where: { id, companyId: currentUser.companyId },
       select: { id: true },
     });
     if (!c) throw new BadRequestException("Cette catégorie n'appartient pas à votre entreprise.");
   }
 
-  private async requireShop(currentUser: CurrentUser, id: string) {
-    const b = await this.prisma.shop.findFirst({
+  private async requireShop(db: Db, currentUser: CurrentUser, id: string) {
+    const b = await db.shop.findFirst({
       where: { id, companyId: currentUser.companyId },
       select: { id: true },
     });
     if (!b) throw new BadRequestException("Cette boutique n'appartient pas à votre entreprise.");
   }
 
-  private async requireStatus(currentUser: CurrentUser, id: string) {
-    const s = await this.prisma.status.findFirst({
+  private async requireStatus(db: Db, currentUser: CurrentUser, id: string) {
+    const s = await db.status.findFirst({
       where: { id, companyId: currentUser.companyId },
     });
     if (!s) throw new BadRequestException("Ce statut n'appartient pas à votre entreprise.");
@@ -602,6 +623,7 @@ export class ProductsService {
 
   /** `CONSIGNMENT` exige un contrat ; `RESALE` en refuse un. */
   private async checkSaleType(
+    db: Db,
     currentUser: CurrentUser,
     saleType: 'RESALE' | 'CONSIGNMENT',
     depositContractId?: string,
@@ -618,7 +640,7 @@ export class ProductsService {
     if (!depositContractId) {
       throw new BadRequestException('Un produit en dépôt-vente doit être rattaché à un contrat.');
     }
-    const contract = await this.prisma.depositContract.findFirst({
+    const contract = await db.depositContract.findFirst({
       // Pas de companyId sur DepositContract : le cloisonnement passe par le déposant.
       where: { id: depositContractId, depositor: { companyId: currentUser.companyId } },
       select: { id: true },
@@ -631,13 +653,14 @@ export class ProductsService {
 
   /** Valide chaque valeur contre les attributs réellement applicables à la catégorie. */
   private async normalizeAttributes(
+    db: Db,
     currentUser: CurrentUser,
     categoryId: string,
     values: ValueAttributeDto[],
   ): Promise<NormalizedValue[]> {
     if (values.length === 0) return [];
 
-    const links = await this.prisma.categoryAttribute.findMany({
+    const links = await db.categoryAttribute.findMany({
       where: { categoryId, attribute: { companyId: currentUser.companyId } },
       include: { attribute: { include: { options: { orderBy: { position: 'asc' } } } } },
     });

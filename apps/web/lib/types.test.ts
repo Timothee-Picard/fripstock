@@ -41,6 +41,8 @@ describe('flattenTree', () => {
     const libelles = flattenTree(arbre).map((o) => o.label);
     expect(libelles[0]).toBe('Vêtements');
     expect(libelles[1]).toContain('└ Robe');
+    // Espaces insécables : sinon l'indentation disparaît dans une <option>.
+    expect(libelles[3].startsWith('\u00a0\u00a0')).toBe(true);
     expect(libelles[3]).toContain('└ Chemise');
     // Le petit-enfant est indenté plus loin que l'enfant.
     expect(libelles[3].indexOf('└')).toBeGreaterThan(libelles[1].indexOf('└'));

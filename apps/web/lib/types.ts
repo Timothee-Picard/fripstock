@@ -121,6 +121,8 @@ export function flattenTree(nodes: CategoryTree[], depth = 0): { id: string; lab
   return nodes.flatMap((n) => [
     {
       id: n.id,
+      // Espaces insécables : dans une <option>, des espaces ordinaires seraient
+      // repliés par le navigateur et l'indentation disparaîtrait.
       label: `${'  '.repeat(depth)}${depth > 0 ? '└ ' : ''}${n.name}`,
     },
     ...flattenTree(n.children, depth + 1),

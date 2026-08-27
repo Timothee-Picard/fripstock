@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { DeadlinesButton, CreateForm } from './forms';
+import { DeadlinesButton } from './forms';
 import { ViewIcon } from '@/components/icons';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
@@ -54,14 +54,31 @@ export default async function DepositContractsPage() {
             sont rattachés passent en dépôt-vente.
           </p>
         </div>
-        <DeadlinesButton />
+        <div className="flex flex-wrap items-center gap-2">
+          <DeadlinesButton />
+          {depositors.length > 0 ? (
+            <Link
+              href="/dashboard/deposit-contracts/new"
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Nouveau contrat
+            </Link>
+          ) : null}
+        </div>
       </div>
-
-      <CreateForm depositors={depositors} />
 
       {contracts.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
-          Aucun contrat pour l&apos;instant.
+          Aucun contrat pour l&apos;instant.{' '}
+          {depositors.length === 0 ? (
+            <>
+              Créez d&apos;abord un{' '}
+              <Link href="/dashboard/depositors" className="underline underline-offset-2">
+                déposant
+              </Link>
+              .
+            </>
+          ) : null}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">

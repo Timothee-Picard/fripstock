@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { DetachButton, DeleteContractButton, ContractForm, Rattachement } from './management';
+import { DetachButton, DeleteContractButton, ContractForm, AttachForm } from './management';
 import { StatusBadge } from '@/components/status-badge';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
@@ -27,8 +27,8 @@ export default async function DepositContractPage({ params }: { params: Promise<
   const stock = inventaire.data ?? { products: [], total: 0, page: 1, perPage: 0, pages: 1 };
 
   // Rattachables : ni vendus, ni déjà sur ce contrat.
-  const dejaDessus = new Set(contract.products.map((p) => p.id));
-  const candidats = stock.products.filter((p) => !dejaDessus.has(p.id) && !p.status.isSale);
+  const alreadyOn = new Set(contract.products.map((p) => p.id));
+  const candidates = stock.products.filter((p) => !alreadyOn.has(p.id) && !p.status.isSale);
 
   const days = daysUntil(contract.endDate);
   const depositorName = contract.depositor.firstName
@@ -121,7 +121,7 @@ export default async function DepositContractPage({ params }: { params: Promise<
                       {p.status.isSale ? (
                         <span className="text-xs text-slate-500">vendu</span>
                       ) : (
-                        <DetachButton contratId={contract.id} product={p} />
+                        <DetachButton contractId={contract.id} product={p} />
                       )}
                     </td>
                   </tr>
@@ -132,7 +132,7 @@ export default async function DepositContractPage({ params }: { params: Promise<
         )}
       </section>
 
-      <Rattachement contratId={contract.id} candidats={candidats} />
+      <AttachForm contractId={contract.id} candidates={candidates} />
     </div>
   );
 }

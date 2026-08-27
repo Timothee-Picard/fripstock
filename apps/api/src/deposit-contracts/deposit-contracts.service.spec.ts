@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DepositContractsService } from './deposit-contracts.service';
+import type { ProductsService } from '../products/products.service';
 import { asPrisma, createPrismaMock, type PrismaMock } from '../test/prisma-mock';
 import { COMPANY_ID, manager } from '../test/fixtures';
 
@@ -17,11 +18,13 @@ const contract = {
 
 describe('DepositContractsService', () => {
   let prisma: PrismaMock;
+  let products: { createWith: jest.Mock };
   let service: DepositContractsService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    service = new DepositContractsService(asPrisma(prisma));
+    products = { createWith: jest.fn().mockResolvedValue({ id: 'p1' }) };
+    service = new DepositContractsService(asPrisma(prisma), products as unknown as ProductsService);
   });
 
   describe('list', () => {
@@ -57,6 +60,11 @@ describe('DepositContractsService', () => {
   describe('create', () => {
     const dto = { depositorId: 'dep-1', startDate: '2026-01-01', endDate: '2026-06-01' };
 
+    beforeEach(() => {
+      // `create` se termine par un `detail` : le contrat doit être relisible.
+      prisma.depositContract.findFirst.mockResolvedValue({ ...contract, products: [] });
+    });
+
     it('copie la commission du déposant quand elle n’est pas précisée', async () => {
       prisma.depositor.findFirst.mockResolvedValue(depositor);
       prisma.depositContract.create.mockResolvedValue(contract);
@@ -83,6 +91,75 @@ describe('DepositContractsService', () => {
       prisma.depositContract.create.mockResolvedValue(contract);
       await service.create(manager, dto);
       expect(prisma.depositContract.create.mock.calls[0][0].data.notifyBeforeDays).toBe(7);
+    });
+
+    it('crée les articles déposés dans la même transaction que le contrat', async () => {
+      prisma.depositor.findFirst.mockResolvedValue(depositor);
+      prisma.depositContract.create.mockResolvedValue(contract);
+
+      await service.create(manager, {
+        ...dto,
+        products: [
+          { name: 'Robe Zara', categoryId: 'cat-1', salePrice: 15 },
+          { name: 'Sac cuir', categoryId: 'cat-2', salePrice: 45 },
+        ],
+      });
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(products.createWith).toHaveBeenCalledTimes(2);
+    });
+
+    it('force le dépôt-vente et le contrat qui vient d’être créé', async () => {
+      prisma.depositor.findFirst.mockResolvedValue(depositor);
+      prisma.depositContract.create.mockResolvedValue(contract);
+
+      await service.create(manager, {
+        ...dto,
+        products: [{ name: 'Robe', categoryId: 'cat-1' }],
+      });
+
+      expect(products.createWith).toHaveBeenCalledWith(expect.anything(), manager, {
+        name: 'Robe',
+        categoryId: 'cat-1',
+        saleType: 'CONSIGNMENT',
+        depositContractId: contract.id,
+      });
+    });
+
+    it('accepte un contrat sans article', async () => {
+      prisma.depositor.findFirst.mockResolvedValue(depositor);
+      prisma.depositContract.create.mockResolvedValue(contract);
+      await service.create(manager, dto);
+      expect(products.createWith).not.toHaveBeenCalled();
+    });
+
+    it('situe l’erreur sur la ligne fautive, sans quoi elle est inexploitable', async () => {
+      prisma.depositor.findFirst.mockResolvedValue(depositor);
+      prisma.depositContract.create.mockResolvedValue(contract);
+      products.createWith
+        .mockResolvedValueOnce({ id: 'p1' })
+        .mockRejectedValueOnce(new Error("Cette catégorie n'appartient pas à votre entreprise."));
+
+      await expect(
+        service.create(manager, {
+          ...dto,
+          products: [
+            { name: 'Robe', categoryId: 'cat-1' },
+            { name: 'Sac', categoryId: 'pirate' },
+          ],
+        }),
+      ).rejects.toThrow("Article 2 (Sac) : Cette catégorie n'appartient pas à votre entreprise.");
+    });
+
+    it('ne crée rien du tout quand une ligne est refusée', async () => {
+      prisma.depositor.findFirst.mockResolvedValue(depositor);
+      prisma.depositContract.create.mockResolvedValue(contract);
+      products.createWith.mockRejectedValue(new Error('refus'));
+      // La transaction remonte l'exception : c'est Prisma qui annule l'écriture
+      // du contrat, on vérifie ici qu'on la laisse bien remonter.
+      await expect(
+        service.create(manager, { ...dto, products: [{ name: 'x', categoryId: 'c' }] }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("refuse un déposant d'une autre entreprise", async () => {

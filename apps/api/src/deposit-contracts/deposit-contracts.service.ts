@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
+import { ProductsService } from '../products/products.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateContractDto } from './dto/create-contract.dto';
 import type { UpdateContractDto } from './dto/update-contract.dto';
@@ -18,7 +19,10 @@ const INCLUDE = {
 
 @Injectable()
 export class DepositContractsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly products: ProductsService,
+  ) {}
 
   /**
    * `DepositContract` n'a pas de `companyId` : tout filtre passe par `client`.
@@ -64,18 +68,41 @@ export class DepositContractsService {
       throw new BadRequestException('La date de fin doit suivre la date de début.');
     }
 
-    return this.prisma.depositContract.create({
-      data: {
-        depositorId: depositor.id,
-        startDate,
-        endDate,
-        // Copiée depuis le déposant à la création, modifiable ensuite pour ce
-        // contrat précis (voir CLAUDE.md).
-        commission: dto.commission ?? depositor.defaultCommission,
-        notifyBeforeDays: dto.notifyBeforeDays ?? 7,
-      },
-      include: INCLUDE,
+    // Contrat et articles dans la même transaction : une ligne refusée ne doit
+    // pas laisser derrière elle un contrat vide que personne n'a demandé.
+    const contract = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.depositContract.create({
+        data: {
+          depositorId: depositor.id,
+          startDate,
+          endDate,
+          // Copiée depuis le déposant à la création, modifiable ensuite pour ce
+          // contrat précis (voir CLAUDE.md).
+          commission: dto.commission ?? depositor.defaultCommission,
+          notifyBeforeDays: dto.notifyBeforeDays ?? 7,
+        },
+      });
+
+      for (const [index, line] of (dto.products ?? []).entries()) {
+        try {
+          await this.products.createWith(tx, currentUser, {
+            ...line,
+            saleType: 'CONSIGNMENT',
+            depositContractId: created.id,
+          });
+        } catch (error) {
+          // Sans le numéro de ligne, « Cette catégorie n'appartient pas à votre
+          // entreprise » est inexploitable sur un dépôt de trente articles.
+          throw new BadRequestException(
+            `Article ${index + 1} (${line.name}) : ${(error as Error).message}`,
+          );
+        }
+      }
+
+      return created;
     });
+
+    return this.detail(currentUser, contract.id);
   }
 
   async update(currentUser: CurrentUser, id: string, dto: UpdateContractDto) {

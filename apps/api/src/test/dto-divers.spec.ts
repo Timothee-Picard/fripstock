@@ -62,6 +62,37 @@ describe('DTO contrats de dépôt', () => {
     expect(isValid(UpdateContractDto, { status: 'TERMINE' })).toBe(false);
   });
 
+  it('accepte des articles saisis avec le contrat', () => {
+    expect(
+      isValid(CreateContractDto, {
+        ...contrat,
+        products: [{ name: 'Robe', categoryId: 'c1', salePrice: 15 }],
+      }),
+    ).toBe(true);
+  });
+
+  it('valide chaque article comme un produit', () => {
+    expect(
+      validateDto(CreateContractDto, { ...contrat, products: [{ salePrice: 15 }] }).errors,
+    ).toContain('products.0.name');
+  });
+
+  it("refuse un prix d'achat sur un article déposé — il appartient au déposant", () => {
+    expect(
+      isValid(CreateContractDto, {
+        ...contrat,
+        products: [{ name: 'Robe', categoryId: 'c1', purchasePrice: 10 }],
+      }),
+    ).toBe(false);
+  });
+
+  it('refuse un dépôt de plus de 200 articles en une fois', () => {
+    const trop = Array.from({ length: 201 }, () => ({ name: 'x', categoryId: 'c1' }));
+    expect(validateDto(CreateContractDto, { ...contrat, products: trop }).errors).toContain(
+      'products',
+    );
+  });
+
   it('refuse un doublon dans les produits à rattacher', () => {
     expect(validateDto(AttachProductsDto, { productIds: ['p1', 'p1'] }).errors).toContain(
       'productIds',

@@ -115,19 +115,19 @@ export function ContractForm({
   );
 }
 
-export function Rattachement({
-  contratId,
-  candidats,
+export function AttachForm({
+  contractId,
+  candidates,
 }: {
-  contratId: string;
+  contractId: string;
   /** Produits non vendus, encore rattachables. */
-  candidats: ProductSummary[];
+  candidates: ProductSummary[];
 }) {
   const [state, action, pending] = useActionState(attachProducts, INITIAL_STATE);
 
   return (
     <form action={action} className="space-y-3 rounded-lg border border-slate-200 bg-white p-5">
-      <input type="hidden" name="id" value={contratId} />
+      <input type="hidden" name="id" value={contractId} />
       <h2 className="text-sm font-medium text-slate-900">Rattacher des produits</h2>
       <p className="text-sm text-slate-600">
         Les produits cochés passent en dépôt-vente : leur prix d&apos;achat est effacé,
@@ -137,12 +137,12 @@ export function Rattachement({
       {state.error ? <Alert>{state.error}</Alert> : null}
       {state.success ? <Alert tone="info">{state.success}</Alert> : null}
 
-      {candidats.length === 0 ? (
+      {candidates.length === 0 ? (
         <p className="text-sm text-slate-600">Aucun produit disponible.</p>
       ) : (
         <>
           <div className="grid max-h-64 gap-1.5 overflow-y-auto rounded-md border border-slate-200 p-3 sm:grid-cols-2">
-            {candidats.map((p) => (
+            {candidates.map((p) => (
               <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
@@ -169,17 +169,17 @@ export function Rattachement({
 }
 
 export function DetachButton({
-  contratId,
+  contractId,
   product,
 }: {
-  contratId: string;
+  contractId: string;
   product: ProductSummary;
 }) {
   const [state, action, pending] = useActionState(detachProduct, INITIAL_STATE);
 
   return (
     <form action={action} className="inline">
-      <input type="hidden" name="id" value={contratId} />
+      <input type="hidden" name="id" value={contractId} />
       <input type="hidden" name="productId" value={product.id} />
       <button
         type="submit"
