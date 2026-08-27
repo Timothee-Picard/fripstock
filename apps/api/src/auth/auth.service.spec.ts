@@ -159,7 +159,7 @@ describe('AuthService', () => {
 
   describe('me', () => {
     it('rend le profil et les accès boutique', async () => {
-      prisma.user.findFirstOrThrow.mockResolvedValue({
+      prisma.user.findFirst.mockResolvedValue({
         ...user,
         company: { id: COMPANY_ID, name: 'Friperie' },
       });
@@ -170,13 +170,21 @@ describe('AuthService', () => {
     });
 
     it("scope la requête sur l'entreprise du jeton", async () => {
-      prisma.user.findFirstOrThrow.mockResolvedValue({ ...user, company: {} });
+      prisma.user.findFirst.mockResolvedValue({ ...user, company: {} });
       prisma.shop.findMany.mockResolvedValue([]);
       await service.me(manager);
-      expect(prisma.user.findFirstOrThrow.mock.calls[0][0].where).toEqual({
+      expect(prisma.user.findFirst.mock.calls[0][0].where).toEqual({
         id: manager.userId,
         companyId: COMPANY_ID,
       });
+    });
+
+    it('refuse proprement un jeton dont le compte a disparu', async () => {
+      // Employé supprimé, base restaurée : le jeton reste valide mais ne
+      // désigne plus personne. Un 500 ferait planter l'écran au lieu de
+      // ramener à la connexion.
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(service.me(manager)).rejects.toThrow('Session expirée. Reconnectez-vous.');
     });
   });
 
@@ -226,11 +234,16 @@ describe('AuthService', () => {
     const dto = { firstName: 'Camille', lastName: 'Durand', email: 'gerant@test.fr' };
 
     beforeEach(() => {
-      prisma.user.findFirstOrThrow.mockResolvedValue({
+      prisma.user.findFirst.mockResolvedValue({
         ...user,
         company: { id: COMPANY_ID, name: 'Friperie' },
       });
       prisma.shop.findMany.mockResolvedValue([]);
+    });
+
+    it('refuse proprement un jeton dont le compte a disparu', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(service.updateProfile(manager, dto)).rejects.toThrow('Session expirée');
     });
 
     it("n'exige pas le mot de passe quand l'email ne change pas", async () => {
@@ -287,7 +300,14 @@ describe('AuthService', () => {
 
   describe('changePassword', () => {
     beforeEach(() => {
-      prisma.user.findFirstOrThrow.mockResolvedValue(user);
+      prisma.user.findFirst.mockResolvedValue(user);
+    });
+
+    it('refuse proprement un jeton dont le compte a disparu', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(
+        service.changePassword(manager, { currentPassword: 'x', newPassword: 'motdepasse' }),
+      ).rejects.toThrow('Session expirée');
     });
 
     it("exige l'ancien mot de passe", async () => {

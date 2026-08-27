@@ -101,9 +101,24 @@ export class AuthService {
     return this.issueToken(user.id, user.companyId, user.isManager);
   }
 
+  /**
+   * Utilisateur du jeton, ou 401.
+   *
+   * Un jeton peut rester valide alors que son compte a disparu — employé
+   * supprimé, base restaurée. `findFirstOrThrow` remonterait alors en 500 et
+   * l'écran planterait ; un 401 renvoie proprement vers la connexion.
+   */
+  private async require(currentUser: CurrentUser) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
+    });
+    if (!user) throw new UnauthorizedException('Session expirée. Reconnectez-vous.');
+    return user;
+  }
+
   /** Profil complet : identité, entreprise, et accès boutique par boutique. */
   async me(currentUser: CurrentUser) {
-    const user = await this.prisma.user.findFirstOrThrow({
+    const user = await this.prisma.user.findFirst({
       where: { id: currentUser.userId, companyId: currentUser.companyId },
       select: {
         id: true,
@@ -114,6 +129,7 @@ export class AuthService {
         company: { select: { id: true, name: true } },
       },
     });
+    if (!user) throw new UnauthorizedException('Session expirée. Reconnectez-vous.');
 
     return {
       ...user,
@@ -159,9 +175,7 @@ export class AuthService {
 
   /** Modification de son propre profil : prénom, nom, email. */
   async updateProfile(currentUser: CurrentUser, dto: UpdateProfileDto) {
-    const user = await this.prisma.user.findFirstOrThrow({
-      where: { id: currentUser.userId, companyId: currentUser.companyId },
-    });
+    const user = await this.require(currentUser);
 
     const email = normalizeEmail(dto.email);
     const emailChanged = email !== user.email;
@@ -192,9 +206,7 @@ export class AuthService {
    * détournée ne doit pas suffire à verrouiller le compte de son propriétaire.
    */
   async changePassword(currentUser: CurrentUser, dto: ChangePasswordDto) {
-    const user = await this.prisma.user.findFirstOrThrow({
-      where: { id: currentUser.userId, companyId: currentUser.companyId },
-    });
+    const user = await this.require(currentUser);
 
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect.');
