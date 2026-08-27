@@ -3,13 +3,13 @@
 # écrites — un schéma modifié sans `prisma migrate dev` ne se voit autrement
 # qu'au déploiement.
 #
-# Le schéma arrive à l'étape 2 : avant, cette cible sort en succès.
+# Sans schéma Prisma, cette cible sort en succès plutôt qu'en erreur.
 set -e
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 if [ ! -f "$ROOT/apps/api/prisma/schema.prisma" ]; then
-  echo "    pas encore de schéma Prisma (étape 2 du PLAN.md) — ignoré"
+  echo "    pas de schéma Prisma — ignoré"
   exit 0
 fi
 

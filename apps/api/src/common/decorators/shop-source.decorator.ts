@@ -19,7 +19,7 @@ export interface ShopSource {
  * Déclare que la boutique concernée par la route se déduit d'une ressource
  * ciblée par un paramètre d'URL, et non d'un `shopId` explicite.
  *
- * Cas typique à partir de l'étape 5 : `PUT /products/:id/statut` — la boutique
+ * Cas typique : `PUT /products/:id/status` — la boutique
  * n'est ni dans les params ni dans le body, il faut charger le produit.
  *
  * Le résolveur doit lui-même scoper sa requête à `companyId`, sinon il

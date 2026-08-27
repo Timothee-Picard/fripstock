@@ -17,9 +17,9 @@ interface ArgsAccessShop {
 }
 
 /**
- * Aucune route n'exige encore de permission fine — les produits arrivent à
- * l'étape 5. Ces tests couvrent donc directement le guard, parce que c'est lui
- * qui décide de tous les accès employés du reste de l'application.
+ * Ces tests visent le garde directement, et non au travers d'une route : c'est
+ * lui qui décide de tous les accès employés de l'application, et le tester par
+ * un contrôleur ne dirait rien des cas qu'aucune route n'expose aujourd'hui.
  */
 describe('PermissionsGuard', () => {
   const EMPLOYEE: CurrentUser = {

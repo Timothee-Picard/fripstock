@@ -2,8 +2,7 @@
 
 Application de gestion de stock pour boutiques de seconde main. Ce fichier est chargé
 automatiquement par Claude Code à chaque session dans ce repo : il fait foi sur les
-règles métier et les conventions. Le plan détaillé par étapes est dans `PLAN.md`,
-les prompts prêts-à-coller sont dans `prompts`.
+règles métier et les conventions.
 
 ## Stack
 
@@ -267,6 +266,32 @@ clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
   fuite inter-entreprises, pas un raccourci acceptable.
 - Écrire les tests au fur et à mesure n'est pas demandé pour le MVP, sauf mention
   contraire dans un prompt d'étape.
+
+## Tenir la documentation à jour
+
+**Toute fonctionnalité ajoutée, modifiée ou retirée met à jour la documentation dans le
+même mouvement** — pas « plus tard », pas dans un commit de rattrapage. Une doc fausse
+coûte plus cher que pas de doc : elle se lit comme vraie. Le `README.md` décrivait encore
+`estVente`, `bloqueVente` et `/dashboard/products/nouveau` des semaines après la
+traduction du code en anglais, et annonçait « aucune route n'exige encore de permission
+fine » alors que toutes en portaient.
+
+Ce qui est concerné, dans l'ordre :
+
+| Fichier            | Quand le toucher                                                          |
+| ------------------ | ------------------------------------------------------------------------- |
+| `CLAUDE.md`        | Une **règle métier** change, ou une convention de code                    |
+| `README.md`        | Un écran, une route, un comportement visible change — et son pourquoi     |
+| `.claude/memoire/` | Un repère de code se déplace, une commande ou un piège d'outillage change |
+
+`.claude/memoire/` contient des notes écrites **pour Claude**, versionnées avec le code :
+une carte de la doc, l'outillage, et les modules qui concentrent une règle. Elles ne
+redisent pas `CLAUDE.md` ni le `README.md` — elles disent où aller chercher, et ce qui ne
+se trouve nulle part ailleurs. Les relire avant de fouiller le code fait gagner du temps ;
+les laisser mentir en fait perdre.
+
+Le réflexe : avant de considérer une tâche terminée, se demander **ce qu'un lecteur de la
+doc croirait encore à tort**.
 
 ## Commits, versions et vérifications
 

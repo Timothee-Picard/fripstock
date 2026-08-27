@@ -37,4 +37,4 @@ Dans `apps/api/src/$ARGUMENTS/` :
 ## Après la création
 
 Résume les endpoints créés (méthode, chemin, permission requise) pour que l'utilisateur
-puisse les tester rapidement, par exemple avec `curl` ou `/verifier-etape`.
+puisse les tester rapidement, par exemple avec `curl` ou `/verifier-stack`.

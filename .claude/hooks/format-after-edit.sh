@@ -1,7 +1,7 @@
 #!/bin/bash
 # Reformate le fichier modifié avec Prettier, si l'outil est installé dans le
 # sous-projet concerné (apps/api ou apps/web). Ne fait rien silencieusement si
-# Prettier n'est pas encore installé (par exemple à l'étape 0) ou si le fichier
+# Prettier n'est pas installé, ou si le fichier
 # n'est pas un type de fichier formatable.
 
 INPUT=$(cat)

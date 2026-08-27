@@ -1,9 +1,13 @@
 # Fripstock
 
 Application de gestion de stock pour boutiques de vêtements et objets de seconde main.
-Ce dépôt ne contient pas encore de code applicatif : c'est le **kit de démarrage** —
-contexte métier, plan de développement, prompts Claude Code et configuration — pour
-faire construire l'application étape par étape.
+
+> **Archive.** Ce document décrit le **kit de démarrage** — contexte métier, prompts
+> Claude Code et configuration — qui a servi à construire l'application. Elle est
+> aujourd'hui complète : le kit ne dit plus rien de l'état du code. Pour ça, lire le
+> `README.md` à la racine et le `CLAUDE.md`, qui font foi. Ce fichier reste pour
+> retrouver l'intention d'origine d'une décision, et pour réutiliser la démarche
+> ailleurs.
 
 ## Le projet
 
@@ -47,29 +51,26 @@ complet des choix techniques et des règles métier.
 - **`CLAUDE.md`** — le contexte projet complet (règles métier, stack, conventions).
   Placé à la racine du repo de code, il est chargé automatiquement par Claude Code à
   chaque session : pas besoin de répéter les règles métier dans chaque prompt.
-- **`PLAN.md`** — la liste des 8 étapes de développement (0 à 7), avec la
-  correspondance vers les prompts.
 - **`prompts/00-squelette-repo.md`** à **`prompts/07-stats-export.md`** — un prompt
   prêt-à-coller par étape.
 - **`.claude/`** — configuration Claude Code prête à l'emploi : permissions, hooks de
   sécurité, skills et subagents adaptés à ce projet (détaillé plus bas).
 - **`docs/KIT.md`** — ce fichier. La racine du repo est réservée à la documentation
-  applicative : le `README.md` de la racine est écrit à l'étape 0 et explique comment
-  démarrer l'application, pas comment se servir du kit.
+  applicative : le `README.md` de la racine explique comment démarrer et comment
+  fonctionne l'application, pas comment se servir du kit.
 
 ## Comment procéder
 
 1. Crée ton repo git, copie tout le contenu de ce kit à la racine (`CLAUDE.md`,
-   `PLAN.md`, `prompts/`, `.claude/`, `docs/`).
+   `prompts/`, `.claude/`, `docs/`).
 2. Lance Claude Code dans ce dossier.
 3. Colle le contenu de `prompts/00-squelette-repo.md` dans une session. Laisse Claude
    Code travailler, relis le résultat, teste avec `make up`.
 4. Une fois satisfait, commit, puis passe au prompt suivant (`01-qualite-ci.md`)
    — idéalement dans une nouvelle session pour repartir avec un contexte propre (Claude
    Code relira `CLAUDE.md` automatiquement).
-5. Répète pour chaque étape dans l'ordre du `PLAN.md`. Coche la case correspondante une
-   fois l'étape validée. Le skill `/verifier-etape` (voir plus bas) automatise une
-   partie de cette vérification.
+5. Répète pour chaque prompt, dans l'ordre de leur numérotation. Le skill
+   `/verifier-stack` (voir plus bas) automatise une partie de la vérification.
 
 ### Si tu veux ajuster une règle métier en cours de route
 
@@ -98,7 +99,7 @@ contexte métier. Tout est optionnel — Claude Code fonctionne très bien avec 
 ├── skills/
 │   ├── nouveau-module-nest/    # /nouveau-module-nest — scaffold un module NestJS
 │   ├── nouveau-modele-prisma/  # /nouveau-modele-prisma — ajoute un modèle + migration
-│   └── verifier-etape/         # /verifier-etape — relance la stack et vérifie l'état
+│   └── verifier-stack/         # /verifier-stack — relance la stack et vérifie l'état
 └── agents/
     ├── revue-fripstock.md       # subagent de revue de code orienté règles métier
     └── revue-schema-prisma.md   # subagent de revue de schéma de base de données
@@ -130,9 +131,10 @@ avec `/nom-du-skill`, ou Claude les déclenche seul quand c'est pertinent.
 - **`/nouveau-modele-prisma <nom>`** : ajoute un modèle au schéma Prisma en respectant
   les conventions (français, camelCase, `@@map` en snake_case), lance la migration, et
   rappelle de mettre à jour le seed si pertinent. Invocation manuelle uniquement.
-- **`/verifier-etape`** : relance la stack (`make up`), applique les migrations et le
+- **`/verifier-stack`** : relance la stack (`make up`), applique les migrations et le
   seed, vérifie que l'API répond, et résume ce qui fonctionne ou non — un moyen rapide
-  de vérifier le critère de validation d'une étape du `PLAN.md`.
+  de vérifier que la stack démarre après un changement touchant Docker, Prisma ou
+  la séquence de démarrage.
 
 ### Subagents — revues spécialisées
 
