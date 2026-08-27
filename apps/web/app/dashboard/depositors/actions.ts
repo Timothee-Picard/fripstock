@@ -26,6 +26,9 @@ function body(data: FormData) {
     // Les IBAN se notent souvent avec des espaces : on les retire avant l'API,
     // qui les refuserait.
     iban: text('iban').replace(/\s+/g, '').toUpperCase() || undefined,
+    // Le code finit écrit sur des étiquettes : on le normalise ici plutôt
+    // que de laisser cohabiter « mar » et « MAR ».
+    code: text('code').toUpperCase() || undefined,
     defaultCommission: commission === '' ? undefined : Number(commission),
   };
 }

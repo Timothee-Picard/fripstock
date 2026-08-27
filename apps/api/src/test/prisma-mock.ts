@@ -67,6 +67,30 @@ export function createPrismaMock(): PrismaMock {
     ) as PrismaMock[typeof model];
   }
 
+  // Les compteurs de références sont incrémentés par la base : le double les
+  // simule, sinon toute création de produit échouerait sur un compteur absent.
+  let entreprise = 0;
+  let deposant = 0;
+  // Seule une écriture qui demande l'incrément le déclenche : poser le code
+  // d'un déposant passe aussi par `update`, sans consommer de numéro.
+  const incremente = (args: unknown) =>
+    (args as { data?: { productCounter?: unknown } })?.data?.productCounter !== undefined;
+
+  mock.company.update.mockImplementation((args: unknown) => {
+    if (incremente(args)) entreprise += 1;
+    return Promise.resolve({ productCounter: entreprise });
+  });
+  mock.depositor.update.mockImplementation((args: unknown) => {
+    if (incremente(args)) deposant += 1;
+    return Promise.resolve({ productCounter: deposant });
+  });
+  mock.depositor.findUniqueOrThrow.mockResolvedValue({
+    id: 'dep-1',
+    code: 'MAR',
+    lastName: 'Martin',
+    firstName: 'Sophie',
+  });
+
   mock.$transaction = jest.fn((arg: unknown) =>
     typeof arg === 'function'
       ? (arg as (tx: PrismaMock) => unknown)(mock)

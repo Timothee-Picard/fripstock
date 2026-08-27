@@ -1,14 +1,17 @@
 export function Field({
   label,
   hint,
+  className = '',
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   return (
     <label className="block">
       <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      {/* `className` est ajouté et non écrasé : posé après le spread, il était
+          jusqu'ici accepté par le typage puis ignoré en silence. */}
       <input
         {...props}
-        className="w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100 disabled:text-slate-600"
+        className={`w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-500 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 disabled:bg-slate-100 disabled:text-slate-600 ${className}`}
       />
       {hint ? <span className="mt-1 block text-xs text-slate-600">{hint}</span> : null}
     </label>

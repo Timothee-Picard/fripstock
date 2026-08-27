@@ -192,7 +192,6 @@ describe('ProductsService', () => {
     it('laisse les champs facultatifs à null quand ils sont absents', async () => {
       await service.create(manager, dto);
       expect(prisma.product.create.mock.calls[0][0].data).toMatchObject({
-        reference: null,
         description: null,
         internalNote: null,
         photoUrl: null,
@@ -200,6 +199,77 @@ describe('ProductsService', () => {
         salePrice: null,
         depositContractId: null,
       });
+    });
+
+    it('génère une référence depuis le compteur de l’entreprise', async () => {
+      await service.create(manager, dto);
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('A-0001');
+      expect(prisma.company.update).toHaveBeenCalledWith({
+        where: { id: COMPANY_ID },
+        data: { productCounter: { increment: 1 } },
+        select: { productCounter: true },
+      });
+    });
+
+    it('garde la référence saisie plutôt que d’en générer une', async () => {
+      await service.create(manager, { ...dto, reference: '  BTR6 ' });
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('BTR6');
+      expect(prisma.company.update).not.toHaveBeenCalled();
+    });
+
+    it('génère depuis le déposant du contrat pour un dépôt-vente', async () => {
+      prisma.depositContract.findFirst.mockResolvedValue({ id: 'c1', depositorId: 'dep-1' });
+      await service.create(manager, {
+        ...dto,
+        saleType: 'CONSIGNMENT',
+        depositContractId: 'c1',
+      });
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('D-MAR-001');
+      // Le compteur du déposant, pas celui de l'entreprise.
+      expect(prisma.company.update).not.toHaveBeenCalled();
+      expect(prisma.depositor.update).toHaveBeenCalledWith({
+        where: { id: 'dep-1' },
+        data: { productCounter: { increment: 1 } },
+        select: { productCounter: true },
+      });
+    });
+
+    it('attribue son code à un déposant qui n’en a pas encore', async () => {
+      prisma.depositContract.findFirst.mockResolvedValue({ id: 'c1', depositorId: 'dep-1' });
+      prisma.depositor.findUniqueOrThrow.mockResolvedValue({
+        id: 'dep-1',
+        code: null,
+        lastName: 'Durand',
+        firstName: null,
+      });
+      prisma.depositor.findMany.mockResolvedValue([{ code: 'MAR' }]);
+      await service.create(manager, {
+        ...dto,
+        saleType: 'CONSIGNMENT',
+        depositContractId: 'c1',
+      });
+      expect(prisma.depositor.update).toHaveBeenCalledWith({
+        where: { id: 'dep-1' },
+        data: { code: 'DUR' },
+      });
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('D-DUR-001');
+    });
+
+    it('refuse une référence déjà utilisée, en la nommant', async () => {
+      prisma.product.create.mockRejectedValue(
+        Object.assign(new Error('unique'), {
+          code: 'P2002',
+          meta: { target: ['company_id', 'reference'] },
+        }),
+      );
+      await expect(service.create(manager, { ...dto, reference: 'BTR6' })).rejects.toThrow(
+        'La référence « BTR6 » est déjà utilisée.',
+      );
+    });
+
+    it('laisse remonter une autre erreur de base telle quelle', async () => {
+      prisma.product.create.mockRejectedValue(new Error('connexion perdue'));
+      await expect(service.create(manager, dto)).rejects.toThrow('connexion perdue');
     });
 
     it("refuse une catégorie d'une autre entreprise", async () => {
@@ -344,12 +414,16 @@ describe('ProductsService', () => {
       expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('BTR6');
     });
 
-    it('accepte une ligne sans référence', async () => {
+    it('génère une référence par exemplaire quand aucune n’est saisie', async () => {
       await service.createLot(manager, {
         totalPurchasePrice: 2,
         lines: [{ name: 'T-shirt', categoryId: 'cat-1', count: 2 }],
       });
-      expect(prisma.product.create.mock.calls[0][0].data.reference).toBeNull();
+      expect(
+        prisma.product.create.mock.calls.map(
+          (c: [{ data: { reference: string } }]) => c[0].data.reference,
+        ),
+      ).toEqual(['A-0001', 'A-0002']);
     });
 
     it('applique la boutique du lot à tous les articles', async () => {

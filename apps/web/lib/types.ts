@@ -250,6 +250,8 @@ export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
 export interface Depositor {
   id: string;
   lastName: string;
+  /** Code court repris dans les références de ses articles (le MAR de D-MAR-001). */
+  code: string | null;
   firstName: string | null;
   email: string | null;
   phone: string | null;

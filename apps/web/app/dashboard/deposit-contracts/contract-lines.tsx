@@ -112,8 +112,8 @@ export function ContractLines({
 
       <p className="text-sm text-slate-600">
         Une ligne par article. Les colonnes d&apos;attributs apparaissent selon les catégories
-        choisies ; une cellule grisée ne s&apos;applique pas à la catégorie de sa ligne. Une ligne
-        sans nom est ignorée.
+        choisies ; une cellule grisée ne s&apos;applique pas à la catégorie de sa ligne. La
+        référence est générée si vous la laissez vide.
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -164,7 +164,7 @@ export function ContractLines({
                   <td className="p-0">
                     <input
                       name={`line:${line.id}:reference`}
-                      placeholder="BTR6"
+                      placeholder="générée"
                       className={`${CELL} font-mono text-xs`}
                       aria-label={`Référence de l'article ${index + 1}`}
                     />

@@ -31,7 +31,11 @@ export function ProductForm({ tree, shops }: { tree: CategoryTree[]; shops: Shop
         <h2 className="text-sm font-medium text-slate-900">Le produit</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Nom" name="name" required />
-          <Field label="Référence" name="reference" hint="Votre système actuel, ex : BTR6" />
+          <Field
+            label="Référence"
+            name="reference"
+            hint="Générée si vous la laissez vide : A-0042, ou D-MAR-001 en dépôt."
+          />
         </div>
 
         <label className="block">

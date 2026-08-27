@@ -181,7 +181,7 @@ export function LotLines({
         Une ligne par modèle. « Nombre » crée autant de produits distincts, chacun vendable
         séparément — quatre t-shirts identiques donnent quatre articles, pas un article en quatre
         exemplaires. Le prix d&apos;achat se calcule tout seul, au prorata du prix de vente ; un
-        article laissé sans prix compte pour la moyenne des autres.
+        article laissé sans prix compte pour la moyenne des autres. Les références sont générées.
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -245,7 +245,7 @@ export function LotLines({
                   <td className="p-0">
                     <input
                       name={`line:${line.id}:reference`}
-                      placeholder="BTR6"
+                      placeholder="générée"
                       className={`${CELL} font-mono text-xs`}
                       aria-label={`Référence de la ligne ${index + 1}`}
                     />

@@ -46,6 +46,16 @@ describe('déposants', () => {
     expect(body).not.toHaveProperty('phone');
   });
 
+  it('normalise le code déposant en majuscules', async () => {
+    await deposants.createDepositor({}, form({ lastName: 'Martin', code: ' mar ' }));
+    expect(dernierAppel().body?.code).toBe('MAR');
+  });
+
+  it('omet le code laissé vide : l’API le déduira du nom', async () => {
+    await deposants.createDepositor({}, form({ lastName: 'Martin' }));
+    expect(dernierAppel().body).not.toHaveProperty('code');
+  });
+
   it('normalise l’IBAN : sans espaces, en majuscules', async () => {
     await deposants.createDepositor({}, form({ lastName: 'Martin', iban: ' fr76 3000 1007 ' }));
     expect(dernierAppel().body?.iban).toBe('FR7630001007');

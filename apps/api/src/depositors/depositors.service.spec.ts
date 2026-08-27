@@ -59,20 +59,59 @@ describe('DepositorsService', () => {
   });
 
   describe('create', () => {
-    it("force l'entreprise du jeton", async () => {
+    beforeEach(() => {
       prisma.depositor.create.mockResolvedValue(depositor);
+      prisma.depositor.findMany.mockResolvedValue([]);
+    });
+
+    it("force l'entreprise du jeton", async () => {
       await service.create(manager, { lastName: 'Martin', defaultCommission: 30 });
-      expect(prisma.depositor.create).toHaveBeenCalledWith({
-        data: { lastName: 'Martin', defaultCommission: 30, companyId: COMPANY_ID },
+      expect(prisma.depositor.create.mock.calls[0][0].data).toMatchObject({
+        lastName: 'Martin',
+        defaultCommission: 30,
+        companyId: COMPANY_ID,
       });
     });
 
     it('applique une commission par défaut de 0 si elle est absente', async () => {
-      prisma.depositor.create.mockResolvedValue(depositor);
       await service.create(manager, { lastName: 'Martin' });
-      expect(prisma.depositor.create).toHaveBeenCalledWith({
-        data: { lastName: 'Martin', defaultCommission: 0, companyId: COMPANY_ID },
-      });
+      expect(prisma.depositor.create.mock.calls[0][0].data.defaultCommission).toBe(0);
+    });
+
+    it('déduit du nom le code repris dans les références de ses articles', async () => {
+      await service.create(manager, { lastName: 'Martin', firstName: 'Sophie' });
+      expect(prisma.depositor.create.mock.calls[0][0].data.code).toBe('MAR');
+    });
+
+    it('suffixe le code d’un homonyme plutôt que de le doubler', async () => {
+      prisma.depositor.findMany.mockResolvedValue([{ code: 'MAR' }]);
+      await service.create(manager, { lastName: 'Martinez' });
+      expect(prisma.depositor.create.mock.calls[0][0].data.code).toBe('MA2');
+    });
+
+    it('refuse un code déjà pris par un autre déposant', async () => {
+      prisma.depositor.create.mockRejectedValue(
+        Object.assign(new Error('unique'), {
+          code: 'P2002',
+          meta: { cause: { constraint: { index: 'depositor_company_id_code_key' } } },
+        }),
+      );
+      await expect(service.create(manager, { lastName: 'Martin', code: 'MAR' })).rejects.toThrow(
+        'Le code « MAR » est déjà pris par un déposant.',
+      );
+    });
+
+    it('laisse remonter une autre erreur de base telle quelle', async () => {
+      prisma.depositor.create.mockRejectedValue(new Error('connexion perdue'));
+      await expect(service.create(manager, { lastName: 'Martin' })).rejects.toThrow(
+        'connexion perdue',
+      );
+    });
+
+    it('reprend le code fourni par le gérant, en majuscules', async () => {
+      await service.create(manager, { lastName: 'Martin', code: ' so ' });
+      expect(prisma.depositor.create.mock.calls[0][0].data.code).toBe('SO');
+      expect(prisma.depositor.findMany).not.toHaveBeenCalled();
     });
   });
 

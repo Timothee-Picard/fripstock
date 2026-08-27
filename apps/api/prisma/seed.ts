@@ -266,6 +266,8 @@ async function main() {
       iban: 'FR7630001007941234567890185',
       // 40% for the shop, so 60% for the depositor.
       defaultCommission: 40,
+      // Code used in this depositor's product references (the MAR of D-MAR-001).
+      code: 'MAR',
     },
   });
 
@@ -285,7 +287,7 @@ async function main() {
   // --- Demo products ------------------------------------------------------
   const products = [
     {
-      reference: 'BTR6',
+      reference: 'A-0001',
       name: 'Robe fleurie été',
       category: 'Robe',
       status: 'En stock',
@@ -296,7 +298,7 @@ async function main() {
       brand: 'Zara',
     },
     {
-      reference: 'BTA4',
+      reference: 'A-0002',
       name: 'Chemise en lin',
       category: 'Chemise',
       status: 'En stock',
@@ -307,7 +309,7 @@ async function main() {
       brand: 'Uniqlo',
     },
     {
-      reference: 'DEP1',
+      reference: 'D-MAR-001',
       name: 'Sac à main cuir',
       category: 'Sac',
       status: 'En rayon',
@@ -318,7 +320,7 @@ async function main() {
       brand: 'Lancel',
     },
     {
-      reference: 'DEP2',
+      reference: 'D-MAR-002',
       name: 'Bottines daim',
       category: 'Chaussures',
       status: 'Vendu',
@@ -331,6 +333,11 @@ async function main() {
       brand: 'Minelli',
     },
   ];
+
+  // Counters aligned with the references written above: the next product
+  // created through the API continues the sequence instead of colliding.
+  await prisma.company.update({ where: { id: company.id }, data: { productCounter: 2 } });
+  await prisma.depositor.update({ where: { id: depositor.id }, data: { productCounter: 2 } });
 
   for (const entry of products) {
     const existing = await prisma.product.findFirst({

@@ -69,8 +69,13 @@ Company (le compte parent, un gérant)
   seconde main), mais peut être > 1 si plusieurs exemplaires identiques. Le statut porte
   sur la ligne entière : pour le MVP, **pas de vente partielle** d'un lot (vendre 2 sur 3
   n'est pas représentable — il faut créer deux produits). Ne pas essayer de modéliser ça.
-- Un produit a une **référence** (`reference`) en texte libre, saisie manuellement par
-  l'utilisateur (ex: `BTR6`, `BTA4` — c'est leur système actuel, pas un code-barre).
+- Un produit a une **référence** (`reference`), **générée à la création** si elle n'est
+  pas saisie : `A-0042` pour un article acheté (compteur de l'entreprise), `D-MAR-001`
+  pour un article déposé (code du déposant + compteur qui lui est propre, reparti à 1
+  pour chacun). Une référence saisie à la main l'emporte toujours. Les compteurs
+  (`Company.productCounter`, `Depositor.productCounter`) sont incrémentés **par la base**
+  dans la transaction de création : un `max + 1` lu puis réécrit donnerait le même numéro
+  à deux employés simultanés. La paire (`companyId`, `reference`) est **unique**.
   Champ `sku` séparé, nullable, prévu pour un futur scan QR code, non utilisé pour l'instant.
 - Une seule photo par produit pour l'instant (`photoUrl`), stockée sur MinIO.
 - Champs `nom`, `description`, `internalNote` : texte libre.
@@ -120,7 +125,9 @@ Company (le compte parent, un gérant)
 
 ## Dépôt-vente
 
-- `Depositor` (déposant) : nom, prénom, contact, IBAN, `defaultCommission` (%). Rattaché à
+- `Depositor` (déposant) : nom, prénom, contact, IBAN, `defaultCommission` (%), et un
+  `code` court (le `MAR` de `D-MAR-001`) déduit du nom à la création et modifiable
+  ensuite — il finit écrit sur des étiquettes. Rattaché à
   l'Entreprise (pas à une boutique précise, un déposant peut avoir des articles dans
   plusieurs boutiques de l'entreprise).
 - `DepositContract` : lie un `Depositor` à une période (`startDate`, `endDate`), une commission

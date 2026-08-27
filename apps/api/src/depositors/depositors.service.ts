@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { isUniqueViolation } from '../common/prisma-errors';
 import type { CurrentUser } from '../common/types/current-user';
+import { depositorCode, freeCode } from '../products/references';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateDepositorDto } from './dto/create-depositor.dto';
 import type { UpdateDepositorDto } from './dto/update-depositor.dto';
@@ -35,19 +37,60 @@ export class DepositorsService {
     return depositor;
   }
 
-  create(currentUser: CurrentUser, dto: CreateDepositorDto) {
-    return this.prisma.depositor.create({
-      data: {
-        ...dto,
-        companyId: currentUser.companyId,
-        defaultCommission: dto.defaultCommission ?? 0,
-      },
-    });
+  async create(currentUser: CurrentUser, dto: CreateDepositorDto) {
+    // Le code apparaît dans les références de ses articles (le MAR de
+    // D-MAR-001). On le pose dès la création pour que le gérant le voie et
+    // puisse le corriger avant qu'une étiquette ne l'emporte.
+    const code = await this.uniqueCode(currentUser.companyId, dto);
+
+    return this.onDuplicateCode(dto.code, () =>
+      this.prisma.depositor.create({
+        data: {
+          ...dto,
+          companyId: currentUser.companyId,
+          defaultCommission: dto.defaultCommission ?? 0,
+          code,
+        },
+      }),
+    );
   }
 
   async update(currentUser: CurrentUser, id: string, dto: UpdateDepositorDto) {
     await this.require(currentUser, id);
-    return this.prisma.depositor.update({ where: { id }, data: dto });
+    return this.onDuplicateCode(dto.code, () =>
+      this.prisma.depositor.update({ where: { id }, data: dto }),
+    );
+  }
+
+  /** Traduit un code déposant déjà pris en refus lisible. */
+  private async onDuplicateCode<T>(code: string | undefined, ecriture: () => Promise<T>) {
+    try {
+      return await ecriture();
+    } catch (error) {
+      if (isUniqueViolation(error, 'code')) {
+        throw new ConflictException(`Le code « ${code ?? ''} » est déjà pris par un déposant.`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Code libre le plus proche de celui que suggère le nom.
+   *
+   * Un code fourni est repris tel quel — c'est le gérant qui décide ; la
+   * contrainte d'unicité en base tranchera s'il double un existant.
+   */
+  private async uniqueCode(companyId: string, dto: CreateDepositorDto): Promise<string> {
+    if (dto.code?.trim()) return dto.code.trim().toUpperCase();
+
+    const autres = await this.prisma.depositor.findMany({
+      where: { companyId, code: { not: null } },
+      select: { code: true },
+    });
+    return freeCode(
+      depositorCode(dto.lastName, dto.firstName),
+      new Set(autres.map((d) => d.code).filter((c): c is string => c !== null)),
+    );
   }
 
   async delete(currentUser: CurrentUser, id: string) {

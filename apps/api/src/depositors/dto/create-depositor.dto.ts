@@ -50,4 +50,15 @@ export class CreateDepositorDto {
   @Min(0)
   @Max(100)
   defaultCommission?: number;
+
+  /**
+   * Code court repris dans les références de ses articles (le MAR de
+   * D-MAR-001). Laissé vide, il est déduit du nom.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9]{1,6}$/, {
+    message: 'Le code déposant ne doit contenir que des lettres ou des chiffres (6 maximum).',
+  })
+  code?: string;
 }

@@ -27,6 +27,14 @@ describe('Field', () => {
     expect(saisie).toHaveAttribute('type', 'number');
   });
 
+  it('ajoute la classe reçue au lieu de l’ignorer', () => {
+    render(<Field label="Code" className="font-mono uppercase" />);
+    const saisie = screen.getByLabelText('Code');
+    expect(saisie.className).toContain('font-mono');
+    // Sans écraser les siennes.
+    expect(saisie.className).toContain('border-slate-400');
+  });
+
   it('donne au texte saisi une couleur foncée — un champ illisible ne sert à rien', () => {
     render(<Field label="Nom" />);
     expect(screen.getByLabelText('Nom').className).toContain('text-slate-900');

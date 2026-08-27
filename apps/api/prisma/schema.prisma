@@ -32,6 +32,11 @@ model Company {
   name      String
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// Dernier numéro attribué aux références d'articles achetés (A-0042).
+  /// Incrémenté dans la transaction de création : deux employés qui
+  /// enregistrent en même temps ne peuvent pas obtenir le même numéro.
+  productCounter Int @default(0) @map("product_counter")
+
   shops                Shop[]
   users                User[]
   categories           Category[]
@@ -284,9 +289,21 @@ model Depositor {
   defaultCommission Decimal  @default(0) @map("default_commission") @db.Decimal(5, 2)
   createdAt         DateTime @default(now()) @map("created_at")
 
+  /// Code court du déposant dans les références d'articles (le MAR de
+  /// D-MAR-001). Déduit du nom à la création, modifiable ensuite : il finit
+  /// écrit sur des étiquettes, il ne doit plus bouger tout seul.
+  /// Nullable pour les déposants créés avant la génération de références —
+  /// leur code est calculé au premier besoin.
+  code String?
+
+  /// Dernier numéro attribué à cet déposant. Reparti à 1 pour chacun, pour que
+  /// « le 3 de Martin » se dise et se retrouve.
+  productCounter Int @default(0) @map("product_counter")
+
   company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contracts DepositContract[]
 
+  @@unique([companyId, code])
   @@index([companyId])
   @@map("depositor")
 }
@@ -344,8 +361,8 @@ model Product {
   categoryId String  @map("category_id")
   statusId   String  @map("status_id")
 
-  /// Free-form, typed by hand (e.g. BTR6). `sku` is reserved for a future QR
-  /// scan and unused for now.
+  /// Generated on creation (A-0042, D-MAR-001) unless typed by hand. `sku` is
+  /// reserved for a future QR scan and unused for now.
   reference    String?
   sku          String?
   name         String
@@ -380,6 +397,11 @@ model Product {
   attributeOptions ProductAttributeOption[]
   statusHistory    StatusHistory[]
 
+  /// Une référence est ce qui identifie physiquement un article : deux
+  /// étiquettes identiques dans la même entreprise sont une erreur, pas un
+  /// raccourci. Postgres accepte plusieurs NULL, un article sans référence
+  /// reste donc possible.
+  @@unique([companyId, reference])
   @@index([companyId])
   @@index([shopId])
   @@index([categoryId])

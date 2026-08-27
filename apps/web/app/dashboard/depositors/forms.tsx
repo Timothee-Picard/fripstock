@@ -40,6 +40,18 @@ function Fields({ depositor }: { depositor?: Depositor }) {
           hint="Part gardée par la boutique — 40 % ici laisse 60 % au déposant. Simple valeur de départ : chaque contrat porte la sienne."
         />
       </div>
+      <Field
+        label="Code déposant"
+        name="code"
+        maxLength={6}
+        defaultValue={depositor?.code ?? ''}
+        className="max-w-40 font-mono uppercase"
+        hint={
+          depositor?.code
+            ? `Repris dans les références de ses articles : D-${depositor.code}-001. Le changer ne renomme pas les étiquettes déjà écrites.`
+            : 'Repris dans les références de ses articles (D-MAR-001). Déduit du nom si vous le laissez vide.'
+        }
+      />
     </>
   );
 }

@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isUniqueViolation } from '../common/prisma-errors';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +17,7 @@ import {
   type NormalizedValue,
 } from './attributes.validation';
 import { splitCost } from './lot-split';
+import { consignmentReference, depositorCode, freeCode, resaleReference } from './references';
 import type { AssignShopDto } from './dto/assign-shop.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
 import type { ChangeStatusDto } from './dto/change-status.dto';
@@ -58,6 +61,27 @@ const DETAIL_INCLUDE = {
  * La requête est scopée à l'entreprise, sinon elle permettrait de sonder
  * l'existence de produits d'ailleurs.
  */
+/**
+ * Traduit une référence déjà prise en refus lisible.
+ *
+ * Sans ça, la contrainte d'unicité de la base remonte en « Internal server
+ * error » : l'utilisateur a simplement saisi une référence qui existe, il doit
+ * lire laquelle.
+ */
+async function onDuplicateReference<T>(
+  reference: string | null,
+  ecriture: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await ecriture();
+  } catch (error) {
+    if (isUniqueViolation(error, 'reference')) {
+      throw new ConflictException(`La référence « ${reference ?? ''} » est déjà utilisée.`);
+    }
+    throw error;
+  }
+}
+
 /**
  * Référence d'un exemplaire dans une ligne de lot.
  *
@@ -308,25 +332,33 @@ export class ProductsService {
       dto.attributes ?? [],
     );
 
-    const created = await tx.product.create({
-      data: {
-        companyId: currentUser.companyId,
-        shopId: dto.shopId ?? null,
-        categoryId: dto.categoryId,
-        statusId: status.id,
-        name: dto.name,
-        reference: dto.reference ?? null,
-        description: dto.description ?? null,
-        internalNote: dto.internalNote ?? null,
-        photoUrl: dto.photoUrl ?? null,
-        purchasePrice: dto.saleType === 'RESALE' ? (dto.purchasePrice ?? null) : null,
-        salePrice: dto.salePrice ?? null,
-        quantity: dto.quantity ?? 1,
-        saleType: dto.saleType,
-        depositContractId: contract?.id ?? null,
-        depositorPaid: dto.saleType === 'CONSIGNMENT' ? false : null,
-      },
-    });
+    // Une référence saisie l'emporte : le gérant peut avoir son propre système,
+    // et une étiquette déjà écrite ne se renumérote pas.
+    const reference = dto.reference?.trim()
+      ? dto.reference.trim()
+      : await this.nextReference(tx, currentUser, dto.saleType, contract);
+
+    const created = await onDuplicateReference(reference, () =>
+      tx.product.create({
+        data: {
+          companyId: currentUser.companyId,
+          shopId: dto.shopId ?? null,
+          categoryId: dto.categoryId,
+          statusId: status.id,
+          name: dto.name,
+          reference: reference,
+          description: dto.description ?? null,
+          internalNote: dto.internalNote ?? null,
+          photoUrl: dto.photoUrl ?? null,
+          purchasePrice: dto.saleType === 'RESALE' ? (dto.purchasePrice ?? null) : null,
+          salePrice: dto.salePrice ?? null,
+          quantity: dto.quantity ?? 1,
+          saleType: dto.saleType,
+          depositContractId: contract?.id ?? null,
+          depositorPaid: dto.saleType === 'CONSIGNMENT' ? false : null,
+        },
+      }),
+    );
 
     await this.writeValues(tx, created.id, values);
     await tx.statusHistory.create({
@@ -440,33 +472,35 @@ export class ProductsService {
         : null;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.product.update({
-        where: { id },
-        data: {
-          ...(dto.name !== undefined ? { name: dto.name } : {}),
-          ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
-          ...(dto.shopId !== undefined ? { shopId: dto.shopId } : {}),
-          ...(dto.reference !== undefined ? { reference: dto.reference } : {}),
-          ...(dto.description !== undefined ? { description: dto.description } : {}),
-          ...(dto.internalNote !== undefined ? { internalNote: dto.internalNote } : {}),
-          ...(dto.photoUrl !== undefined ? { photoUrl: dto.photoUrl } : {}),
-          ...(dto.salePrice !== undefined ? { salePrice: dto.salePrice } : {}),
-          ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
-          ...(dto.saleType !== undefined ? { saleType: dto.saleType } : {}),
-          // purchasePrice n'a de sens qu'en achat-revente (voir CLAUDE.md).
-          ...(saleType === 'RESALE'
-            ? dto.purchasePrice !== undefined
-              ? { purchasePrice: dto.purchasePrice }
-              : {}
-            : { purchasePrice: null }),
-          depositContractId: contract?.id ?? null,
-          ...(saleType === 'CONSIGNMENT'
-            ? product.depositorPaid === null
-              ? { depositorPaid: false }
-              : {}
-            : { depositorPaid: null }),
-        },
-      });
+      await onDuplicateReference(dto.reference ?? null, () =>
+        tx.product.update({
+          where: { id },
+          data: {
+            ...(dto.name !== undefined ? { name: dto.name } : {}),
+            ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+            ...(dto.shopId !== undefined ? { shopId: dto.shopId } : {}),
+            ...(dto.reference !== undefined ? { reference: dto.reference } : {}),
+            ...(dto.description !== undefined ? { description: dto.description } : {}),
+            ...(dto.internalNote !== undefined ? { internalNote: dto.internalNote } : {}),
+            ...(dto.photoUrl !== undefined ? { photoUrl: dto.photoUrl } : {}),
+            ...(dto.salePrice !== undefined ? { salePrice: dto.salePrice } : {}),
+            ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+            ...(dto.saleType !== undefined ? { saleType: dto.saleType } : {}),
+            // purchasePrice n'a de sens qu'en achat-revente (voir CLAUDE.md).
+            ...(saleType === 'RESALE'
+              ? dto.purchasePrice !== undefined
+                ? { purchasePrice: dto.purchasePrice }
+                : {}
+              : { purchasePrice: null }),
+            depositContractId: contract?.id ?? null,
+            ...(saleType === 'CONSIGNMENT'
+              ? product.depositorPaid === null
+                ? { depositorPaid: false }
+                : {}
+              : { depositorPaid: null }),
+          },
+        }),
+      );
       if (values) {
         await tx.attributeValue.deleteMany({ where: { productId: id } });
         await tx.productAttributeOption.deleteMany({ where: { productId: id } });
@@ -677,6 +711,66 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * Référence suivante pour un article qu'on est en train de créer.
+   *
+   * Le compteur est incrémenté par la base, dans la transaction en cours : deux
+   * employés qui enregistrent au même moment obtiennent deux numéros, là où un
+   * `max + 1` lu puis réécrit leur donnerait le même.
+   */
+  private async nextReference(
+    tx: Prisma.TransactionClient,
+    currentUser: CurrentUser,
+    saleType: 'RESALE' | 'CONSIGNMENT',
+    contract: { depositorId: string } | null,
+  ): Promise<string> {
+    if (saleType === 'RESALE' || !contract) {
+      const { productCounter } = await tx.company.update({
+        where: { id: currentUser.companyId },
+        data: { productCounter: { increment: 1 } },
+        select: { productCounter: true },
+      });
+      return resaleReference(productCounter);
+    }
+
+    const depositor = await tx.depositor.findUniqueOrThrow({
+      where: { id: contract.depositorId },
+      select: { id: true, code: true, lastName: true, firstName: true },
+    });
+    const code = depositor.code ?? (await this.assignCode(tx, currentUser.companyId, depositor));
+
+    const { productCounter } = await tx.depositor.update({
+      where: { id: depositor.id },
+      data: { productCounter: { increment: 1 } },
+      select: { productCounter: true },
+    });
+    return consignmentReference(code, productCounter);
+  }
+
+  /**
+   * Attribue son code à un déposant qui n'en a pas encore.
+   *
+   * Le cas se présente pour les déposants créés avant la génération de
+   * références : plutôt qu'une migration qui devinerait des codes en masse, on
+   * le calcule au premier article déposé, une fois pour toutes.
+   */
+  private async assignCode(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    depositor: { id: string; lastName: string; firstName: string | null },
+  ): Promise<string> {
+    const autres = await tx.depositor.findMany({
+      where: { companyId, code: { not: null } },
+      select: { code: true },
+    });
+    const code = freeCode(
+      depositorCode(depositor.lastName, depositor.firstName),
+      new Set(autres.map((d) => d.code).filter((c): c is string => c !== null)),
+    );
+    await tx.depositor.update({ where: { id: depositor.id }, data: { code } });
+    return code;
+  }
+
   private async requireCategory(db: Db, currentUser: CurrentUser, id: string) {
     const c = await db.category.findFirst({
       where: { id, companyId: currentUser.companyId },
@@ -723,7 +817,7 @@ export class ProductsService {
     const contract = await db.depositContract.findFirst({
       // Pas de companyId sur DepositContract : le cloisonnement passe par le déposant.
       where: { id: depositContractId, depositor: { companyId: currentUser.companyId } },
-      select: { id: true },
+      select: { id: true, depositorId: true },
     });
     if (!contract) {
       throw new BadRequestException("Ce contrat de dépôt n'appartient pas à votre entreprise.");
