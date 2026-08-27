@@ -66,7 +66,7 @@ export default async function PageTableauDeBord({
     );
   }
 
-  const { sales, stock, returns } = stats;
+  const { sales, stock, returns, today } = stats;
 
   return (
     <div className="space-y-6">
@@ -74,12 +74,44 @@ export default async function PageTableauDeBord({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Bonjour {session.firstName}</h1>
           <p className="mt-1 text-sm text-slate-600">
-            {session.company.name} — from {new Date(stats.period.from).toLocaleDateString('fr-FR')}{' '}
-            to {new Date(stats.period.to).toLocaleDateString('fr-FR')}
+            {session.company.name} — du {new Date(stats.period.from).toLocaleDateString('fr-FR')} au{' '}
+            {new Date(stats.period.to).toLocaleDateString('fr-FR')}
           </p>
         </div>
         <PeriodSelector />
       </div>
+
+      {/* La journée en cours passe avant la période : c'est la question qu'on
+          se pose en fermant la boutique. */}
+      <section className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-lg border border-slate-900 bg-slate-900 px-5 py-4 text-white">
+        <h2 className="text-sm font-medium">
+          Aujourd&apos;hui
+          <span className="ml-2 text-xs font-normal text-slate-300">
+            {new Date(today.date).toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </span>
+        </h2>
+        {today.count === 0 ? (
+          <p className="text-sm text-slate-300">Aucune vente pour l&apos;instant.</p>
+        ) : (
+          <>
+            <p className="text-sm">
+              <strong className="text-lg font-semibold">{eurosNumber(today.revenue)}</strong>
+              <span className="ml-1.5 text-slate-300">encaissés</span>
+            </p>
+            <p className="text-sm">
+              <strong className="text-lg font-semibold">{eurosNumber(today.margin)}</strong>
+              <span className="ml-1.5 text-slate-300">de marge</span>
+            </p>
+            <p className="text-sm text-slate-300">
+              {today.count} vente{today.count > 1 ? 's' : ''}
+            </p>
+          </>
+        )}
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Chiffre

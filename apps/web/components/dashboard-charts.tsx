@@ -34,6 +34,30 @@ function enEuros(label: string) {
 }
 const GRILLE = '#e2e8f0';
 
+/**
+ * Clés lues par recharts dans les données du tableau de bord.
+ *
+ * `dataKey` est une chaîne : rien ne relie le graphique à la forme réelle des
+ * données. Un champ renommé côté API laisse alors un graphique vide, sans que
+ * ni le typage ni les tests ne bronchent — c'est exactement ce qui est arrivé
+ * au passage du code en anglais. Les déclarer ici, contraintes par le type du
+ * tableau de bord, fait échouer la compilation au prochain renommage.
+ */
+const PAR_JOUR = {
+  x: 'day',
+  y: 'revenue',
+} as const satisfies Record<string, keyof Dashboard['byDay'][number]>;
+
+const CATEGORIES = {
+  label: 'name',
+  value: 'revenue',
+} as const satisfies Record<string, keyof Dashboard['topCategories'][number]>;
+
+const PAR_STATUT = {
+  label: 'name',
+  value: 'count',
+} as const satisfies Record<string, keyof Dashboard['stock']['byStatus'][number]>;
+
 function jourCourt(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 }
@@ -53,13 +77,19 @@ export function SalesCurve({ data }: { data: Dashboard['byDay'] }) {
     <ResponsiveContainer width="100%" height={240}>
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
         <CartesianGrid stroke={GRILLE} vertical={false} />
-        <XAxis dataKey="jour" tickFormatter={jourCourt} tick={AXE} tickLine={false} />
+        <XAxis dataKey={PAR_JOUR.x} tickFormatter={jourCourt} tick={AXE} tickLine={false} />
         <YAxis tick={AXE} tickLine={false} axisLine={false} />
         <Tooltip
           formatter={enEuros("Chiffre d'affaires")}
           labelFormatter={(l: unknown) => new Date(String(l)).toLocaleDateString('fr-FR')}
         />
-        <Line type="monotone" dataKey="ca" stroke="#0f172a" strokeWidth={2} dot={{ r: 3 }} />
+        <Line
+          type="monotone"
+          dataKey={PAR_JOUR.y}
+          stroke="#0f172a"
+          strokeWidth={2}
+          dot={{ r: 3 }}
+        />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -80,7 +110,17 @@ export function StockPie({ data }: { data: Dashboard['stock']['byStatus'] }) {
   return (
     <ResponsiveContainer width="100%" height={240}>
       <PieChart>
-        <Pie data={withStock} dataKey="count" nameKey="name" innerRadius={50} outerRadius={85}>
+        {/* Sans animation : le camembert d'un tableau de bord se relit à chaque
+            changement de période, et une part qui se déplie à chaque fois
+            fatigue plus qu'elle n'informe. */}
+        <Pie
+          data={withStock}
+          dataKey={PAR_STATUT.value}
+          nameKey={PAR_STATUT.label}
+          innerRadius={50}
+          outerRadius={85}
+          isAnimationActive={false}
+        >
           {withStock.map((s) => (
             <Cell key={s.id} fill={s.color} />
           ))}
@@ -114,9 +154,9 @@ export function CategoryBars({ data }: { data: Dashboard['topCategories'] }) {
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 8 }}>
         <CartesianGrid stroke={GRILLE} horizontal={false} />
         <XAxis type="number" tick={AXE} tickLine={false} axisLine={false} />
-        <YAxis type="category" dataKey="name" tick={AXE} tickLine={false} width={96} />
+        <YAxis type="category" dataKey={CATEGORIES.label} tick={AXE} tickLine={false} width={96} />
         <Tooltip formatter={enEuros("Chiffre d'affaires")} />
-        <Bar dataKey="ca" fill="#0f172a" radius={[0, 4, 4, 0]} maxBarSize={22} />
+        <Bar dataKey={CATEGORIES.value} fill="#0f172a" radius={[0, 4, 4, 0]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -349,6 +349,8 @@ export function daysUntil(date: string): number {
 
 export interface Dashboard {
   period: { from: string; to: string };
+  /** Journée en cours, indépendante de la période choisie. */
+  today: { date: string; count: number; revenue: number; margin: number };
   sales: { count: number; revenue: number; margin: number; averageBasket: number };
   byDay: { day: string; revenue: number; count: number }[];
   topCategories: { id: string; name: string; revenue: number; count: number }[];

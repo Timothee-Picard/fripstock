@@ -2,9 +2,29 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { dayBounds } from './today';
 import type { PeriodDto } from './dto/period.dto';
 
 const DEFAULT_DAYS = 30;
+
+/**
+ * Ce que la boutique garde réellement sur un article vendu.
+ *
+ * Sa marge en achat-revente, sa commission en dépôt-vente — où l'essentiel du
+ * prix revient au déposant.
+ */
+function margeDe(p: {
+  soldPrice: unknown;
+  purchasePrice: unknown;
+  appliedCommission: unknown;
+  saleType: string;
+}): number {
+  const cashed = Number(p.soldPrice ?? 0);
+  if (p.saleType === 'CONSIGNMENT') {
+    return (cashed * Number(p.appliedCommission ?? 0)) / 100;
+  }
+  return cashed - Number(p.purchasePrice ?? 0);
+}
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
@@ -46,7 +66,11 @@ export class StatsService {
       ...(filters.shopId ? { shopId: filters.shopId } : {}),
     };
 
-    const [sold, stock, consignmentPeriod] = await Promise.all([
+    // La journée en cours, indépendante de la période choisie : c'est la
+    // question qu'on se pose en fermant la boutique.
+    const jour = dayBounds();
+
+    const [sold, stock, consignmentPeriod, today] = await Promise.all([
       // Les produits vendus sur la période, avec ce qu'il faut pour le CA et la
       // marge. Le volume est celui des ventes d'une boutique : on agrège en
       // mémoire plutôt que d'empiler cinq requêtes d'agrégation.
@@ -78,6 +102,10 @@ export class StatsService {
         where: { ...base, saleType: 'CONSIGNMENT', createdAt: { gte: from, lte: to } },
         select: { status: { select: { blocksSale: true } } },
       }),
+      this.prisma.product.findMany({
+        where: { ...base, status: { isSale: true }, soldAt: { gte: jour.from, lte: jour.to } },
+        select: { purchasePrice: true, soldPrice: true, appliedCommission: true, saleType: true },
+      }),
     ]);
 
     // --- Ventes -------------------------------------------------------------
@@ -85,15 +113,7 @@ export class StatsService {
 
     // Ce que la boutique garde réellement : sa marge en achat-revente, sa
     // commission en dépôt-vente — où l'essentiel du prix revient au déposant.
-    const margin = round(
-      sold.reduce((total, p) => {
-        const cashed = Number(p.soldPrice ?? 0);
-        if (p.saleType === 'CONSIGNMENT') {
-          return total + (cashed * Number(p.appliedCommission ?? 0)) / 100;
-        }
-        return total + (cashed - Number(p.purchasePrice ?? 0));
-      }, 0),
-    );
+    const margin = round(sold.reduce((total, p) => total + margeDe(p), 0));
 
     // --- Ventes par jour, pour la courbe ------------------------------------
     const byDay = new Map<string, { revenue: number; count: number }>();
@@ -174,6 +194,12 @@ export class StatsService {
         byStatus: statuses.sort((a, b) => b.count - a.count),
         active: active.reduce((t, s) => t + s.count, 0),
         activeValue: round(active.reduce((t, s) => t + s.value, 0)),
+      },
+      today: {
+        date: jour.from.toISOString(),
+        count: today.length,
+        revenue: round(today.reduce((t, p) => t + Number(p.soldPrice ?? 0), 0)),
+        margin: round(today.reduce((t, p) => t + margeDe(p), 0)),
       },
       returns: {
         consignmentOverPeriod: consignmentPeriod.length,

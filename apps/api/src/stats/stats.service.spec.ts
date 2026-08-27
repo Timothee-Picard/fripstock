@@ -27,12 +27,18 @@ describe('StatsService', () => {
   let prisma: PrismaMock;
   let service: StatsService;
 
-  /** Les trois requêtes du tableau de bord, dans l'ordre du Promise.all. */
-  function arrange(sold: unknown[], stock: unknown[], consignment: unknown[] = []) {
+  /** Les quatre requêtes du tableau de bord, dans l'ordre du Promise.all. */
+  function arrange(
+    sold: unknown[],
+    stock: unknown[],
+    consignment: unknown[] = [],
+    today: unknown[] = [],
+  ) {
     prisma.product.findMany
       .mockResolvedValueOnce(sold)
       .mockResolvedValueOnce(stock)
-      .mockResolvedValueOnce(consignment);
+      .mockResolvedValueOnce(consignment)
+      .mockResolvedValueOnce(today);
   }
 
   beforeEach(() => {
@@ -192,6 +198,57 @@ describe('StatsService', () => {
       arrange([], [enStock({ salePrice: null })]);
       const { stock } = await service.dashboard(manager, {});
       expect(stock.activeValue).toBe(0);
+    });
+  });
+
+  describe('journée en cours', () => {
+    it('compte les ventes du jour, indépendamment de la période choisie', async () => {
+      arrange([], [], [], [vendu(), vendu({ id: 'p2', soldPrice: '30' })]);
+      const { today } = await service.dashboard(manager, { from: '2020-01-01' });
+      expect(today.count).toBe(2);
+      expect(today.revenue).toBe(80);
+    });
+
+    it('calcule la marge du jour comme celle de la période', async () => {
+      arrange([], [], [], [vendu({ soldPrice: '50', purchasePrice: '10' })]);
+      const { today } = await service.dashboard(manager, {});
+      expect(today.margin).toBe(40);
+    });
+
+    it('ne retient que la commission sur un dépôt-vente', async () => {
+      arrange(
+        [],
+        [],
+        [],
+        [vendu({ saleType: 'CONSIGNMENT', soldPrice: '100', appliedCommission: '40' })],
+      );
+      const { today } = await service.dashboard(manager, {});
+      expect(today.margin).toBe(40);
+    });
+
+    it('rend une journée à zéro plutôt que rien', async () => {
+      arrange([], []);
+      const { today } = await service.dashboard(manager, {});
+      expect(today).toMatchObject({ count: 0, revenue: 0, margin: 0 });
+      expect(today.date).toEqual(expect.any(String));
+    });
+
+    it('borne la requête sur la journée, et non sur la période', async () => {
+      arrange([], []);
+      await service.dashboard(manager, { from: '2020-01-01', to: '2030-01-01' });
+      const bornes = prisma.product.findMany.mock.calls[3][0].where.soldAt as {
+        gte: Date;
+        lte: Date;
+      };
+      // Vingt-quatre heures, quand la période en couvre dix ans.
+      expect(bornes.lte.getTime() - bornes.gte.getTime()).toBe(86400000 - 1);
+    });
+
+    it('respecte le filtre boutique', async () => {
+      prisma.shop.count.mockResolvedValue(1);
+      arrange([], []);
+      await service.dashboard(manager, { shopId: SHOP_ID });
+      expect(prisma.product.findMany.mock.calls[3][0].where.shopId).toBe(SHOP_ID);
     });
   });
 
