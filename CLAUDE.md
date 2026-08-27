@@ -140,6 +140,9 @@ Company (le compte parent, un gérant)
   ensuite — il finit écrit sur des étiquettes. Rattaché à
   l'Entreprise (pas à une boutique précise, un déposant peut avoir des articles dans
   plusieurs boutiques de l'entreprise).
+- **Un contrat porte au moins un article** : on ne fait pas signer un déposant pour rien,
+  et le relevé qui en découlerait serait vide. Les articles se saisissent dans la même
+  passe que le contrat, dans la même transaction — une ligne refusée n'enregistre rien.
 - `DepositContract` : lie un `Depositor` à une période (`startDate`, `endDate`), une commission
   (copiée depuis `defaultCommission` à la création mais modifiable pour ce contrat précis),
   et `notifyBeforeDays` pour l'alerte d'échéance. Un ou plusieurs produits sont rattachés
@@ -216,7 +219,9 @@ corriger la faute de frappe. `products.delete` (irréversible) et `products.chan
 **Une route qui fait deux choses les exige toutes les deux** : `@RequirePermission` est
 variadique et cumule. Créer un contrat de dépôt crée aussi les produits qui y figurent,
 d'où `@RequirePermission('deposits.manage', 'products.manage')` — n'exiger que le premier
-en faisait une porte dérobée vers la création de produits.
+en faisait une porte dérobée vers la création de produits. Ce lien n'a rien d'évident vu
+de l'écran : partout où il se manifeste — bouton masqué, page refusée, case à cocher des
+accès — il doit être **écrit**, sinon le refus passe pour une panne.
 
 **Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
 clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.

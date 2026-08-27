@@ -85,7 +85,7 @@ export class DepositContractsService {
         },
       });
 
-      for (const [index, line] of (dto.products ?? []).entries()) {
+      for (const [index, line] of dto.products.entries()) {
         try {
           await this.products.createWith(tx, currentUser, {
             ...line,

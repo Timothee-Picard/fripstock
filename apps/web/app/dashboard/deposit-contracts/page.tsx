@@ -60,14 +60,20 @@ export default async function DepositContractsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DeadlinesButton />
-          {peutCreer && depositors.length > 0 ? (
+          {depositors.length === 0 ? null : peutCreer ? (
             <Link
               href="/dashboard/deposit-contracts/new"
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
             >
               Nouveau contrat
             </Link>
-          ) : null}
+          ) : (
+            /* Un bouton qui disparaît sans un mot ressemble à une panne. */
+            <p className="max-w-xs text-xs text-slate-600">
+              Ouvrir un contrat enregistre aussi les articles déposés : il faut pour cela le droit
+              «&nbsp;Créer et modifier des produits&nbsp;».
+            </p>
+          )}
         </div>
       </div>
 

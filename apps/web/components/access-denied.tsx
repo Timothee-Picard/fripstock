@@ -7,7 +7,20 @@ import { PERMISSION_LABELS, type Permission } from '@/lib/types';
  * Une page en erreur pour un simple manque de droits est illisible : on
  * explique ce qui manque et on renvoie vers ce qui reste accessible.
  */
-export function AccessDenied({ what, permission }: { what: string; permission: Permission }) {
+export function AccessDenied({
+  what,
+  permission,
+  why,
+}: {
+  what: string;
+  permission: Permission;
+  /**
+   * Pourquoi ce droit-là commande cet écran-là, quand le lien n'est pas
+   * évident. Sans cette phrase, se voir refuser un contrat de dépôt faute du
+   * droit sur les *produits* ressemble à une erreur de l'application.
+   */
+  why?: string;
+}) {
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-xl font-semibold text-slate-900">{what}</h1>
@@ -16,6 +29,7 @@ export function AccessDenied({ what, permission }: { what: string; permission: P
           Vous n&apos;avez pas la permission «&nbsp;{PERMISSION_LABELS[permission]}&nbsp;»,
           nécessaire pour consulter cet écran.
         </p>
+        {why ? <p className="mt-2 text-sm text-slate-700">{why}</p> : null}
         <p className="mt-2 text-sm text-slate-600">
           Demandez-la au gérant de votre entreprise, ou revenez au{' '}
           <Link href="/dashboard" className="underline underline-offset-2">

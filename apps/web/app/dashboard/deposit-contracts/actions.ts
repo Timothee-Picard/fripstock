@@ -83,6 +83,11 @@ export async function createContract(
   const saisie = readLines(data);
   if (saisie.error) return { error: saisie.error };
   const products = saisie.lines;
+  // L'API le refuse aussi, mais le dire ici évite un aller-retour pour une
+  // erreur que le formulaire voit tout seul.
+  if (products.length === 0) {
+    return { error: 'Ajoutez au moins un article : un contrat de dépôt vide ne veut rien dire.' };
+  }
 
   let id: string;
   try {
@@ -96,7 +101,7 @@ export async function createContract(
         notifyBeforeDays: count(data, 'notifyBeforeDays'),
         // Contrat et articles partent ensemble : l'API les écrit dans la même
         // transaction, une ligne refusée n'enregistre rien.
-        ...(products.length > 0 ? { products } : {}),
+        products,
       }),
     });
     id = created.id;

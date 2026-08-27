@@ -95,6 +95,9 @@ describe('contrats de dépôt', () => {
           endDate: '2026-06-01',
           commission: '40',
           notifyBeforeDays: '7',
+          lineId: 'a',
+          'line:a:name': 'Robe',
+          'line:a:categoryId': 'c1',
         }),
       ),
     );
@@ -110,7 +113,14 @@ describe('contrats de dépôt', () => {
     await attraperRedirection(
       contrats.createContract(
         {},
-        form({ depositorId: 'd1', startDate: '2026-01-01', endDate: '2026-06-01' }),
+        form({
+          depositorId: 'd1',
+          startDate: '2026-01-01',
+          endDate: '2026-06-01',
+          lineId: 'a',
+          'line:a:name': 'Robe',
+          'line:a:categoryId': 'c1',
+        }),
       ),
     );
     const { body } = dernierAppel();
@@ -181,9 +191,13 @@ describe('contrats de dépôt', () => {
       expect(apiFetch).not.toHaveBeenCalled();
     });
 
-    it("n'envoie pas de tableau d'articles quand aucun n'est saisi", async () => {
-      await attraperRedirection(contrats.createContract({}, form(conditions)));
-      expect(dernierAppel().body).not.toHaveProperty('products');
+    it('refuse un contrat sans aucun article, sans appeler l’API', async () => {
+      // On ne fait pas signer un déposant pour rien. L'API le refuse aussi,
+      // mais le formulaire le voit sans aller-retour.
+      await expect(contrats.createContract({}, form(conditions))).resolves.toEqual({
+        error: 'Ajoutez au moins un article : un contrat de dépôt vide ne veut rien dire.',
+      });
+      expect(apiFetch).not.toHaveBeenCalled();
     });
 
     it('applique la boutique du contrat à chaque article', async () => {

@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsInt,
   IsISO8601,
@@ -43,14 +44,15 @@ export class CreateContractDto {
   /**
    * Articles déposés, saisis dans la foulée du contrat.
    *
-   * Facultatif : un contrat peut être ouvert vide, quitte à lui rattacher des
-   * produits existants ensuite. Quand la liste est fournie, contrat et articles
-   * sont écrits dans la même transaction — une ligne refusée n'enregistre rien.
+   * **Au moins un** : un contrat de dépôt sans article ne veut rien dire — on
+   * ne fait pas signer un déposant pour rien, et le relevé qui en découlerait
+   * serait vide. Contrat et articles sont écrits dans la même transaction, une
+   * ligne refusée n'enregistre rien.
    */
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(200)
+  @IsArray({ message: 'La liste des articles déposés est absente ou mal formée.' })
+  @ArrayMinSize(1, { message: 'Un contrat de dépôt doit porter au moins un article.' })
+  @ArrayMaxSize(200, { message: 'Un contrat ne peut pas porter plus de 200 articles.' })
   @ValidateNested({ each: true })
   @Type(() => ContractProductDto)
-  products?: ContractProductDto[];
+  products!: ContractProductDto[];
 }

@@ -11,7 +11,13 @@ export default async function NewDepositContractPage() {
   // La création d'un contrat crée aussi ses articles : sans le droit d'en
   // créer, on n'obtiendrait qu'un contrat vide, ce qui n'a pas de sens.
   if (!hasPermission(session, 'products.manage')) {
-    return <AccessDenied what="Nouveau contrat de dépôt" permission="products.manage" />;
+    return (
+      <AccessDenied
+        what="Nouveau contrat de dépôt"
+        permission="products.manage"
+        why="Ouvrir un contrat enregistre du même coup les articles déposés : cela revient à créer des produits, et demande donc ce droit en plus de « Gérer les contrats de dépôt »."
+      />
+    );
   }
 
   const [depositorList, tree, shops, attributes] = await Promise.all([

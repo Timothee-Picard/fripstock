@@ -36,7 +36,13 @@ describe('DTO catégories', () => {
 });
 
 describe('DTO contrats de dépôt', () => {
-  const contrat = { depositorId: 'd1', startDate: '2026-01-01', endDate: '2026-06-01' };
+  // `products` en fait partie : un contrat porte toujours au moins un article.
+  const contrat = {
+    depositorId: 'd1',
+    startDate: '2026-01-01',
+    endDate: '2026-06-01',
+    products: [{ name: 'Robe', categoryId: 'cat-1' }],
+  };
 
   it('exige déposant et dates', () => {
     const { errors } = validateDto(CreateContractDto, {});
@@ -47,6 +53,23 @@ describe('DTO contrats de dépôt', () => {
     expect(validateDto(CreateContractDto, { ...contrat, endDate: '01/06/2026' }).errors).toContain(
       'endDate',
     );
+  });
+
+  it('refuse un contrat sans aucun article', () => {
+    // On ne fait pas signer un déposant pour rien : le relevé qui en
+    // découlerait serait vide, et le contrat n'aurait servi à personne.
+    expect(validateDto(CreateContractDto, { ...contrat, products: [] }).errors).toContain(
+      'products',
+    );
+  });
+
+  it('refuse un contrat dont la liste d’articles est absente', () => {
+    expect(isValid(CreateContractDto, { ...contrat, products: undefined })).toBe(false);
+  });
+
+  it('plafonne le dépôt à 200 articles', () => {
+    const lignes = Array.from({ length: 201 }, () => ({ name: 'Robe', categoryId: 'cat-1' }));
+    expect(isValid(CreateContractDto, { ...contrat, products: lignes })).toBe(false);
   });
 
   it('borne la commission entre 0 et 100', () => {

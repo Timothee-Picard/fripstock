@@ -62,7 +62,13 @@ describe('DepositContractsService', () => {
   });
 
   describe('create', () => {
-    const dto = { depositorId: 'dep-1', startDate: '2026-01-01', endDate: '2026-06-01' };
+    // Un contrat porte toujours au moins un article : le DTO l'exige.
+    const dto = {
+      depositorId: 'dep-1',
+      startDate: '2026-01-01',
+      endDate: '2026-06-01',
+      products: [{ name: 'Robe', categoryId: 'cat-1' }],
+    };
 
     beforeEach(() => {
       // `create` se termine par un `detail` : le contrat doit être relisible.
@@ -128,13 +134,6 @@ describe('DepositContractsService', () => {
         saleType: 'CONSIGNMENT',
         depositContractId: contract.id,
       });
-    });
-
-    it('accepte un contrat sans article', async () => {
-      prisma.depositor.findFirst.mockResolvedValue(depositor);
-      prisma.depositContract.create.mockResolvedValue(contract);
-      await service.create(manager, dto);
-      expect(products.createWith).not.toHaveBeenCalled();
     });
 
     it('situe l’erreur sur la ligne fautive, sans quoi elle est inexploitable', async () => {

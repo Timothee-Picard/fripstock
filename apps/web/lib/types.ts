@@ -58,7 +58,8 @@ export const PERMISSION_HINTS: Record<Permission, string> = {
   'categories.manage': "Ajouter et réorganiser l'arborescence des catégories.",
   'attributes.manage': 'Définir les attributs (taille, couleur…) et leurs options.',
   'depositors.manage': 'Créer et modifier les fiches des clients déposants.',
-  'deposits.manage': 'Ouvrir un contrat de dépôt, y rattacher des articles, régler les déposants.',
+  'deposits.manage':
+    "Ouvrir un contrat de dépôt, y rattacher des articles, régler les déposants. Ouvrir un contrat demande en plus « Créer et modifier des produits », puisqu'il enregistre les articles déposés.",
   'stats.view': "Chiffre d'affaires, marge, panier moyen, taux de retour.",
   'stock.view': 'Nombre et valeur des articles en boutique, répartition par statut.',
   'export.csv': 'Télécharger le stock au format tableur.',

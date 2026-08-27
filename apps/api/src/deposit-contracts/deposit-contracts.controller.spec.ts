@@ -68,11 +68,13 @@ describe('DepositContractsController', () => {
         depositorId: 'd1',
         startDate: '2026-01-01',
         endDate: '2026-02-01',
+        products: [{ name: 'Robe', categoryId: 'cat-1' }],
       });
       expect(service.create).toHaveBeenCalledWith(manager, {
         depositorId: 'd1',
         startDate: '2026-01-01',
         endDate: '2026-02-01',
+        products: [{ name: 'Robe', categoryId: 'cat-1' }],
       });
     });
 
