@@ -610,6 +610,118 @@ describe('ProductsService', () => {
     });
   });
 
+  describe('sellMany', () => {
+    const lignes = [
+      { productId: 'p1', soldPrice: 28.89 },
+      { productId: 'p2', soldPrice: 10.83 },
+    ];
+
+    beforeEach(() => {
+      prisma.status.findMany.mockResolvedValue([{ id: sold.id, name: 'Vendu' }]);
+      prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+      prisma.status.findFirst.mockResolvedValue(sold);
+      prisma.product.findMany.mockResolvedValue([
+        { ...product({ id: 'p1', name: 'Veste' }) },
+        { ...product({ id: 'p2', name: 'Ceinture' }) },
+      ]);
+    });
+
+    it('passe chaque article à vendu avec son propre prix', async () => {
+      await service.sellMany(manager, { lines: lignes });
+      expect(prisma.product.update).toHaveBeenCalledTimes(2);
+      expect(
+        prisma.product.update.mock.calls.map(
+          (c: [{ data: { soldPrice: number } }]) => c[0].data.soldPrice,
+        ),
+      ).toEqual([28.89, 10.83]);
+    });
+
+    it('rend le total encaissé, arrondi au centime', async () => {
+      await expect(service.sellMany(manager, { lines: lignes })).resolves.toMatchObject({
+        count: 2,
+        total: 39.72,
+      });
+    });
+
+    it('trouve le statut de vente par son flag, jamais par son libellé', async () => {
+      await service.sellMany(manager, { lines: lignes });
+      expect(prisma.status.findMany).toHaveBeenCalledWith({
+        where: { companyId: COMPANY_ID, isSale: true },
+        select: { id: true, name: true },
+      });
+    });
+
+    it('horodate toutes les lignes du même passage', async () => {
+      await service.sellMany(manager, { lines: lignes });
+      const dates = prisma.product.update.mock.calls.map((c: [{ data: { soldAt: Date } }]) =>
+        c[0].data.soldAt.getTime(),
+      );
+      expect(new Set(dates).size).toBe(1);
+    });
+
+    it('écrit tout dans une seule transaction', async () => {
+      await service.sellMany(manager, { lines: lignes });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('gèle la commission des articles en dépôt', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        product({ id: 'p1', name: 'Sac', saleType: 'CONSIGNMENT', depositContractId: 'c1' }),
+      ]);
+      prisma.depositContract.findUniqueOrThrow.mockResolvedValue({ commission: 40 });
+      await service.sellMany(manager, { lines: [{ productId: 'p1', soldPrice: 54.17 }] });
+      expect(prisma.product.update.mock.calls[0][0].data.appliedCommission).toBe(40);
+    });
+
+    it("refuse un article d'une autre entreprise", async () => {
+      prisma.product.findMany.mockResolvedValue([product({ id: 'p1' })]);
+      await expect(service.sellMany(manager, { lines: lignes })).rejects.toThrow(
+        "n'appartient pas à votre entreprise",
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it("cache à l'employé un article d'une boutique où il n'a pas accès", async () => {
+      prisma.product.findMany.mockResolvedValue([
+        product({ id: 'p1', shopId: 'shop-interdite' }),
+        product({ id: 'p2', shopId: 'shop-interdite' }),
+      ]);
+      prisma.shopAccess.count.mockResolvedValue(0);
+      await expect(service.sellMany(employee, { lines: lignes })).rejects.toThrow(
+        'Produit introuvable.',
+      );
+    });
+
+    it('nomme l’article fautif plutôt que de laisser deviner', async () => {
+      prisma.status.findUniqueOrThrow.mockResolvedValue(returned);
+      await expect(service.sellMany(manager, { lines: lignes })).rejects.toThrow(
+        'Veste : Ce produit est « Rendu au client » : il ne peut plus être vendu.',
+      );
+    });
+
+    it("refuse quand aucun statut de vente n'existe", async () => {
+      prisma.status.findMany.mockResolvedValue([]);
+      await expect(service.sellMany(manager, { lines: lignes })).rejects.toThrow(
+        'Aucun statut de vente',
+      );
+    });
+
+    it('demande lequel quand l’entreprise en a plusieurs', async () => {
+      prisma.status.findMany.mockResolvedValue([
+        { id: 's1', name: 'Vendu' },
+        { id: 's2', name: 'Vendu en ligne' },
+      ]);
+      await expect(service.sellMany(manager, { lines: lignes })).rejects.toThrow(
+        'Plusieurs statuts de vente existent (Vendu, Vendu en ligne)',
+      );
+    });
+
+    it('accepte un statut de vente désigné explicitement', async () => {
+      await service.sellMany(manager, { lines: lignes, statusId: sold.id });
+      expect(prisma.status.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateSale', () => {
     it('corrige le prix encaissé d’un produit vendu', async () => {
       prisma.status.findUniqueOrThrow.mockResolvedValue(sold);

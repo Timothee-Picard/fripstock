@@ -18,6 +18,7 @@ const exporter = await import('./export/route');
 const photos = await import('./photos/route');
 const photo = await import('./photos/[...key]/route');
 const attributs = await import('./categories/[id]/attributes/route');
+const recherche = await import('./products/search/route');
 
 /** Une réponse d'API avec un corps diffusable. */
 function amont(status: number, headers: Record<string, string> = {}, corps = 'contenu') {
@@ -168,5 +169,47 @@ describe('GET /api/categories/[id]/attributes', () => {
     apiFetch.mockRejectedValue(new Error('boum'));
     const r = await attributs.GET(new Request('http://x'), params);
     expect(r.status).toBe(500);
+  });
+});
+
+describe('GET /api/products/search', () => {
+  const vendable = (over: Record<string, unknown> = {}) => ({
+    id: 'p1',
+    reference: 'A-0042',
+    status: { leavesStock: false },
+    ...over,
+  });
+
+  it('rend les articles trouvés', async () => {
+    apiFetch.mockResolvedValue({ products: [vendable()] });
+    const r = await recherche.GET(new Request('http://x/api/products/search?q=A-0042'));
+    await expect(r.json()).resolves.toEqual([vendable()]);
+    expect(String(apiFetch.mock.calls[0][0])).toContain('search=A-0042');
+  });
+
+  it('écarte ce qui est déjà sorti du stock — vendu, rendu, retiré', async () => {
+    apiFetch.mockResolvedValue({
+      products: [vendable(), vendable({ id: 'p2', status: { leavesStock: true } })],
+    });
+    const r = await recherche.GET(new Request('http://x/api/products/search?q=veste'));
+    await expect(r.json()).resolves.toHaveLength(1);
+  });
+
+  it('ne cherche rien sur une saisie vide', async () => {
+    const r = await recherche.GET(new Request('http://x/api/products/search?q=%20'));
+    await expect(r.json()).resolves.toEqual([]);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('restreint à la boutique quand elle est donnée', async () => {
+    apiFetch.mockResolvedValue({ products: [] });
+    await recherche.GET(new Request('http://x/api/products/search?q=veste&shopId=b1'));
+    expect(String(apiFetch.mock.calls[0][0])).toContain('shopId=b1');
+  });
+
+  it('relaie le code de refus de l’API', async () => {
+    apiFetch.mockRejectedValue(new ApiError(403, 'Interdit'));
+    const r = await recherche.GET(new Request('http://x/api/products/search?q=veste'));
+    expect(r.status).toBe(403);
   });
 });

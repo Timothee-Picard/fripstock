@@ -120,6 +120,9 @@ Company (le compte parent, un gérant)
   | Rendu au client | ✗        | ✓            | ✓             |
   | Retiré          | ✗        | ✓            | ✓             |
 
+- Le flux de base autorise « En stock » → « Vendu » : un client peut acheter un article
+  sorti de la réserve, lui imposer un passage par le rayon bloquerait la vente au
+  comptoir pour rien.
 - Un **flux** (`StatusTransition`) dit quels passages sont autorisés d'un statut à l'autre.
   Il est posé à la création de l'entreprise et n'est pas modifiable ; l'écran des statuts
   l'affiche en lecture seule. Les règles de flags s'appliquent **par-dessus** le flux,

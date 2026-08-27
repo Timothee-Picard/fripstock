@@ -8,6 +8,7 @@ import { AssignShopDto } from './dto/assign-shop.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateLotDto } from './dto/create-lot.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { SellManyDto } from './dto/sell-many.dto';
 import { FilterProductsDto } from './dto/filter-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -78,6 +79,19 @@ export class ProductsController {
   @RequirePermission('products.create')
   createLot(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateLotDto) {
     return this.products.createLot(currentUser, dto);
+  }
+
+  /**
+   * Vente au comptoir : plusieurs articles d'un coup.
+   *
+   * Même permission qu'un changement de statut à l'unité, puisque c'est
+   * exactement ce qu'elle fait — en série. Aucune boutique n'est visée par
+   * l'URL : le service vérifie l'accès article par article.
+   */
+  @Post('sale')
+  @RequirePermission('products.changeStatus')
+  sellMany(@AuthUser() currentUser: CurrentUser, @Body() dto: SellManyDto) {
+    return this.products.sellMany(currentUser, dto);
   }
 
   @Put(':id')

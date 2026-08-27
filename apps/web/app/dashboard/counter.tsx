@@ -1,0 +1,289 @@
+'use client';
+
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { sellBasket } from './products/actions';
+import { Alert, Button } from '@/components/field';
+import { splitCost } from '@/lib/lot-split';
+import { euros, eurosNumber, type ProductSummary } from '@/lib/types';
+
+/**
+ * Comptoir : plusieurs articles passent à vendu d'un coup.
+ *
+ * Le client pose cinq vêtements, il faut que le stock suive. Le point d'entrée
+ * est la référence lue sur l'étiquette — c'est ce qu'on a en main, et une
+ * douchette QR se contentera de la taper à notre place le jour venu. Une
+ * référence exacte ajoute l'article sans un clic ; toute autre saisie propose
+ * une liste, pour l'étiquette arrachée.
+ *
+ * La remise se pose sur le total : elle se répartit alors au prorata des prix
+ * affichés, exactement comme le prix d'un lot acheté se répartit entre ses
+ * articles. Chaque ligne reste modifiable à la main, pour négocier un seul
+ * vêtement.
+ */
+
+interface Ligne {
+  product: ProductSummary;
+  /** Prix encaissé, en saisie libre. Vide = prix de l'étiquette. */
+  prix: string;
+}
+
+function nombre(valeur: string | null): number {
+  const n = Number(String(valeur ?? '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+const CHAMP =
+  'w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900';
+
+export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
+  const [state, action, pending] = useActionState(sellBasket, {});
+  const [lignes, setLignes] = useState<Ligne[]>([]);
+  const [saisie, setSaisie] = useState('');
+  const [propositions, setPropositions] = useState<ProductSummary[]>([]);
+  const [cherche, setCherche] = useState(false);
+  const [remise, setRemise] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
+  const champ = useRef<HTMLInputElement>(null);
+
+  // Le panier se vide au succès, et le curseur retourne dans le champ : au
+  // comptoir, le client suivant attend déjà.
+  const [dernierSucces, setDernierSucces] = useState<string | undefined>(undefined);
+  if (state.token && state.token !== dernierSucces) {
+    setDernierSucces(state.token);
+    setLignes([]);
+    setRemise('');
+    setSaisie('');
+    setPropositions([]);
+  }
+
+  useEffect(() => {
+    champ.current?.focus();
+  }, [dernierSucces]);
+
+  const sousTotal = useMemo(
+    () =>
+      Math.round(
+        lignes.reduce(
+          (t, l) => t + (l.prix === '' ? nombre(l.product.salePrice) : nombre(l.prix)),
+          0,
+        ) * 100,
+      ) / 100,
+    [lignes],
+  );
+
+  /**
+   * Prix effectivement encaissés.
+   *
+   * Sans remise, chaque ligne garde son prix. Avec, le total saisi se répartit
+   * au prorata — la somme retombe alors exactement sur ce que le client paie.
+   */
+  const encaisses = useMemo(() => {
+    const bruts = lignes.map((l) => (l.prix === '' ? nombre(l.product.salePrice) : nombre(l.prix)));
+    const total = nombre(remise);
+    if (remise === '' || total <= 0) return bruts;
+    return splitCost(total, bruts);
+  }, [lignes, remise]);
+
+  const total = Math.round(encaisses.reduce((t, p) => t + p, 0) * 100) / 100;
+
+  function ajouter(product: ProductSummary) {
+    setErreur(null);
+    setSaisie('');
+    setPropositions([]);
+    setLignes((current) =>
+      current.some((l) => l.product.id === product.id)
+        ? current
+        : [...current, { product, prix: '' }],
+    );
+    champ.current?.focus();
+  }
+
+  async function chercher(terme: string) {
+    setCherche(true);
+    setErreur(null);
+    try {
+      const params = new URLSearchParams({ q: terme });
+      if (shops.length === 1) params.set('shopId', shops[0].id);
+      const reponse = await fetch(`/api/products/search?${params.toString()}`);
+      const trouves = reponse.ok ? ((await reponse.json()) as ProductSummary[]) : [];
+
+      // Référence exacte : on ajoute sans faire cliquer.
+      const exact = trouves.find((p) => p.reference?.toLowerCase() === terme.toLowerCase());
+      if (exact) {
+        ajouter(exact);
+        return;
+      }
+      if (trouves.length === 0) {
+        setErreur(`Aucun article vendable ne correspond à « ${terme} ».`);
+        setPropositions([]);
+        return;
+      }
+      setPropositions(trouves);
+    } catch {
+      setErreur('Recherche indisponible.');
+    } finally {
+      setCherche(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium text-slate-900">Vendre des articles</h2>
+        <p className="text-xs text-slate-600">
+          Tapez la référence de l&apos;étiquette, ou un nom d&apos;article.
+        </p>
+      </div>
+
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const terme = saisie.trim();
+          if (terme) void chercher(terme);
+        }}
+      >
+        <input
+          ref={champ}
+          autoFocus
+          value={saisie}
+          onChange={(e) => setSaisie(e.target.value)}
+          placeholder="A-0042"
+          aria-label="Référence ou nom de l'article"
+          className={`${CHAMP} max-w-xs font-mono`}
+        />
+        <Button type="submit" variant="secondary" disabled={cherche || saisie.trim() === ''}>
+          {cherche ? '…' : 'Ajouter'}
+        </Button>
+      </form>
+
+      {erreur ? <p className="mt-2 text-sm text-red-700">{erreur}</p> : null}
+
+      {propositions.length > 0 ? (
+        <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
+          {propositions.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => ajouter(p)}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-slate-50"
+              >
+                <span>
+                  <span className="font-mono text-xs text-slate-600">{p.reference}</span> {p.name}
+                  <span className="ml-2 text-xs text-slate-500">
+                    {p.category.name} · {p.shop?.name ?? 'Stock central'} · {p.status.name}
+                  </span>
+                </span>
+                <span className="shrink-0 text-slate-700">{euros(p.salePrice)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {state.error ? (
+        <div className="mt-3">
+          <Alert>{state.error}</Alert>
+        </div>
+      ) : null}
+      {state.success ? (
+        <div className="mt-3">
+          <Alert tone="info">{state.success}</Alert>
+        </div>
+      ) : null}
+
+      {lignes.length > 0 ? (
+        <form action={action} className="mt-4 space-y-3">
+          {lignes.map((ligne, index) => (
+            <input
+              key={ligne.product.id}
+              type="hidden"
+              name="line"
+              value={`${ligne.product.id}:${encaisses[index]}`}
+            />
+          ))}
+
+          <table className="w-full text-sm">
+            <tbody>
+              {lignes.map((ligne, index) => {
+                const brut =
+                  ligne.prix === '' ? nombre(ligne.product.salePrice) : nombre(ligne.prix);
+                const remisee = remise !== '' && encaisses[index] !== brut;
+                return (
+                  <tr key={ligne.product.id} className="border-b border-slate-100 last:border-0">
+                    <td className="py-1.5 pr-2 font-mono text-xs text-slate-600">
+                      {ligne.product.reference}
+                    </td>
+                    <td className="py-1.5 pr-2 text-slate-900">{ligne.product.name}</td>
+                    <td className="w-28 py-1.5">
+                      <input
+                        inputMode="decimal"
+                        value={ligne.prix}
+                        placeholder={nombre(ligne.product.salePrice).toFixed(2).replace('.', ',')}
+                        onChange={(e) =>
+                          setLignes((current) =>
+                            current.map((l, i) =>
+                              i === index ? { ...l, prix: e.target.value } : l,
+                            ),
+                          )
+                        }
+                        aria-label={`Prix de ${ligne.product.name}`}
+                        className={`${CHAMP} py-1 text-right`}
+                      />
+                    </td>
+                    <td className="w-24 py-1.5 pl-2 text-right text-slate-600">
+                      {remisee ? eurosNumber(encaisses[index]) : null}
+                    </td>
+                    <td className="w-8 py-1.5 pl-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLignes((current) => current.filter((_, i) => i !== index))
+                        }
+                        aria-label={`Retirer ${ligne.product.name}`}
+                        className="rounded px-1.5 text-slate-500 transition hover:bg-red-50 hover:text-red-700"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-3">
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-slate-800">Total négocié (€)</span>
+              <input
+                inputMode="decimal"
+                value={remise}
+                onChange={(e) => setRemise(e.target.value)}
+                placeholder={sousTotal.toFixed(2).replace('.', ',')}
+                aria-label="Total négocié"
+                className={`${CHAMP} w-32 text-right`}
+              />
+              <span className="mt-1 block text-xs text-slate-600">
+                Réparti au prorata sur les articles.
+              </span>
+            </label>
+
+            <p role="status" className="text-sm text-slate-700">
+              <strong>{lignes.length}</strong> article{lignes.length > 1 ? 's' : ''} ·{' '}
+              <strong className="text-lg font-semibold">{eurosNumber(total)}</strong>
+              {remise !== '' && total !== sousTotal ? (
+                <span className="ml-1.5 text-slate-500 line-through">{eurosNumber(sousTotal)}</span>
+              ) : null}
+            </p>
+
+            <Button type="submit" disabled={pending}>
+              {pending
+                ? 'Enregistrement…'
+                : `Valider ${lignes.length} vente${lignes.length > 1 ? 's' : ''}`}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+    </section>
+  );
+}

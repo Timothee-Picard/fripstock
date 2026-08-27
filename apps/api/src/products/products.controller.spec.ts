@@ -7,6 +7,7 @@ describe('ProductsController', () => {
   const service = {
     list: jest.fn(),
     createLot: jest.fn(),
+    sellMany: jest.fn(),
     exportCsv: jest.fn(),
     detail: jest.fn(),
     create: jest.fn(),
@@ -29,6 +30,7 @@ describe('ProductsController', () => {
     ['detail', 'GET', ':id'],
     ['create', 'POST', '/'],
     ['createLot', 'POST', 'lot'],
+    ['sellMany', 'POST', 'sale'],
     ['update', 'PUT', ':id'],
     ['assignShop', 'PUT', ':id/assign-shop'],
     ['updateSale', 'PUT', ':id/sale'],
@@ -45,6 +47,7 @@ describe('ProductsController', () => {
     ['detail', 'products.view'],
     ['create', 'products.create'],
     ['createLot', 'products.create'],
+    ['sellMany', 'products.changeStatus'],
     ['update', 'products.update'],
     ['assignShop', 'products.update'],
     ['updateSale', 'products.update'],
@@ -133,6 +136,12 @@ describe('ProductsController', () => {
       const lot = { totalPurchasePrice: 7, lines: [{ name: 'T-shirt', categoryId: 'c1' }] };
       void controller.createLot(manager, lot);
       expect(service.createLot).toHaveBeenCalledWith(manager, lot);
+    });
+
+    it('sellMany passe le panier entier', () => {
+      const panier = { lines: [{ productId: 'p1', soldPrice: 32 }] };
+      void controller.sellMany(manager, panier);
+      expect(service.sellMany).toHaveBeenCalledWith(manager, panier);
     });
 
     it('delete appelle delete', () => {

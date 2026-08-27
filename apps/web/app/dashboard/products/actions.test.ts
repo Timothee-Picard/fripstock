@@ -12,6 +12,7 @@ import {
 const {
   assignShop,
   createLot,
+  sellBasket,
   changeStatus,
   createProduct,
   deleteProduct,
@@ -329,6 +330,72 @@ describe('createLot', () => {
     );
     await expect(createLot({}, form(lot))).resolves.toEqual({
       error: "Ligne 2 (Chemise) : Cette catégorie n'appartient pas à votre entreprise.",
+    });
+  });
+});
+
+describe('sellBasket', () => {
+  beforeEach(() => resetMocks({ count: 2, total: 44 }));
+
+  it('poste le panier sur la route de vente', async () => {
+    await sellBasket({}, form({ line: ['p1:32', 'p2:12'] }));
+    expect(dernierAppel()).toMatchObject({
+      route: '/products/sale',
+      method: 'POST',
+      body: {
+        lines: [
+          { productId: 'p1', soldPrice: 32 },
+          { productId: 'p2', soldPrice: 12 },
+        ],
+      },
+    });
+  });
+
+  it('annonce ce qui a été vendu', async () => {
+    await expect(sellBasket({}, form({ line: ['p1:32', 'p2:12'] }))).resolves.toMatchObject({
+      success: '2 articles vendus · 44,00 €',
+      sold: 2,
+    });
+  });
+
+  it('accorde le message au singulier', async () => {
+    resetMocks({ count: 1, total: 32 });
+    await expect(sellBasket({}, form({ line: ['p1:32'] }))).resolves.toMatchObject({
+      success: '1 article vendu · 32,00 €',
+    });
+  });
+
+  it("refuse un panier vide sans appeler l'API", async () => {
+    await expect(sellBasket({}, form({}))).resolves.toEqual({
+      error: 'Ajoutez au moins un article.',
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('écarte une ligne illisible plutôt que d’envoyer NaN', async () => {
+    await sellBasket({}, form({ line: ['p1:32', 'cassée'] }));
+    expect((dernierAppel().body?.lines as unknown[]).length).toBe(1);
+  });
+
+  it('rafraîchit le tableau de bord, le stock et les relevés', async () => {
+    await sellBasket({}, form({ line: ['p1:32'] }));
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard', 'layout');
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/products', 'layout');
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/depositors', 'layout');
+  });
+
+  it('rend un marqueur neuf, pour que le comptoir se vide', async () => {
+    const a = await sellBasket({}, form({ line: ['p1:32'] }));
+    const b = await sellBasket({}, form({ line: ['p1:32'] }));
+    expect(a.token).not.toBe(b.token);
+  });
+
+  it('remonte le refus de l’API en nommant l’article', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(400, 'Veste : Ce produit est « Rendu au client » : il ne peut plus être vendu.'),
+    );
+    await expect(sellBasket({}, form({ line: ['p1:32'] }))).resolves.toEqual({
+      error: 'Veste : Ce produit est « Rendu au client » : il ne peut plus être vendu.',
     });
   });
 });

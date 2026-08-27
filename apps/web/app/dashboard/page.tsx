@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { Counter } from './counter';
 import { CategoryBars, StockPie, SalesCurve } from '@/components/dashboard-charts';
 import { PeriodSelector } from '@/components/period-selector';
 import { apiFetch, ApiError } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import { eurosNumber, type Dashboard } from '@/lib/types';
 
@@ -80,6 +82,12 @@ export default async function PageTableauDeBord({
         </div>
         <PeriodSelector />
       </div>
+
+      {/* Le comptoir en tête : c'est le geste du quotidien, tout le reste est
+          de la lecture. */}
+      {hasPermission(session, 'products.changeStatus') ? (
+        <Counter shops={session.shops.map((b) => ({ id: b.shopId, name: b.name }))} />
+      ) : null}
 
       {/* La journée en cours passe avant la période : c'est la question qu'on
           se pose en fermant la boutique. */}

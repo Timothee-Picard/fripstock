@@ -2,6 +2,7 @@ import { AssignShopDto } from './assign-shop.dto';
 import { ValueAttributeDto } from './attribute-value.dto';
 import { ChangeStatusDto } from './change-status.dto';
 import { CreateLotDto } from './create-lot.dto';
+import { SellManyDto } from './sell-many.dto';
 import { CreateProductDto } from './create-product.dto';
 import { DepositorPaymentDto } from './depositor-payment.dto';
 import { FilterProductsDto } from './filter-products.dto';
@@ -184,6 +185,53 @@ describe('DTO produits', () => {
       expect(
         validateDto(CreateLotDto, { totalPurchasePrice: 7, lines: [{ salePrice: 10 }] }).errors,
       ).toContain('lines.0.name');
+    });
+  });
+
+  describe('SellManyDto', () => {
+    const panier = { lines: [{ productId: 'p1', soldPrice: 32 }] };
+
+    it('accepte un panier d’un article', () => {
+      expect(isValid(SellManyDto, panier)).toBe(true);
+    });
+
+    it('refuse un panier vide', () => {
+      expect(validateDto(SellManyDto, { lines: [] }).errors).toContain('lines');
+    });
+
+    it('refuse deux fois le même article — il ne se vend qu’une fois', () => {
+      expect(
+        validateDto(SellManyDto, {
+          lines: [
+            { productId: 'p1', soldPrice: 10 },
+            { productId: 'p1', soldPrice: 20 },
+          ],
+        }).errors,
+      ).toContain('lines');
+    });
+
+    it('accepte un article donné, mais pas un prix négatif', () => {
+      expect(isValid(SellManyDto, { lines: [{ productId: 'p1', soldPrice: 0 }] })).toBe(true);
+      expect(isValid(SellManyDto, { lines: [{ productId: 'p1', soldPrice: -1 }] })).toBe(false);
+    });
+
+    it('refuse un prix à trois décimales', () => {
+      expect(isValid(SellManyDto, { lines: [{ productId: 'p1', soldPrice: 1.234 }] })).toBe(false);
+    });
+
+    it('exige le prix de chaque ligne', () => {
+      expect(validateDto(SellManyDto, { lines: [{ productId: 'p1' }] }).errors).toContain(
+        'lines.0.soldPrice',
+      );
+    });
+
+    it('rend statut et date facultatifs', () => {
+      expect(isValid(SellManyDto, { ...panier, statusId: 's1', soldAt: '2026-08-27' })).toBe(true);
+    });
+
+    it('borne le panier à cent articles', () => {
+      const trop = Array.from({ length: 101 }, (_, i) => ({ productId: `p${i}`, soldPrice: 1 }));
+      expect(validateDto(SellManyDto, { lines: trop }).errors).toContain('lines');
     });
   });
 });

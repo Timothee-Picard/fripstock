@@ -131,6 +131,47 @@ export async function createLot(_state: ProductState, data: FormData): Promise<P
   redirect(`/dashboard/products?lot=${created.count}`);
 }
 
+/**
+ * Vente au comptoir : le panier part d'un coup.
+ *
+ * Les prix arrivent déjà répartis — la remise est une affaire d'affichage, ce
+ * qui compte en base est ce que chaque article a réellement rapporté.
+ */
+export async function sellBasket(
+  _state: ProductState,
+  data: FormData,
+): Promise<ProductState & { sold?: number }> {
+  const lines = data
+    .getAll('line')
+    .map(String)
+    .map((brut) => {
+      const [productId, prix] = brut.split(':');
+      return { productId, soldPrice: Number(prix) };
+    })
+    .filter((l) => l.productId && Number.isFinite(l.soldPrice));
+
+  if (lines.length === 0) return { error: 'Ajoutez au moins un article.' };
+
+  let vendu: { count: number; total: number };
+  try {
+    vendu = await apiFetch<{ count: number; total: number }>('/products/sale', {
+      method: 'POST',
+      body: JSON.stringify({ lines }),
+    });
+  } catch (error) {
+    return message(error, 'Vente impossible.');
+  }
+
+  revalidatePath('/dashboard', 'layout');
+  revalidatePath('/dashboard/products', 'layout');
+  revalidatePath('/dashboard/depositors', 'layout');
+  return {
+    success: `${vendu.count} article${vendu.count > 1 ? 's' : ''} vendu${vendu.count > 1 ? 's' : ''} · ${vendu.total.toFixed(2).replace('.', ',')} €`,
+    sold: vendu.count,
+    token: randomUUID(),
+  };
+}
+
 export async function changeStatus(_state: ProductState, data: FormData): Promise<ProductState> {
   const id = String(data.get('id'));
   const soldPrice = numberOrNothing(data, 'soldPrice');

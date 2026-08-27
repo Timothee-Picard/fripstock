@@ -77,6 +77,9 @@ export const BASE_STATUSES = [
 export const BASE_TRANSITIONS: [string, string][] = [
   ['En stock', 'En rayon'],
   ['En stock', 'Réservé'],
+  // Un client peut acheter un article sorti de la réserve : lui imposer un
+  // passage par le rayon bloquerait la vente au comptoir pour rien.
+  ['En stock', 'Vendu'],
   ['En stock', 'Retiré'],
   ['En stock', 'Rendu au client'],
   ['En rayon', 'En stock'],

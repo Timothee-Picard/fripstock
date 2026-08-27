@@ -60,8 +60,8 @@ export function readFormLines(data: FormData): RawLine[] {
  * comme telle.
  */
 export function isBlank(line: RawLine): boolean {
-  const { categoryId: _inherited, ...saisi } = line.cells;
-  return Object.keys(saisi).length === 0 && line.attributes.length === 0;
+  const saisi = Object.keys(line.cells).filter((champ) => champ !== 'categoryId');
+  return saisi.length === 0 && line.attributes.length === 0;
 }
 
 /**

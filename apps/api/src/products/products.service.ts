@@ -20,6 +20,7 @@ import { splitCost } from './lot-split';
 import { consignmentReference, depositorCode, freeCode, resaleReference } from './references';
 import type { AssignShopDto } from './dto/assign-shop.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
+import type { SellManyDto } from './dto/sell-many.dto';
 import type { ChangeStatusDto } from './dto/change-status.dto';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { FilterProductsDto } from './dto/filter-products.dto';
@@ -530,8 +531,24 @@ export class ProductsService {
    */
   async changeStatus(currentUser: CurrentUser, id: string, dto: ChangeStatusDto) {
     const product = await this.loadForWrite(currentUser, id);
-    const current = await this.prisma.status.findUniqueOrThrow({ where: { id: product.statusId } });
-    const target = await this.requireStatus(this.prisma, currentUser, dto.statusId);
+    await this.prisma.$transaction((tx) => this.changeStatusWith(tx, currentUser, product, dto));
+    return this.detail(currentUser, id);
+  }
+
+  /**
+   * Fait passer un produit à un autre statut, dans une transaction ouverte.
+   *
+   * Exposé pour la vente en lot au comptoir : cinq articles passent à vendu
+   * ensemble, ou aucun. Un panier à moitié encaissé serait pire qu'un refus.
+   */
+  async changeStatusWith(
+    tx: Prisma.TransactionClient,
+    currentUser: CurrentUser,
+    product: { id: string; statusId: string; saleType: string; depositContractId: string | null },
+    dto: ChangeStatusDto,
+  ) {
+    const current = await tx.status.findUniqueOrThrow({ where: { id: product.statusId } });
+    const target = await this.requireStatus(tx, currentUser, dto.statusId);
 
     // Le flux de l'entreprise, s'il est défini, dit quelles transitions sont
     // permises. Les règles de flags s'appliquent par-dessus.
@@ -569,7 +586,7 @@ export class ProductsService {
       // Gel de la commission : le relevé, l'export et les stats liront cette
       // valeur, jamais celle du contrat, qui peut changer après coup.
       if (product.saleType === 'CONSIGNMENT' && product.depositContractId) {
-        const contract = await this.prisma.depositContract.findUniqueOrThrow({
+        const contract = await tx.depositContract.findUniqueOrThrow({
           where: { id: product.depositContractId },
           select: { commission: true },
         });
@@ -577,22 +594,97 @@ export class ProductsService {
       }
     }
 
-    await this.prisma.$transaction([
-      this.prisma.product.update({
-        where: { id },
-        data: { status: { connect: { id: target.id } }, ...saleData },
-      }),
-      this.prisma.statusHistory.create({
-        data: {
-          productId: id,
-          statusId: target.id,
-          changedByUserId: currentUser.userId,
-          note: dto.note ?? null,
-        },
-      }),
-    ]);
+    await tx.product.update({
+      where: { id: product.id },
+      data: { status: { connect: { id: target.id } }, ...saleData },
+    });
+    await tx.statusHistory.create({
+      data: {
+        productId: product.id,
+        statusId: target.id,
+        changedByUserId: currentUser.userId,
+        note: dto.note ?? null,
+      },
+    });
+  }
 
-    return this.detail(currentUser, id);
+  /**
+   * Vente au comptoir : plusieurs articles passent à vendu d'un coup.
+   *
+   * Tout dans une transaction : un panier à moitié encaissé laisserait le
+   * vendeur deviner ce qui est passé et ce qui ne l'est pas, client devant lui.
+   * L'article fautif est nommé.
+   */
+  async sellMany(currentUser: CurrentUser, dto: SellManyDto) {
+    const statusId = dto.statusId ?? (await this.saleStatus(currentUser)).id;
+    const soldAt = dto.soldAt ?? new Date().toISOString();
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: dto.lines.map((l) => l.productId) },
+        companyId: currentUser.companyId,
+      },
+      select: {
+        id: true,
+        name: true,
+        statusId: true,
+        saleType: true,
+        depositContractId: true,
+        shopId: true,
+      },
+    });
+    if (products.length !== dto.lines.length) {
+      throw new BadRequestException("Un article cité n'appartient pas à votre entreprise.");
+    }
+    for (const produit of products) {
+      await this.requireShopAccess(currentUser, produit.shopId);
+    }
+
+    const parId = new Map(products.map((p) => [p.id, p]));
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const ligne of dto.lines) {
+        const produit = parId.get(ligne.productId)!;
+        try {
+          await this.changeStatusWith(tx, currentUser, produit, {
+            statusId,
+            soldPrice: ligne.soldPrice,
+            soldAt,
+          });
+        } catch (error) {
+          throw new BadRequestException(`${produit.name} : ${(error as Error).message}`);
+        }
+      }
+    });
+
+    return {
+      count: dto.lines.length,
+      total: Math.round(dto.lines.reduce((t, l) => t + l.soldPrice, 0) * 100) / 100,
+      soldAt,
+    };
+  }
+
+  /**
+   * Statut de vente de l'entreprise.
+   *
+   * C'est le flag `isSale` qui décide, jamais le libellé : le gérant peut
+   * renommer ses statuts (voir CLAUDE.md). Plusieurs statuts de vente restent
+   * possibles, il faut alors dire lequel.
+   */
+  private async saleStatus(currentUser: CurrentUser) {
+    const ventes = await this.prisma.status.findMany({
+      where: { companyId: currentUser.companyId, isSale: true },
+      select: { id: true, name: true },
+    });
+    if (ventes.length === 0) {
+      throw new BadRequestException("Aucun statut de vente n'est défini pour cette entreprise.");
+    }
+    if (ventes.length > 1) {
+      throw new BadRequestException(
+        `Plusieurs statuts de vente existent (${ventes.map((s) => s.name).join(', ')}) : précisez lequel.`,
+      );
+    }
+    return ventes[0];
   }
 
   /**
