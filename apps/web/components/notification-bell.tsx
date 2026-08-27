@@ -12,7 +12,17 @@ import type { Notifications } from '@/lib/types';
  * alerte lue la masque pour tout le monde. Assumé pour le MVP, c'est noté dans
  * le README.
  */
-export function NotificationBell({ data }: { data: Notifications }) {
+export function NotificationBell({
+  data,
+  align = 'right',
+}: {
+  data: Notifications;
+  /**
+   * Bord auquel le panneau s'accroche. `left` depuis le menu latéral : ancré à
+   * droite, il sortirait de l'écran par la gauche.
+   */
+  align?: 'left' | 'right';
+}) {
   const [open, setOpen] = useState(false);
   const { notifications, unread } = data;
 
@@ -56,7 +66,9 @@ export function NotificationBell({ data }: { data: Notifications }) {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-10 cursor-default"
           />
-          <div className="absolute right-0 z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white shadow-lg">
+          <div
+            className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white shadow-lg`}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
               <span className="text-sm font-medium text-slate-900">Alertes</span>
               {unread > 0 ? (
