@@ -23,6 +23,27 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/**
+ * Libellés lisibles des permissions.
+ *
+ * Une clé technique n'a rien à faire sous les yeux d'un utilisateur : un refus
+ * doit nommer le droit tel qu'il apparaît sur l'écran des accès, sinon
+ * l'employé ne sait pas quoi demander à son gérant.
+ */
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  'products.view': 'Voir les produits',
+  'products.create': 'Créer des produits',
+  'products.update': 'Modifier des produits',
+  'products.delete': 'Supprimer des produits',
+  'products.changeStatus': 'Changer le statut',
+  'categories.manage': 'Gérer les catégories',
+  'attributes.manage': 'Gérer les attributs',
+  'depositors.manage': 'Gérer les déposants',
+  'deposits.manage': 'Gérer les dépôts',
+  'stats.view': 'Voir les statistiques',
+  'export.csv': 'Exporter en CSV',
+};
+
 /** Permissions d'un employé sur une boutique donnée. Absent = refusé. */
 export type PermissionMap = Partial<Record<Permission, boolean>>;
 

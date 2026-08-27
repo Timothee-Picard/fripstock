@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { SHOP_SOURCE_KEY, type ShopSource } from '../decorators/shop-source.decorator';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
-import { readPermissions, type Permission } from '../permissions';
+import { PERMISSION_LABELS, readPermissions, type Permission } from '../permissions';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../types/current-user';
 
@@ -53,10 +53,13 @@ export class PermissionsGuard implements CanActivate {
       const compte = await this.prisma.shopAccess.count({
         where: {
           userId: user.userId,
+          // Scoping par la relation, comme partout : `ShopAccess` n'a pas de
+          // colonne companyId.
+          shop: { companyId: user.companyId },
           permissions: { path: [permission], equals: true },
         },
       });
-      if (compte === 0) this.deny(permission);
+      if (compte === 0) this.deny(permission, false);
       return true;
     }
 
@@ -73,7 +76,7 @@ export class PermissionsGuard implements CanActivate {
     });
 
     if (!accesses || readPermissions(accesses.permissions)[permission] !== true) {
-      this.deny(permission);
+      this.deny(permission, true);
     }
     return true;
   }
@@ -111,7 +114,20 @@ export class PermissionsGuard implements CanActivate {
     return null;
   }
 
-  private deny(permission: Permission): never {
-    throw new ForbiddenException(`Permission manquante : ${permission}`);
+  /**
+   * Refus lisible.
+   *
+   * `enBoutique` distingue les deux refus possibles : le droit peut exister
+   * ailleurs et manquer ici. Sans cette nuance, un employé qui voit
+   * « Modifier des produits » coché sur son profil ne comprendrait pas pourquoi
+   * l'action échoue sur cette boutique-là.
+   */
+  private deny(permission: Permission, enBoutique: boolean): never {
+    const libelle = PERMISSION_LABELS[permission];
+    throw new ForbiddenException(
+      enBoutique
+        ? `Vous n'avez pas le droit « ${libelle} » sur cette boutique.`
+        : `Vous n'avez pas le droit « ${libelle} ».`,
+    );
   }
 }

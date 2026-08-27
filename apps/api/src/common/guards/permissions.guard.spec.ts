@@ -93,6 +93,25 @@ describe('PermissionsGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
+  it('nomme le droit en français plutôt que sa clé technique', async () => {
+    const { guard } = mount({
+      permission: 'products.update',
+      accesTrouve: { permissions: { 'products.view': true } },
+    });
+    const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+    await expect(guard.canActivate(ctx)).rejects.toThrow(
+      "Vous n'avez pas le droit « Modifier des produits » sur cette boutique.",
+    );
+  });
+
+  it('omet la boutique quand le refus porte sur le stock central', async () => {
+    const { guard } = mount({ permission: 'products.update', compteStockCentral: 0 });
+    const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
+    await expect(guard.canActivate(ctx)).rejects.toThrow(
+      "Vous n'avez pas le droit « Modifier des produits ».",
+    );
+  });
+
   it("refuse quand l'employé n'a aucun accès à la boutique visée", async () => {
     const { guard } = mount({ permission: 'products.view', accesTrouve: null });
     const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'autre' }, body: {}, query: {} });
