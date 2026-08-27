@@ -85,6 +85,38 @@ export default async function PageTableauDeBord({
         </p>
       </div>
 
+      {/* La journée en cours et le comptoir disent le présent : ils ne
+          dépendent pas de la période, et passent donc avant le trait. */}
+      <section className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-900">
+        <h2 className="text-sm font-medium">
+          Aujourd&apos;hui
+          <span className="ml-2 text-xs font-normal text-emerald-700">
+            {new Date(today.date).toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </span>
+        </h2>
+        {today.count === 0 ? (
+          <p className="text-sm text-emerald-700">Aucune vente pour l&apos;instant.</p>
+        ) : (
+          <>
+            <p className="text-sm">
+              <strong className="text-lg font-semibold">{eurosNumber(today.revenue)}</strong>
+              <span className="ml-1.5 text-emerald-700">encaissés</span>
+            </p>
+            <p className="text-sm">
+              <strong className="text-lg font-semibold">{eurosNumber(today.margin)}</strong>
+              <span className="ml-1.5 text-emerald-700">de marge</span>
+            </p>
+            <p className="text-sm text-emerald-700">
+              {today.count} vente{today.count > 1 ? 's' : ''}
+            </p>
+          </>
+        )}
+      </section>
+
       {/* Le comptoir dépend de la boutique choisie en haut, pas de la période :
           il était jusqu'ici collé aux raccourcis 7 jours / 3 mois, qui ne le
           concernent en rien. */}
@@ -102,38 +134,6 @@ export default async function PageTableauDeBord({
         </div>
         <PeriodSelector />
       </div>
-
-      {/* La journée en cours passe avant la période : c'est la question qu'on
-          se pose en fermant la boutique. */}
-      <section className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-lg border border-slate-900 bg-slate-900 px-5 py-4 text-white">
-        <h2 className="text-sm font-medium">
-          Aujourd&apos;hui
-          <span className="ml-2 text-xs font-normal text-slate-300">
-            {new Date(today.date).toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-            })}
-          </span>
-        </h2>
-        {today.count === 0 ? (
-          <p className="text-sm text-slate-300">Aucune vente pour l&apos;instant.</p>
-        ) : (
-          <>
-            <p className="text-sm">
-              <strong className="text-lg font-semibold">{eurosNumber(today.revenue)}</strong>
-              <span className="ml-1.5 text-slate-300">encaissés</span>
-            </p>
-            <p className="text-sm">
-              <strong className="text-lg font-semibold">{eurosNumber(today.margin)}</strong>
-              <span className="ml-1.5 text-slate-300">de marge</span>
-            </p>
-            <p className="text-sm text-slate-300">
-              {today.count} vente{today.count > 1 ? 's' : ''}
-            </p>
-          </>
-        )}
-      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Chiffre
