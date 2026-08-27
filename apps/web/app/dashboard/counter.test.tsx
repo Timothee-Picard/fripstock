@@ -226,6 +226,91 @@ describe('Counter', () => {
     expect(await screen.findByLabelText('Prix de Pull unique')).toBeInTheDocument();
   });
 
+  describe('navigation au clavier', () => {
+    const trois = [
+      article({ id: 'p1', reference: 'A-0001', name: 'Veste en jean' }),
+      article({ id: 'p2', reference: 'A-0002', name: 'Veste tailleur' }),
+      article({ id: 'p3', reference: 'A-0003', name: 'Veste polaire' }),
+    ];
+
+    /** Proposition surlignée, telle qu'annoncée aux lecteurs d'écran. */
+    const surlignee = () =>
+      screen.queryAllByRole('option').find((o) => o.getAttribute('aria-selected') === 'true')
+        ?.textContent;
+
+    async function proposer() {
+      trouve(...trois);
+      render(<Counter {...BOUTIQUE} />);
+      await userEvent.type(champ(), 'veste');
+      await screen.findAllByRole('option');
+    }
+
+    it('n’en surligne aucune tant qu’on n’a pas touché aux flèches', async () => {
+      await proposer();
+      expect(surlignee()).toBeUndefined();
+    });
+
+    it('descend et remonte dans la liste', async () => {
+      await proposer();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(surlignee()).toContain('Veste en jean');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(surlignee()).toContain('Veste tailleur');
+      await userEvent.keyboard('{ArrowUp}');
+      expect(surlignee()).toContain('Veste en jean');
+    });
+
+    it('boucle : après la dernière, on revient au champ puis en tête', async () => {
+      await proposer();
+      await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+      expect(surlignee()).toContain('Veste polaire');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(surlignee()).toBeUndefined();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(surlignee()).toContain('Veste en jean');
+    });
+
+    it('remonte du champ vers la dernière proposition', async () => {
+      await proposer();
+      await userEvent.keyboard('{ArrowUp}');
+      expect(surlignee()).toContain('Veste polaire');
+    });
+
+    it('Entrée ajoute la proposition surlignée', async () => {
+      await proposer();
+      await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+      expect(await screen.findByLabelText('Prix de Veste tailleur')).toBeInTheDocument();
+    });
+
+    it('Échap referme la liste sans rien ajouter', async () => {
+      await proposer();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('repart de zéro dès qu’on retape', async () => {
+      await proposer();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(surlignee()).toContain('Veste en jean');
+      await userEvent.type(champ(), 's');
+      expect(surlignee()).toBeUndefined();
+    });
+
+    it('désigne la proposition surlignée au lecteur d’écran', async () => {
+      await proposer();
+      expect(champ()).toHaveAttribute('aria-expanded', 'true');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(champ()).toHaveAttribute('aria-activedescendant', 'comptoir-option-0');
+    });
+
+    it('suit aussi la souris, pour que les deux ne se contredisent pas', async () => {
+      await proposer();
+      await userEvent.hover(screen.getAllByRole('button', { name: /Veste polaire/ })[0]);
+      expect(surlignee()).toContain('Veste polaire');
+    });
+  });
+
   it('ne montre le panier que lorsqu’il contient quelque chose', () => {
     render(<Counter {...BOUTIQUE} />);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();

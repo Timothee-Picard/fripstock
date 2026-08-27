@@ -44,6 +44,9 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
   const [remise, setRemise] = useState('');
   const [erreur, setErreur] = useState<string | null>(null);
   const champ = useRef<HTMLInputElement>(null);
+  const liste = useRef<HTMLUListElement>(null);
+  /** Proposition surlignée au clavier. -1 : aucune. */
+  const [survole, setSurvole] = useState(-1);
 
   // Le panier se vide au succès, et le curseur retourne dans le champ : au
   // comptoir, le client suivant attend déjà.
@@ -90,6 +93,7 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
     setErreur(null);
     setSaisie('');
     setPropositions([]);
+    setSurvole(-1);
     setLignes((current) =>
       current.some((l) => l.product.id === product.id)
         ? current
@@ -132,6 +136,44 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
   // dérivé du champ plutôt que remis à zéro dans l'effet : effacer sa saisie
   // doit vider la liste tout de suite, sans attendre un rendu de plus.
   const affichees = saisie.trim().length < 2 ? [] : propositions;
+  // La liste peut rétrécir sous le curseur, entre deux requêtes : on ramène
+  // alors la sélection à rien plutôt que de désigner un article au hasard.
+  const actif = survole >= affichees.length ? -1 : survole;
+
+  // Une liste plus longue que l'écran doit suivre le clavier, sinon la
+  // sélection disparaît sous le bord.
+  useEffect(() => {
+    if (actif < 0) return;
+    // jsdom n'implémente pas `scrollIntoView` : son absence ne doit pas faire
+    // échouer les tests.
+    liste.current?.children[actif]?.scrollIntoView?.({ block: 'nearest' });
+  }, [actif]);
+
+  /**
+   * Flèches, Entrée, Échap dans le champ.
+   *
+   * Le comptoir se tient au clavier : on descend dans les propositions et on
+   * valide sans lâcher les mains, comme dans n'importe quelle liste de
+   * complétion.
+   */
+  function auClavier(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (affichees.length === 0) return;
+      e.preventDefault();
+      const pas = e.key === 'ArrowDown' ? 1 : -1;
+      // Le champ lui-même est un cran, avant la première proposition : on
+      // raisonne donc sur `n + 1` dans [0, longueur], et la liste boucle —
+      // arrivé en bas, la flèche suivante ramène au champ, puis en tête.
+      const crans = affichees.length + 1;
+      setSurvole((n) => ((n + 1 + pas + crans) % crans) - 1);
+      return;
+    }
+    if (e.key === 'Escape' && affichees.length > 0) {
+      e.preventDefault();
+      setPropositions([]);
+      setSurvole(-1);
+    }
+  }
 
   /**
    * Validation au clavier.
@@ -175,6 +217,8 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
         className="mt-3 flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
+          // Une proposition surlignée l'emporte : c'est celle que l'œil suit.
+          if (actif >= 0) return ajouter(affichees[actif]);
           const terme = saisie.trim();
           if (terme) void valider(terme);
         }}
@@ -185,9 +229,18 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
           value={saisie}
           // Les espaces sautent à la frappe : une référence copiée depuis un
           // tableur en traîne souvent, et une douchette en ajoute parfois.
-          onChange={(e) => setSaisie(e.target.value.replace(/\s+/g, ''))}
+          onChange={(e) => {
+            setSaisie(e.target.value.replace(/\s+/g, ''));
+            setSurvole(-1);
+          }}
+          onKeyDown={auClavier}
           placeholder="A-0042"
           aria-label="Référence ou nom de l'article"
+          role="combobox"
+          aria-expanded={affichees.length > 0}
+          aria-controls="comptoir-propositions"
+          aria-autocomplete="list"
+          aria-activedescendant={actif >= 0 ? `comptoir-option-${actif}` : undefined}
           className={`${CHAMP} max-w-xs font-mono`}
         />
         <Button type="submit" variant="secondary" disabled={cherche || saisie.trim() === ''}>
@@ -198,13 +251,27 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
       {erreur ? <p className="mt-2 text-sm text-red-700">{erreur}</p> : null}
 
       {affichees.length > 0 ? (
-        <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
-          {affichees.map((p) => (
-            <li key={p.id}>
+        <ul
+          ref={liste}
+          id="comptoir-propositions"
+          role="listbox"
+          className="mt-2 max-h-64 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-200"
+        >
+          {affichees.map((p, index) => (
+            <li
+              key={p.id}
+              id={`comptoir-option-${index}`}
+              role="option"
+              aria-selected={index === actif}
+            >
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => ajouter(p)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-slate-50"
+                onMouseEnter={() => setSurvole(index)}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition ${
+                  index === actif ? 'bg-sky-50' : 'hover:bg-slate-50'
+                }`}
               >
                 <span>
                   <span className="font-mono text-xs text-slate-600">{p.reference}</span> {p.name}
