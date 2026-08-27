@@ -151,8 +151,14 @@ export function ContractLines({
               );
               return (
                 <tr key={line.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-2 py-1 text-xs text-slate-500">{index + 1}</td>
-                  <input type="hidden" name="lineId" value={line.id} />
+                  {/* L'input caché tient dans la cellule : un <input> enfant
+                      direct de <tr> est du HTML invalide, que le navigateur
+                      sort de la table au parsing — d'où une divergence
+                      d'hydratation à chaque rendu. */}
+                  <td className="px-2 py-1 text-xs text-slate-500">
+                    {index + 1}
+                    <input type="hidden" name="lineId" value={line.id} />
+                  </td>
                   <td className="p-0">
                     <input
                       name={`line:${line.id}:name`}
