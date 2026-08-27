@@ -135,7 +135,10 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
   // Les propositions ne s'affichent qu'à partir de deux caractères. C'est
   // dérivé du champ plutôt que remis à zéro dans l'effet : effacer sa saisie
   // doit vider la liste tout de suite, sans attendre un rendu de plus.
-  const affichees = saisie.trim().length < 2 ? [] : propositions;
+  // Ce qui est déjà au panier disparaît des propositions : le proposer une
+  // seconde fois ne mènerait à rien, et Entrée dessus semblerait sans effet.
+  const auPanier = new Set(lignes.map((l) => l.product.id));
+  const affichees = saisie.trim().length < 2 ? [] : propositions.filter((p) => !auPanier.has(p.id));
   // La liste peut rétrécir sous le curseur, entre deux requêtes : on ramène
   // alors la sélection à rien plutôt que de désigner un article au hasard.
   const actif = survole >= affichees.length ? -1 : survole;
@@ -186,12 +189,20 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
     setCherche(true);
     setErreur(null);
     try {
-      const trouves = affichees.length > 0 ? affichees : await rechercher(terme);
-      const exact = trouves.find((p) => p.reference?.toLowerCase() === terme.toLowerCase());
+      const trouves = propositions.length > 0 ? propositions : await rechercher(terme);
+      const libres = trouves.filter((p) => !auPanier.has(p.id));
+
+      const exact = libres.find((p) => p.reference?.toLowerCase() === terme.toLowerCase());
       if (exact) return ajouter(exact);
-      if (trouves.length === 1) return ajouter(trouves[0]);
-      if (trouves.length === 0) {
-        setErreur(`Aucun article vendable ne correspond à « ${terme} ».`);
+      if (libres.length === 1) return ajouter(libres[0]);
+      if (libres.length === 0) {
+        // Distinguer les deux : « rien ne correspond » et « c'est déjà pris »
+        // demandent au vendeur deux gestes différents.
+        setErreur(
+          trouves.length > 0
+            ? `« ${terme} » est déjà dans le panier.`
+            : `Aucun article vendable ne correspond à « ${terme} ».`,
+        );
         setPropositions([]);
         return;
       }

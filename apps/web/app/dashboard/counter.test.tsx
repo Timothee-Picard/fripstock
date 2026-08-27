@@ -116,6 +116,43 @@ describe('Counter', () => {
     expect(screen.getAllByText('Veste en jean')).toHaveLength(1);
   });
 
+  describe('un article déjà au panier', () => {
+    it('disparaît des propositions', async () => {
+      trouve(article(), article({ id: 'p2', reference: 'A-0031', name: 'Veste tailleur' }));
+      render(<Counter {...BOUTIQUE} />);
+      await ajouter('A-0042');
+
+      await userEvent.type(champ(), 'veste');
+      const propositions = await screen.findAllByRole('option');
+      expect(propositions.map((o) => o.textContent)).toHaveLength(1);
+      expect(propositions[0].textContent).toContain('Veste tailleur');
+    });
+
+    it('le dit plutôt que de ne rien faire quand on le retape', async () => {
+      trouve(article());
+      render(<Counter {...BOUTIQUE} />);
+      await ajouter('A-0042');
+      await ajouter('A-0042');
+      expect(await screen.findByText(/déjà dans le panier/)).toBeInTheDocument();
+    });
+
+    it('ne se confond pas avec un article introuvable', async () => {
+      render(<Counter {...BOUTIQUE} />);
+      await ajouter('inconnu');
+      expect(await screen.findByText(/Aucun article vendable/)).toBeInTheDocument();
+    });
+
+    it('revient dans les propositions une fois retiré du panier', async () => {
+      trouve(article());
+      render(<Counter {...BOUTIQUE} />);
+      await ajouter('A-0042');
+      await userEvent.click(screen.getByLabelText('Retirer Veste en jean'));
+
+      await userEvent.type(champ(), 'veste');
+      expect((await screen.findAllByRole('option'))[0].textContent).toContain('Veste en jean');
+    });
+  });
+
   it('totalise les prix des étiquettes', async () => {
     trouve(article());
     render(<Counter {...BOUTIQUE} />);
