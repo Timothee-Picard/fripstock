@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Category, Shop, Status } from '@/lib/types';
+import type { Category, Depositor, Shop, Status } from '@/lib/types';
 
 const push = vi.fn();
 let params = new URLSearchParams();
@@ -16,9 +16,12 @@ const { Filters } = await import('./filters');
 const shops = [{ id: 'b1', name: 'Centre-ville' }] as Shop[];
 const categories = [{ id: 'c1', name: 'Sac' }] as Category[];
 const statuses = [{ id: 's1', name: 'En stock' }] as Status[];
+const depositors = [{ id: 'd1', lastName: 'Martin', firstName: 'Sophie' }] as Depositor[];
 
-function rendre() {
-  return render(<Filters shops={shops} categories={categories} statuses={statuses} />);
+function rendre(clients: Depositor[] = depositors) {
+  return render(
+    <Filters shops={shops} categories={categories} statuses={statuses} depositors={clients} />,
+  );
 }
 
 /** Paramètres de la dernière URL poussée. */
@@ -36,6 +39,17 @@ describe('Filters', () => {
     rendre();
     await userEvent.type(screen.getByPlaceholderText('Nom, référence…'), 'bott{Enter}');
     expect(derniereUrl().get('search')).toBe('bott');
+  });
+
+  it('filtre par client déposant', async () => {
+    rendre();
+    await userEvent.selectOptions(screen.getByLabelText('Déposant'), 'd1');
+    expect(derniereUrl().get('depositorId')).toBe('d1');
+  });
+
+  it('cache le filtre déposant à qui n’a pas le droit de les consulter', () => {
+    rendre([]);
+    expect(screen.queryByLabelText('Déposant')).toBeNull();
   });
 
   it('filtre par boutique', async () => {

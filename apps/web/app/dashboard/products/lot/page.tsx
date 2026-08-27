@@ -1,11 +1,17 @@
 import Link from 'next/link';
 import { LotForm } from './form';
+import { AccessDenied } from '@/components/access-denied';
 import { apiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import type { AttributeDefinition, CategoryTree, Shop } from '@/lib/types';
 
 export default async function LotPage() {
-  await requireSession();
+  const session = await requireSession();
+  if (!hasPermission(session, 'products.manage')) {
+    return <AccessDenied what="Achat en lot" permission="products.manage" />;
+  }
+
   const [tree, shops, attributes] = await Promise.all([
     apiFetch<CategoryTree[]>('/categories/tree'),
     apiFetch<Shop[]>('/shops'),

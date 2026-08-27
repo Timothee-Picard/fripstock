@@ -43,7 +43,7 @@ describe('AttributesController', () => {
     ['setCategories', 'attributes.manage'],
     ['delete', 'attributes.manage'],
   ])('%s exige la permission %s', (name, permission) => {
-    expect(route(AttributesController, name).permission).toBe(permission);
+    expect(route(AttributesController, name).permissions).toEqual([permission].flat());
   });
 
   describe('délégation', () => {

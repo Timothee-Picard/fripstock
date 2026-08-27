@@ -33,11 +33,11 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const permission = this.reflector.getAllAndOverride<Permission>(PERMISSION_KEY, [
+    const permissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (!permission) return true;
+    if (!permissions || permissions.length === 0) return true;
 
     const request = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
     const user = request.user;
@@ -49,17 +49,20 @@ export class PermissionsGuard implements CanActivate {
     const shopId = await this.findShop(context, request, user);
 
     if (shopId === null) {
-      // Cas 3 : stock central.
-      const compte = await this.prisma.shopAccess.count({
-        where: {
-          userId: user.userId,
-          // Scoping par la relation, comme partout : `ShopAccess` n'a pas de
-          // colonne companyId.
-          shop: { companyId: user.companyId },
-          permissions: { path: [permission], equals: true },
-        },
-      });
-      if (compte === 0) this.deny(permission, false);
+      // Cas 3 : stock central. Chaque permission s'évalue séparément — la
+      // détenir quelque part suffit, comme partout ailleurs.
+      for (const permission of permissions) {
+        const compte = await this.prisma.shopAccess.count({
+          where: {
+            userId: user.userId,
+            // Scoping par la relation, comme partout : `ShopAccess` n'a pas de
+            // colonne companyId.
+            shop: { companyId: user.companyId },
+            permissions: { path: [permission], equals: true },
+          },
+        });
+        if (compte === 0) this.deny(permission, false);
+      }
       return true;
     }
 
@@ -75,8 +78,9 @@ export class PermissionsGuard implements CanActivate {
       select: { permissions: true },
     });
 
-    if (!accesses || readPermissions(accesses.permissions)[permission] !== true) {
-      this.deny(permission, true);
+    const detenues = readPermissions(accesses?.permissions);
+    for (const permission of permissions) {
+      if (detenues[permission] !== true) this.deny(permission, true);
     }
     return true;
   }

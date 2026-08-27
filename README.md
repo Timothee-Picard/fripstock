@@ -53,10 +53,10 @@ make seed      # jeu de données de démonstration
 
 Le seed est idempotent et crée deux comptes de démonstration, affichés à la fin :
 
-| Compte  | Identifiants                           | Accès                                                                  |
-| ------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| Gérant  | `gerant@fripstock.test` / `fripstock`  | Tous les droits sur toute l'entreprise                                 |
-| Employé | `employe@fripstock.test` / `fripstock` | Boutique Centre-ville, `products.view` et `products.create` uniquement |
+| Compte  | Identifiants                           | Accès                                                                        |
+| ------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| Gérant  | `gerant@fripstock.test` / `fripstock`  | Tous les droits sur toute l'entreprise                                       |
+| Employé | `employe@fripstock.test` / `fripstock` | Boutique Centre-ville : stock ; Boutique Gare : caisse — jamais `stats.view` |
 
 Les permissions de l'employé sont volontairement partielles : tout le reste doit lui
 renvoyer un 403, ce qui rend la restriction testable sans bricoler un compte à la main.
@@ -103,7 +103,7 @@ Trois niveaux d'autorisation, tous appliqués côté API et jamais seulement dan
 | --------------- | --------------------------------------- | -------------------------------------- |
 | Authentifié     | `JwtAuthGuard` global                   | Toute route non `@Public()`            |
 | Gérant          | `@GerantUniquement()`                   | Créer une boutique, inviter un employé |
-| Permission fine | `@RequirePermission('products.create')` | Actions sur les produits (étape 5)     |
+| Permission fine | `@RequirePermission('products.manage')` | Actions sur les produits (étape 5)     |
 
 Le gérant contourne entièrement la table des permissions, une seule fois, dans le guard.
 Pour un employé, `PermissionsGuard` retrouve la boutique concernée de trois façons :

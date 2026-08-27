@@ -24,7 +24,7 @@ export class UploadsController {
    * Aucune boutique n'est visée, la règle du stock central s'applique.
    */
   @Post('photo')
-  @RequirePermission('products.create')
+  @RequirePermission('products.manage')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE_BYTES } }))
   async upload(@AuthUser() currentUser: CurrentUser, @UploadedFile() file: Express.Multer.File) {
     return { key: await this.uploads.savePhoto(currentUser.companyId, file) };

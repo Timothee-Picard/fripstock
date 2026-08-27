@@ -1,7 +1,13 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { SALE_TYPE_LABELS, type Shop, type Category, type Status } from '@/lib/types';
+import {
+  SALE_TYPE_LABELS,
+  type Shop,
+  type Category,
+  type Depositor,
+  type Status,
+} from '@/lib/types';
 
 /**
  * Filtres de la liste. Ils vivent dans l'URL et non dans un état React : la
@@ -12,10 +18,13 @@ export function Filters({
   shops,
   categories,
   statuses,
+  depositors,
 }: {
   shops: Shop[];
   categories: Category[];
   statuses: Status[];
+  /** Vide si l'utilisateur n'a pas le droit de consulter les déposants. */
+  depositors: Depositor[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -104,6 +113,24 @@ export function Filters({
           ))}
         </select>
       </label>
+
+      {depositors.length > 0 ? (
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-slate-700">Déposant</span>
+          <select
+            value={params.get('depositorId') ?? ''}
+            onChange={(e) => apply('depositorId', e.target.value)}
+            className={css}
+          >
+            <option value="">Tous</option>
+            {depositors.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.lastName} {d.firstName}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
 
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-slate-700">Type de vente</span>

@@ -21,7 +21,7 @@ describe('StatsController', () => {
     // Trois droits ouvrent des blocs différents du tableau de bord. Un garde de
     // route ne saurait en exiger qu'un — et le remettre ici refermerait la page
     // à l'employé qui n'a que `stock.view`.
-    expect(route(StatsController, 'dashboard').permission).toBeUndefined();
+    expect(route(StatsController, 'dashboard').permissions).toBeUndefined();
   });
 
   describe('délégation', () => {

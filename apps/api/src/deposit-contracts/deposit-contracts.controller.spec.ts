@@ -41,13 +41,13 @@ describe('DepositContractsController', () => {
   it.each([
     ['list', 'deposits.manage'],
     ['detail', 'deposits.manage'],
-    ['create', 'deposits.manage'],
+    ['create', ['deposits.manage', 'products.manage']],
     ['attach', 'deposits.manage'],
     ['detach', 'deposits.manage'],
     ['update', 'deposits.manage'],
     ['delete', 'deposits.manage'],
   ])('%s exige la permission %s', (name, permission) => {
-    expect(route(DepositContractsController, name).permission).toBe(permission);
+    expect(route(DepositContractsController, name).permissions).toEqual([permission].flat());
   });
 
   describe('délégation', () => {

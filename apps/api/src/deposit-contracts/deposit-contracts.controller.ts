@@ -28,8 +28,15 @@ export class DepositContractsController {
     return this.contracts.detail(currentUser, id);
   }
 
+  /**
+   * Création d'un contrat **et de ses produits** en une passe.
+   *
+   * D'où les deux permissions : la route crée des produits pour de bon, et
+   * `deposits.manage` seule en aurait fait une porte dérobée. Un contrat sans
+   * article n'existe de toute façon pas — on saisit les deux d'un coup.
+   */
   @Post()
-  @RequirePermission('deposits.manage')
+  @RequirePermission('deposits.manage', 'products.manage')
   create(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateContractDto) {
     return this.contracts.create(currentUser, dto);
   }

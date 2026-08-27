@@ -1,6 +1,25 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
 import { SaleType } from '../../generated/prisma/enums';
+
+/**
+ * Colonnes sur lesquelles on peut trier.
+ *
+ * Liste fermée et non un nom de champ libre : `orderBy` part tel quel à Prisma,
+ * et une chaîne venue du client y choisirait une colonne arbitraire.
+ */
+export const PRODUCT_SORTS = [
+  'createdAt',
+  'reference',
+  'name',
+  'salePrice',
+  'soldPrice',
+  'soldAt',
+  'status',
+  'category',
+] as const;
+
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
 export class FilterProductsDto {
   @IsOptional()
@@ -15,6 +34,11 @@ export class FilterProductsDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  /** Client déposant : ses articles, quel que soit le contrat. */
+  @IsOptional()
+  @IsString()
+  depositorId?: string;
 
   @IsOptional()
   @IsString()
@@ -44,6 +68,14 @@ export class FilterProductsDto {
   @IsOptional()
   @IsISO8601()
   soldBefore?: string;
+
+  @IsOptional()
+  @IsIn(PRODUCT_SORTS)
+  sort?: ProductSort;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  direction?: 'asc' | 'desc';
 
   @IsOptional()
   @Type(() => Number)

@@ -23,7 +23,7 @@ import type { CreateLotDto } from './dto/create-lot.dto';
 import type { SellManyDto } from './dto/sell-many.dto';
 import type { ChangeStatusDto } from './dto/change-status.dto';
 import type { CreateProductDto } from './dto/create-product.dto';
-import type { FilterProductsDto } from './dto/filter-products.dto';
+import type { FilterProductsDto, ProductSort } from './dto/filter-products.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import type { UpdateSaleDto } from './dto/update-sale.dto';
 import type { ValueAttributeDto } from './dto/attribute-value.dto';
@@ -134,7 +134,7 @@ export class ProductsService {
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: this.orderBy(filters),
         skip: (page - 1) * perPage,
         take: perPage,
         include: {
@@ -159,7 +159,7 @@ export class ProductsService {
   async exportCsv(currentUser: CurrentUser, filters: FilterProductsDto): Promise<string> {
     const products = await this.prisma.product.findMany({
       where: await this.buildFilter(currentUser, filters),
-      orderBy: { createdAt: 'desc' },
+      orderBy: this.orderBy(filters),
       include: {
         category: { select: { name: true } },
         shop: { select: { name: true } },
@@ -249,6 +249,30 @@ export class ProductsService {
    * le même sous-ensemble, sinon exportCsv « ce qu'on voit » devient un
    * mensonge.
    */
+  /**
+   * Ordre de la liste, et donc de l'export : on exporte ce qu'on voit.
+   *
+   * Un second critère sur `id` ferme le tri : à valeurs égales — trois articles
+   * au même prix — Postgres est libre de les rendre dans n'importe quel ordre,
+   * et le même article pourrait apparaître sur deux pages ou sur aucune.
+   */
+  private orderBy(filters: FilterProductsDto): Prisma.ProductOrderByWithRelationInput[] {
+    const sens: Prisma.SortOrder = filters.direction ?? (filters.sort ? 'asc' : 'desc');
+    const colonnes: Record<ProductSort, Prisma.ProductOrderByWithRelationInput> = {
+      createdAt: { createdAt: sens },
+      reference: { reference: sens },
+      name: { name: sens },
+      salePrice: { salePrice: sens },
+      soldPrice: { soldPrice: sens },
+      soldAt: { soldAt: sens },
+      // Par la position dans le flux, pas par le libellé : « En stock » avant
+      // « Vendu » a un sens, l'ordre alphabétique n'en a aucun.
+      status: { status: { position: sens } },
+      category: { category: { name: sens } },
+    };
+    return [colonnes[filters.sort ?? 'createdAt'], { id: 'asc' }];
+  }
+
   private async buildFilter(
     currentUser: CurrentUser,
     filters: FilterProductsDto,
@@ -257,6 +281,9 @@ export class ProductsService {
       companyId: currentUser.companyId,
       ...(await this.shopRestriction(currentUser, filters)),
       ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      // Le déposant se rejoint par le contrat. Le scoping tient au `companyId`
+      // du produit lui-même, posé juste au-dessus.
+      ...(filters.depositorId ? { depositContract: { depositorId: filters.depositorId } } : {}),
       ...(filters.statusId ? { statusId: filters.statusId } : {}),
       ...(filters.saleType ? { saleType: filters.saleType } : {}),
       ...(filters.search

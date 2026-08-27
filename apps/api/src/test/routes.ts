@@ -10,7 +10,7 @@ export interface RouteInfo {
   path: string;
   public: boolean;
   managerOnly: boolean;
-  permission?: string;
+  permissions?: string[];
   shopSourceParam?: string;
 }
 
@@ -31,7 +31,7 @@ export function route(controller: new (...args: never[]) => object, name: string
     path: Reflect.getMetadata(PATH_METADATA, handler) as string,
     public: Reflect.getMetadata(PUBLIC_KEY, handler) === true,
     managerOnly: Reflect.getMetadata(MANAGER_KEY, handler) === true,
-    permission: Reflect.getMetadata(PERMISSION_KEY, handler) as string | undefined,
+    permissions: Reflect.getMetadata(PERMISSION_KEY, handler) as string[] | undefined,
     shopSourceParam: source?.param,
   };
 }

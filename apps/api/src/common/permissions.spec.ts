@@ -17,7 +17,7 @@ describe('permissions', () => {
       expect(
         readPermissions({
           'products.view': true,
-          'products.create': false,
+          'products.manage': false,
           'products.inventer': true,
         }),
       ).toEqual({ 'products.view': true });
@@ -31,7 +31,7 @@ describe('permissions', () => {
     });
 
     it('ignore une valeur vraie non booléenne — seul `true` compte', () => {
-      expect(readPermissions({ 'products.view': 1, 'products.create': 'oui' })).toEqual({});
+      expect(readPermissions({ 'products.view': 1, 'products.manage': 'oui' })).toEqual({});
     });
 
     it('accepte un tableau, qui reste un objet sans clé connue', () => {

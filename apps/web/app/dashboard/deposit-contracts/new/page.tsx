@@ -2,11 +2,17 @@ import Link from 'next/link';
 import { ContractCreateForm } from './form';
 import { AccessDenied } from '@/components/access-denied';
 import { apiFetch, tolerantApiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import type { AttributeDefinition, CategoryTree, Depositor, Shop } from '@/lib/types';
 
 export default async function NewDepositContractPage() {
-  await requireSession();
+  const session = await requireSession();
+  // La création d'un contrat crée aussi ses articles : sans le droit d'en
+  // créer, on n'obtiendrait qu'un contrat vide, ce qui n'a pas de sens.
+  if (!hasPermission(session, 'products.manage')) {
+    return <AccessDenied what="Nouveau contrat de dépôt" permission="products.manage" />;
+  }
 
   const [depositorList, tree, shops, attributes] = await Promise.all([
     tolerantApiFetch<Depositor[]>('/depositors'),

@@ -3,6 +3,7 @@ import { DeadlinesButton } from './forms';
 import { ViewIcon } from '@/components/icons';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import {
   daysUntil,
@@ -31,7 +32,10 @@ function state(contract: DepositContract): { label: string; css: string } {
 }
 
 export default async function DepositContractsPage() {
-  await requireSession();
+  const session = await requireSession();
+  // Un contrat se saisit avec ses articles : sans le droit de créer des
+  // produits, le bouton ne mènerait qu'à un contrat vide.
+  const peutCreer = hasPermission(session, 'products.manage');
   const [list, deposants] = await Promise.all([
     tolerantApiFetch<DepositContract[]>('/deposit-contracts'),
     tolerantApiFetch<Depositor[]>('/depositors'),
@@ -56,7 +60,7 @@ export default async function DepositContractsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <DeadlinesButton />
-          {depositors.length > 0 ? (
+          {peutCreer && depositors.length > 0 ? (
             <Link
               href="/dashboard/deposit-contracts/new"
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"

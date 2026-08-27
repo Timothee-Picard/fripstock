@@ -39,7 +39,7 @@ describe('CategoriesController', () => {
     ['update', 'categories.manage'],
     ['delete', 'categories.manage'],
   ])('%s exige la permission %s', (name, permission) => {
-    expect(route(CategoriesController, name).permission).toBe(permission);
+    expect(route(CategoriesController, name).permissions).toEqual([permission].flat());
   });
 
   describe('délégation', () => {

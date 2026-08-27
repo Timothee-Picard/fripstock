@@ -37,7 +37,7 @@ const DEMO_PASSWORD = 'fripstock';
  */
 const DEMO_STOCK_PERMISSIONS: PermissionMap = {
   'products.view': true,
-  'products.create': true,
+  'products.manage': true,
   'stock.view': true,
 };
 

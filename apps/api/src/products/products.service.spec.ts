@@ -91,6 +91,48 @@ describe('ProductsService', () => {
       );
     });
 
+    it('filtre sur les articles d’un client déposant', async () => {
+      await service.list(manager, { depositorId: 'dep-1' });
+      expect(prisma.product.findMany.mock.calls[0][0].where.depositContract).toEqual({
+        depositorId: 'dep-1',
+      });
+    });
+
+    it('trie par date de création décroissante par défaut', async () => {
+      await service.list(manager, {});
+      expect(prisma.product.findMany.mock.calls[0][0].orderBy).toEqual([
+        { createdAt: 'desc' },
+        { id: 'asc' },
+      ]);
+    });
+
+    it('trie sur la colonne demandée, croissant par défaut', async () => {
+      await service.list(manager, { sort: 'salePrice' });
+      expect(prisma.product.findMany.mock.calls[0][0].orderBy[0]).toEqual({ salePrice: 'asc' });
+    });
+
+    it('respecte le sens demandé', async () => {
+      await service.list(manager, { sort: 'reference', direction: 'desc' });
+      expect(prisma.product.findMany.mock.calls[0][0].orderBy[0]).toEqual({ reference: 'desc' });
+    });
+
+    it('trie les statuts par position dans le flux, pas par libellé', async () => {
+      await service.list(manager, { sort: 'status' });
+      // « En stock » avant « Vendu » a un sens ; l'ordre alphabétique n'en a
+      // aucun, et le gérant peut de toute façon renommer ses statuts.
+      expect(prisma.product.findMany.mock.calls[0][0].orderBy[0]).toEqual({
+        status: { position: 'asc' },
+      });
+    });
+
+    it('ferme toujours le tri sur l’identifiant', async () => {
+      // Sans ce second critère, trois articles au même prix peuvent changer
+      // d'ordre entre deux pages : l'un apparaîtrait deux fois, l'autre jamais.
+      await service.list(manager, { sort: 'salePrice' });
+      const orderBy = prisma.product.findMany.mock.calls[0][0].orderBy;
+      expect(orderBy[orderBy.length - 1]).toEqual({ id: 'asc' });
+    });
+
     it('cherche à la fois dans le nom, la référence et la description', async () => {
       await service.list(manager, { search: 'bott' });
       const or = prisma.product.findMany.mock.calls[0][0].where.OR;

@@ -63,7 +63,7 @@ export class ProductsController {
   }
 
   @Post()
-  @RequirePermission('products.create')
+  @RequirePermission('products.manage')
   create(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateProductDto) {
     return this.products.create(currentUser, dto);
   }
@@ -76,7 +76,7 @@ export class ProductsController {
    * central s'applique, comme pour la création d'un produit.
    */
   @Post('lot')
-  @RequirePermission('products.create')
+  @RequirePermission('products.manage')
   createLot(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateLotDto) {
     return this.products.createLot(currentUser, dto);
   }
@@ -95,7 +95,7 @@ export class ProductsController {
   }
 
   @Put(':id')
-  @RequirePermission('products.update')
+  @RequirePermission('products.manage')
   @ShopFromResource('id', shopOfProduct)
   update(
     @AuthUser() currentUser: CurrentUser,
@@ -106,7 +106,7 @@ export class ProductsController {
   }
 
   @Put(':id/assign-shop')
-  @RequirePermission('products.update')
+  @RequirePermission('products.manage')
   @ShopFromResource('id', shopOfProduct)
   assignShop(
     @AuthUser() currentUser: CurrentUser,
@@ -118,7 +118,7 @@ export class ProductsController {
 
   /** Corrige une vente déjà enregistrée : prix encaissé, date, commission. */
   @Put(':id/sale')
-  @RequirePermission('products.update')
+  @RequirePermission('products.manage')
   @ShopFromResource('id', shopOfProduct)
   updateSale(
     @AuthUser() currentUser: CurrentUser,

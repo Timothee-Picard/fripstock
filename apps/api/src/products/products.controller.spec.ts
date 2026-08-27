@@ -45,17 +45,17 @@ describe('ProductsController', () => {
     ['list', 'products.view'],
     ['exportCsv', 'export.csv'],
     ['detail', 'products.view'],
-    ['create', 'products.create'],
-    ['createLot', 'products.create'],
+    ['create', 'products.manage'],
+    ['createLot', 'products.manage'],
     ['sellMany', 'products.changeStatus'],
-    ['update', 'products.update'],
-    ['assignShop', 'products.update'],
-    ['updateSale', 'products.update'],
+    ['update', 'products.manage'],
+    ['assignShop', 'products.manage'],
+    ['updateSale', 'products.manage'],
     ['depositorPayment', 'deposits.manage'],
     ['changeStatus', 'products.changeStatus'],
     ['delete', 'products.delete'],
   ])('%s exige la permission %s', (name, permission) => {
-    expect(route(ProductsController, name).permission).toBe(permission);
+    expect(route(ProductsController, name).permissions).toEqual([permission].flat());
   });
 
   it.each([

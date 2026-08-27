@@ -27,7 +27,7 @@ describe('UploadsController', () => {
     expect(route(UploadsController, 'upload')).toMatchObject({
       method: 'POST',
       path: 'photo',
-      permission: 'products.create',
+      permissions: ['products.manage'],
     });
   });
 
@@ -36,7 +36,7 @@ describe('UploadsController', () => {
       method: 'GET',
       path: 'photo/*key',
       public: false,
-      permission: undefined,
+      permissions: undefined,
     });
   });
 

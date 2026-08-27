@@ -347,14 +347,14 @@ describe('utilisateurs', () => {
         userId: 'u2',
         shopId: ['b1', 'b2'],
         'perm:b1:products.view': 'on',
-        'perm:b1:products.create': 'on',
+        'perm:b1:products.manage': 'on',
         'perm:b2:stats.view': 'on',
       }),
     );
     expect(dernierAppel()).toMatchObject({ route: '/users/u2/access', method: 'PUT' });
     expect(dernierAppel().body).toEqual({
       accesses: [
-        { shopId: 'b1', permissions: ['products.view', 'products.create'] },
+        { shopId: 'b1', permissions: ['products.view', 'products.manage'] },
         { shopId: 'b2', permissions: ['stats.view'] },
       ],
     });

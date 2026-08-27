@@ -3,7 +3,13 @@
 import { useActionState } from 'react';
 import { saveAccess, inviteEmployee, deleteEmployee, type UserState } from './actions';
 import { Alert, Button, Field } from '@/components/field';
-import { PERMISSION_LABELS, PERMISSIONS, type Shop, type Employee } from '@/lib/types';
+import {
+  PERMISSION_HINTS,
+  PERMISSION_LABELS,
+  PERMISSIONS,
+  type Shop,
+  type Employee,
+} from '@/lib/types';
 
 const INITIAL_STATE: UserState = {};
 
@@ -72,17 +78,19 @@ export function AccessForm({ employee, shops }: { employee: Employee; shops: Sho
               <input type="hidden" name="shopId" value={shop.id} />
               <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
                 {PERMISSIONS.map((permission) => (
-                  <label
-                    key={permission}
-                    className="flex items-center gap-2 text-sm text-slate-700"
-                  >
+                  <label key={permission} className="flex gap-2 text-sm text-slate-700">
                     <input
                       type="checkbox"
                       name={`perm:${shop.id}:${permission}`}
                       defaultChecked={checked.has(permission)}
-                      className="size-4 rounded border-slate-400 text-slate-900 accent-slate-900"
+                      className="mt-0.5 size-4 shrink-0 rounded border-slate-400 text-slate-900 accent-slate-900"
                     />
-                    {PERMISSION_LABELS[permission]}
+                    <span>
+                      {PERMISSION_LABELS[permission]}
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        {PERMISSION_HINTS[permission]}
+                      </span>
+                    </span>
                   </label>
                 ))}
               </div>

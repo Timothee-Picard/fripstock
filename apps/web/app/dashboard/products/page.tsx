@@ -1,17 +1,20 @@
 import Link from 'next/link';
 import { DeleteProductButton } from './[id]/detail-actions';
 import { ExportButton } from './export-button';
+import { SortableHeader } from './sortable-header';
 import { EditIcon, ViewIcon } from '@/components/icons';
 import { Filters } from './filters';
 import { StatusBadge } from '@/components/status-badge';
 import { AccessDenied } from '@/components/access-denied';
 import { apiFetch, tolerantApiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import {
   euros,
   SALE_TYPE_LABELS,
   type Shop,
   type Category,
+  type Depositor,
   type ProductPage,
   type Status,
 } from '@/lib/types';
@@ -21,8 +24,11 @@ const KNOWN_FILTERS = [
   'shopId',
   'unassigned',
   'categoryId',
+  'depositorId',
   'statusId',
   'saleType',
+  'sort',
+  'direction',
   'page',
   'perPage',
 ] as const;
@@ -32,7 +38,9 @@ export default async function ProductsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireSession();
+  const session = await requireSession();
+  const peutCreer = hasPermission(session, 'products.manage');
+  const peutExporter = hasPermission(session, 'export.csv');
   const params = await searchParams;
   // Retour de l'achat en lot : le nombre d'articles créés vient de l'URL, le
   // temps d'un rendu, plutôt que d'un état à faire vivre entre deux écrans.
@@ -44,11 +52,14 @@ export default async function ProductsPage({
     if (typeof value === 'string' && value !== '') request.set(key, value);
   }
 
-  const [inventaire, shops, categories, statuses] = await Promise.all([
+  const [inventaire, shops, categories, statuses, depositorList] = await Promise.all([
     tolerantApiFetch<ProductPage>(`/products?${request.toString()}`),
     apiFetch<Shop[]>('/shops'),
     apiFetch<Category[]>('/categories'),
     apiFetch<Status[]>('/statuses'),
+    // Tolérant : filtrer par déposant suppose le droit de les consulter, et
+    // son absence ne doit pas mettre toute la liste en erreur.
+    tolerantApiFetch<Depositor[]>('/depositors'),
   ]);
 
   if (inventaire.denied || !inventaire.data) {
@@ -71,20 +82,26 @@ export default async function ProductsPage({
             {page.total} produit{page.total > 1 ? 's' : ''} — page {page.page} sur {page.pages}
           </p>
         </div>
+        {/* Ne proposer que ce qui aboutira : les deux boutons créent des
+            produits pour de bon, et l'API les refuserait sans le droit. */}
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButton />
-          <Link
-            href="/dashboard/products/lot"
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Achat en lot
-          </Link>
-          <Link
-            href="/dashboard/products/new"
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-          >
-            Nouveau produit
-          </Link>
+          {peutExporter ? <ExportButton /> : null}
+          {peutCreer ? (
+            <>
+              <Link
+                href="/dashboard/products/lot"
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Achat en lot
+              </Link>
+              <Link
+                href="/dashboard/products/new"
+                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+              >
+                Nouveau produit
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -94,7 +111,12 @@ export default async function ProductsPage({
         </p>
       ) : null}
 
-      <Filters shops={shops} categories={categories} statuses={statuses} />
+      <Filters
+        shops={shops}
+        categories={categories}
+        statuses={statuses}
+        depositors={depositorList.data ?? []}
+      />
 
       {page.products.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-600">
@@ -106,11 +128,11 @@ export default async function ProductsPage({
             <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-medium">Photo</th>
-                <th className="px-3 py-2 font-medium">Référence</th>
-                <th className="px-3 py-2 font-medium">Produit</th>
+                <SortableHeader field="reference">Référence</SortableHeader>
+                <SortableHeader field="name">Produit</SortableHeader>
                 <th className="px-3 py-2 font-medium">Boutique</th>
-                <th className="px-3 py-2 font-medium">Prix</th>
-                <th className="px-3 py-2 font-medium">Statut</th>
+                <SortableHeader field="salePrice">Prix</SortableHeader>
+                <SortableHeader field="status">Statut</SortableHeader>
                 <th className="px-3 py-2 font-medium">Actions</th>
               </tr>
             </thead>

@@ -9,8 +9,7 @@
  */
 export const PERMISSIONS = [
   'products.view',
-  'products.create',
-  'products.update',
+  'products.manage',
   'products.delete',
   'products.changeStatus',
   'categories.manage',
@@ -33,14 +32,13 @@ export type Permission = (typeof PERMISSIONS)[number];
  */
 export const PERMISSION_LABELS: Record<Permission, string> = {
   'products.view': 'Voir les produits',
-  'products.create': 'Créer des produits',
-  'products.update': 'Modifier des produits',
+  'products.manage': 'Créer et modifier des produits',
   'products.delete': 'Supprimer des produits',
-  'products.changeStatus': 'Changer le statut',
+  'products.changeStatus': 'Vendre et changer le statut',
   'categories.manage': 'Gérer les catégories',
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
-  'deposits.manage': 'Gérer les dépôts',
+  'deposits.manage': 'Gérer les contrats de dépôt',
   'stats.view': 'Voir les chiffres de vente',
   'stock.view': "Voir l'état du stock",
   'export.csv': 'Exporter en CSV',

@@ -38,7 +38,8 @@ describe('PermissionsGuard', () => {
   }
 
   function mount(options: {
-    permission?: Permission;
+    /** Une seule permission, ou plusieurs : elles se cumulent. */
+    permission?: Permission | Permission[];
     source?: ShopSource;
     accesTrouve?: { permissions: unknown } | null;
     compteStockCentral?: number;
@@ -46,7 +47,9 @@ describe('PermissionsGuard', () => {
     const reflector = {
       getAllAndOverride: (key: string) =>
         key === PERMISSION_KEY
-          ? options.permission
+          ? options.permission === undefined
+            ? undefined
+            : [options.permission].flat()
           : key === SHOP_SOURCE_KEY
             ? options.source
             : undefined,
@@ -70,15 +73,15 @@ describe('PermissionsGuard', () => {
   });
 
   it('laisse toujours passer le gérant, sans lire la table des accès', async () => {
-    const { guard, findFirst } = mount({ permission: 'products.create' });
+    const { guard, findFirst } = mount({ permission: 'products.manage' });
     await expect(guard.canActivate(contexte({ user: GERANT }))).resolves.toBe(true);
     expect(findFirst).not.toHaveBeenCalled();
   });
 
   it('accepte un employé qui a la permission sur la boutique visée', async () => {
     const { guard } = mount({
-      permission: 'products.create',
-      accesTrouve: { permissions: { 'products.create': true } },
+      permission: 'products.manage',
+      accesTrouve: { permissions: { 'products.manage': true } },
     });
     const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -93,22 +96,54 @@ describe('PermissionsGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
+  describe('plusieurs permissions exigées', () => {
+    it('laisse passer qui les détient toutes', async () => {
+      const { guard } = mount({
+        permission: ['deposits.manage', 'products.manage'],
+        accesTrouve: { permissions: { 'deposits.manage': true, 'products.manage': true } },
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it("refuse s'il en manque une, et nomme celle qui manque", async () => {
+      const { guard } = mount({
+        permission: ['deposits.manage', 'products.manage'],
+        accesTrouve: { permissions: { 'deposits.manage': true } },
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(
+        "Vous n'avez pas le droit « Créer et modifier des produits » sur cette boutique.",
+      );
+    });
+
+    it('les exige aussi une à une sur le stock central', async () => {
+      const { guard, count } = mount({
+        permission: ['deposits.manage', 'products.manage'],
+        compteStockCentral: 0,
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+      expect(count).toHaveBeenCalled();
+    });
+  });
+
   it('nomme le droit en français plutôt que sa clé technique', async () => {
     const { guard } = mount({
-      permission: 'products.update',
+      permission: 'products.manage',
       accesTrouve: { permissions: { 'products.view': true } },
     });
     const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).rejects.toThrow(
-      "Vous n'avez pas le droit « Modifier des produits » sur cette boutique.",
+      "Vous n'avez pas le droit « Créer et modifier des produits » sur cette boutique.",
     );
   });
 
   it('omet la boutique quand le refus porte sur le stock central', async () => {
-    const { guard } = mount({ permission: 'products.update', compteStockCentral: 0 });
+    const { guard } = mount({ permission: 'products.manage', compteStockCentral: 0 });
     const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
     await expect(guard.canActivate(ctx)).rejects.toThrow(
-      "Vous n'avez pas le droit « Modifier des produits ».",
+      "Vous n'avez pas le droit « Créer et modifier des produits ».",
     );
   });
 
@@ -131,8 +166,8 @@ describe('PermissionsGuard', () => {
 
   it('lit shopId depuis le body quand il n’est pas dans les params', async () => {
     const { guard, findFirst } = mount({
-      permission: 'products.create',
-      accesTrouve: { permissions: { 'products.create': true } },
+      permission: 'products.manage',
+      accesTrouve: { permissions: { 'products.manage': true } },
     });
     await guard.canActivate(
       contexte({ user: EMPLOYEE, params: {}, body: { shopId: 'depuis-body' }, query: {} }),
@@ -142,13 +177,13 @@ describe('PermissionsGuard', () => {
 
   describe('stock central (aucune boutique visée)', () => {
     it('accepte si la permission est détenue sur au moins une boutique', async () => {
-      const { guard } = mount({ permission: 'products.create', compteStockCentral: 1 });
+      const { guard } = mount({ permission: 'products.manage', compteStockCentral: 1 });
       const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
     });
 
     it('refuse si la permission n’est détenue nulle part', async () => {
-      const { guard } = mount({ permission: 'products.create', compteStockCentral: 0 });
+      const { guard } = mount({ permission: 'products.manage', compteStockCentral: 0 });
       const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     });
@@ -171,7 +206,7 @@ describe('PermissionsGuard', () => {
 
     it('bascule sur la règle du stock central si la ressource n’a pas de boutique', async () => {
       const { guard } = mount({
-        permission: 'products.update',
+        permission: 'products.manage',
         source: { param: 'id', resolver: jest.fn().mockResolvedValue(null) },
         compteStockCentral: 1,
       });

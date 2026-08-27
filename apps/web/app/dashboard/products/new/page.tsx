@@ -1,10 +1,16 @@
 import { ProductForm } from './form';
+import { AccessDenied } from '@/components/access-denied';
 import { apiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import type { Shop, CategoryTree } from '@/lib/types';
 
 export default async function NewProductPage() {
-  await requireSession();
+  const session = await requireSession();
+  if (!hasPermission(session, 'products.manage')) {
+    return <AccessDenied what="Nouveau produit" permission="products.manage" />;
+  }
+
   const [tree, shops] = await Promise.all([
     apiFetch<CategoryTree[]>('/categories/tree'),
     apiFetch<Shop[]>('/shops'),

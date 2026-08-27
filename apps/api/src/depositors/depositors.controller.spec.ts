@@ -40,7 +40,7 @@ describe('DepositorsController', () => {
     ['update', 'depositors.manage'],
     ['delete', 'depositors.manage'],
   ])('%s exige la permission %s', (name, permission) => {
-    expect(route(DepositorsController, name).permission).toBe(permission);
+    expect(route(DepositorsController, name).permissions).toEqual([permission].flat());
   });
 
   describe('délégation', () => {

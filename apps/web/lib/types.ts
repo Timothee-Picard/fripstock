@@ -1,7 +1,20 @@
+/** Colonnes triables de la liste produits. Miroir de `PRODUCT_SORTS` côté API. */
+export const PRODUCT_SORTS = [
+  'createdAt',
+  'reference',
+  'name',
+  'salePrice',
+  'soldPrice',
+  'soldAt',
+  'status',
+  'category',
+] as const;
+
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
 export const PERMISSIONS = [
   'products.view',
-  'products.create',
-  'products.update',
+  'products.manage',
   'products.delete',
   'products.changeStatus',
   'categories.manage',
@@ -18,17 +31,37 @@ export type Permission = (typeof PERMISSIONS)[number];
 /** Libellés lisibles, pour ne pas afficher les clés techniques au gérant. */
 export const PERMISSION_LABELS: Record<Permission, string> = {
   'products.view': 'Voir les produits',
-  'products.create': 'Créer des produits',
-  'products.update': 'Modifier des produits',
+  'products.manage': 'Créer et modifier des produits',
   'products.delete': 'Supprimer des produits',
-  'products.changeStatus': 'Changer le statut',
+  'products.changeStatus': 'Vendre et changer le statut',
   'categories.manage': 'Gérer les catégories',
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
-  'deposits.manage': 'Gérer les dépôts',
+  'deposits.manage': 'Gérer les contrats de dépôt',
   'stats.view': 'Voir les chiffres de vente',
   'stock.view': "Voir l'état du stock",
   'export.csv': 'Exporter en CSV',
+};
+
+/**
+ * Ce que chaque droit ouvre réellement, en une phrase.
+ *
+ * Le libellé seul ne suffit pas : « Changer le statut » ne dit pas qu'il s'agit
+ * de la vente, et le gérant qui coche des cases doit savoir ce qu'il accorde.
+ */
+export const PERMISSION_HINTS: Record<Permission, string> = {
+  'products.view': 'Consulter la liste et les fiches produit.',
+  'products.manage': 'Créer un article, un lot, et corriger une fiche existante.',
+  'products.delete': 'Effacer un article définitivement.',
+  'products.changeStatus':
+    "Encaisser une vente au comptoir, et déplacer un article d'un statut à l'autre.",
+  'categories.manage': "Ajouter et réorganiser l'arborescence des catégories.",
+  'attributes.manage': 'Définir les attributs (taille, couleur…) et leurs options.',
+  'depositors.manage': 'Créer et modifier les fiches des clients déposants.',
+  'deposits.manage': 'Ouvrir un contrat de dépôt, y rattacher des articles, régler les déposants.',
+  'stats.view': "Chiffre d'affaires, marge, panier moyen, taux de retour.",
+  'stock.view': 'Nombre et valeur des articles en boutique, répartition par statut.',
+  'export.csv': 'Télécharger le stock au format tableur.',
 };
 
 export interface ShopAccess {

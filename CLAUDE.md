@@ -164,8 +164,7 @@ Company (le compte parent, un gérant)
 
 ```
 products.view
-products.create
-products.update
+products.manage
 products.delete
 products.changeStatus
 categories.manage
@@ -208,6 +207,16 @@ livrer les chiffres des autres. Avec `?shopId=`, le droit doit être détenu **s
 boutique-là** — le garde de route ne peut plus s'en charger. Le sélecteur de boutique de
 l'en-tête écrit son choix dans l'URL, lue côté serveur ; l'API applique la restriction de
 son côté, elle ne fait pas confiance à l'écran.
+
+**Créer et modifier ne se séparent pas** : `products.manage` couvre les deux. Les
+distinguer produisait un état cassé — un employé créait un article et ne pouvait plus en
+corriger la faute de frappe. `products.delete` (irréversible) et `products.changeStatus`
+(c'est la vente) restent des droits à part.
+
+**Une route qui fait deux choses les exige toutes les deux** : `@RequirePermission` est
+variadique et cumule. Créer un contrat de dépôt crée aussi les produits qui y figurent,
+d'où `@RequirePermission('deposits.manage', 'products.manage')` — n'exiger que le premier
+en faisait une porte dérobée vers la création de produits.
 
 **Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
 clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
