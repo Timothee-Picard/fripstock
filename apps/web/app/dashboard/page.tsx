@@ -176,15 +176,27 @@ export default async function PageTableauDeBord({
 
       {sales || stock ? (
         <>
+          {/* La période ne gouverne que les chiffres de vente : le stock est
+              une photo de l'instant, sa requête ne porte aucune borne de date.
+              Proposer « 7 jours / 3 mois » au-dessus du seul stock promettrait
+              un filtre qui ne filtre rien. */}
           <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-6">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Statistiques</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                {sales ? 'Statistiques' : 'Stock'}
+              </h2>
               <p className="mt-0.5 text-sm text-slate-600">
-                du {new Date(stats.period.from).toLocaleDateString('fr-FR')} au{' '}
-                {new Date(stats.period.to).toLocaleDateString('fr-FR')}
+                {sales ? (
+                  <>
+                    du {new Date(stats.period.from).toLocaleDateString('fr-FR')} au{' '}
+                    {new Date(stats.period.to).toLocaleDateString('fr-FR')}
+                  </>
+                ) : (
+                  "État actuel de la boutique, à l'instant."
+                )}
               </p>
             </div>
-            <PeriodSelector />
+            {sales ? <PeriodSelector /> : null}
           </div>
 
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
@@ -224,9 +236,9 @@ export default async function PageTableauDeBord({
           </div>
 
           <p className="text-xs text-slate-600">
-            Vendu, stock actif et retour se déterminent par le comportement des statuts — vente,
-            sort du stock, invendable ensuite — jamais par leur libellé : les chiffres restent
-            justes après un renaming.
+            {sales
+              ? 'Vendu, stock actif et retour se déterminent par le comportement des statuts — vente, sort du stock, invendable ensuite — jamais par leur libellé : les chiffres restent justes après un renaming.'
+              : 'Le stock actif se détermine par le comportement des statuts — sort du stock ou non — jamais par leur libellé : les chiffres restent justes après un renaming.'}
           </p>
         </>
       ) : (
