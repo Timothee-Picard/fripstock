@@ -1,12 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
-import type { UpdateStatusDto } from './dto/update-status.dto';
 
 @Injectable()
 export class StatusesService {
@@ -35,34 +29,6 @@ export class StatusesService {
         ? outgoingTransitions.map((t) => t.targetId)
         : statuses.filter((s) => s.id !== status.id).map((s) => s.id),
     }));
-  }
-
-  async update(currentUser: CurrentUser, id: string, dto: UpdateStatusDto) {
-    const status = await this.require(currentUser, id);
-    if (dto.name && dto.name !== status.name) await this.rejectDuplicateName(currentUser, dto.name);
-    return this.prisma.status.update({ where: { id }, data: dto });
-  }
-
-  /**
-   * Désigne le statut attribué automatiquement à un produit à sa création.
-   *
-   * L'unicité de `isDefault` par entreprise n'est pas exprimable en index
-   * Prisma (un index sur [companyId, isDefault] interdirait aussi deux
-   * `false`) : elle est tenue ici, dans une transaction qui remet tous les
-   * autres à `false`. Voir le commentaire du modèle Statut.
-   */
-  async setDefault(currentUser: CurrentUser, id: string) {
-    await this.require(currentUser, id);
-
-    await this.prisma.$transaction([
-      this.prisma.status.updateMany({
-        where: { companyId: currentUser.companyId },
-        data: { isDefault: false },
-      }),
-      this.prisma.status.update({ where: { id }, data: { isDefault: true } }),
-    ]);
-
-    return this.list(currentUser);
   }
 
   /**
@@ -102,21 +68,5 @@ export class StatusesService {
       throw new BadRequestException("Aucun statut par défaut n'est défini pour cette entreprise.");
     }
     return status;
-  }
-
-  private async require(currentUser: CurrentUser, id: string) {
-    const status = await this.prisma.status.findFirst({
-      where: { id, companyId: currentUser.companyId },
-    });
-    if (!status) throw new NotFoundException('Statut introuvable.');
-    return status;
-  }
-
-  private async rejectDuplicateName(currentUser: CurrentUser, name: string) {
-    const existing = await this.prisma.status.findFirst({
-      where: { companyId: currentUser.companyId, name },
-      select: { id: true },
-    });
-    if (existing) throw new ConflictException(`Un statut « ${name} » existe déjà.`);
   }
 }

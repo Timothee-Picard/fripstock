@@ -285,31 +285,15 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 
 ### Statuts
 
-`/dashboard/statuses` : renommer, recolorer, désigner celui attribué par défaut. Réservé
-au gérant, sans permission fine — un employé y voit le flux en lecture seule.
+**Les statuts sont des rouages internes, et aucun écran ne les expose.** Les six statuts
+et leurs 16 transitions sont posés à la création de l'entreprise et ne bougent plus : ni
+créés, ni supprimés, ni renommés. L'API n'en garde que la lecture (`GET /statuses`), dont
+la liste des produits, leur fiche et leur changement de statut ont besoin.
 
-**L'écran affiche le cycle de vie** sur un schéma plein écran (`@xyflow/react`), en
-**lecture seule**. On clique un statut pour changer son libellé, sa couleur, ou en faire
-celui attribué par défaut — rien d'autre.
-
-Ni création ni suppression de statut : le flux les référence, un statut ajouté n'aurait
-aucune flèche et resterait inatteignable, sans que rien ne le signale. Le libellé, lui,
-reste libre : c'est exactement pourquoi le comportement tient à des flags.
-
-**Le schéma a deux sens de lecture.** Une progression sort à droite d'un statut et entre
-à gauche du suivant. Un **retour** — « Vendu » qui revient « En rayon » — sort par le bas
-et rentre par le bas, en passant sous le schéma : tiré comme les autres, il traverserait
-tout ce qui le sépare de sa cible. Les retours sont en pointillés, et s'étagent du plus
-court au plus profond pour s'emboîter au lieu de se superposer.
-
-Une entreprise reçoit son flux à la création : 16 transitions et une colonne par étape —
-l'entrée, le rayon, puis les trois sorties de stock regroupées. Les mélanger au parcours
-actif y faisait converger les flèches les unes sur les autres.
-
-Le calcul des flèches vit dans `apps/web/app/dashboard/statuses/flow.ts`, à part et
-testé : le type d'arête déclaré doit correspondre à la table des types, faute de quoi
-React Flow retombe silencieusement sur ses courbes par défaut — ni le typage ni les tests
-d'affichage ne l'auraient vu.
+Un écran de visualisation du flux a existé, puis a été retiré : il donnait à voir de la
+plomberie. Ce qui compte d'un statut n'est pas son nom mais le **comportement porté par
+ses flags**, et ce comportement se lit là où il agit — sur la fiche produit, dans les
+cibles proposées au changement de statut, dans les chiffres du tableau de bord.
 
 Le repli permissif reste dans le code — **sans aucune transition, tous les passages sont
 permis** — parce qu'une entreprise créée avant cette table n'en a pas, et qu'un graphe vide

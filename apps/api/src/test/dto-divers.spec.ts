@@ -8,7 +8,6 @@ import { CreateDepositorDto } from '../depositors/dto/create-depositor.dto';
 import { UpdateDepositorDto } from '../depositors/dto/update-depositor.dto';
 import { CreateShopDto } from '../shops/dto/create-shop.dto';
 import { UpdateShopDto } from '../shops/dto/update-shop.dto';
-import { UpdateStatusDto } from '../statuses/dto/update-status.dto';
 import { InviteUserDto } from '../users/dto/invite-user.dto';
 import { SetAccessDto } from '../users/dto/set-access.dto';
 import { PeriodDto } from '../stats/dto/period.dto';
@@ -162,17 +161,6 @@ describe('DTO boutiques', () => {
 
   it('accepte une modification partielle', () => {
     expect(isValid(UpdateShopDto, {})).toBe(true);
-  });
-});
-
-describe('DTO statuts', () => {
-  it('accepte un renommage seul', () => {
-    expect(isValid(UpdateStatusDto, { name: 'Au dépôt' })).toBe(true);
-  });
-
-  it('refuse une couleur qui n’est pas hexadécimale', () => {
-    expect(isValid(UpdateStatusDto, { color: 'rouge' })).toBe(false);
-    expect(isValid(UpdateStatusDto, { color: '#a1b2c3' })).toBe(true);
   });
 });
 

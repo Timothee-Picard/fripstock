@@ -6,8 +6,6 @@ import { manager } from '../test/fixtures';
 describe('StatusesController', () => {
   const service = {
     list: jest.fn(),
-    update: jest.fn(),
-    setDefault: jest.fn(),
     checkTransition: jest.fn(),
     defaults: jest.fn(),
   } as unknown as StatusesService;
@@ -17,34 +15,24 @@ describe('StatusesController', () => {
     expect(prefix(StatusesController)).toBe('statuses');
   });
 
-  it.each([
-    ['list', 'GET', '/'],
-    ['update', 'PUT', ':id'],
-    ['setDefault', 'PUT', ':id/default'],
-  ])('%s → %s %s', (name, method, path) => {
-    expect(route(StatusesController, name)).toMatchObject({ method, path });
+  it('n’expose que la lecture', () => {
+    // Les statuts sont des rouages internes : aucun écran ne les modifie, et
+    // une route d'écriture sans appelant est une surface offerte pour rien.
+    const methodes = Object.getOwnPropertyNames(StatusesController.prototype).filter(
+      (n) => n !== 'constructor',
+    );
+    expect(methodes).toEqual(['list']);
+    expect(route(StatusesController, 'list')).toMatchObject({ method: 'GET', path: '/' });
   });
 
-  it.each(['update', 'setDefault'])('%s est réservé au gérant', (name) => {
-    expect(route(StatusesController, name).managerOnly).toBe(true);
+  it('laisse la lecture ouverte à toute l’entreprise', () => {
+    // La liste, la fiche et le changement de statut d'un produit en ont besoin.
+    expect(route(StatusesController, 'list').permissions).toBeUndefined();
+    expect(route(StatusesController, 'list').managerOnly).toBe(false);
   });
 
-  describe('délégation', () => {
-    beforeEach(() => jest.clearAllMocks());
-
-    it('list appelle list', () => {
-      void controller.list(manager);
-      expect(service.list).toHaveBeenCalledWith(manager);
-    });
-
-    it('update appelle update', () => {
-      void controller.update(manager, 's1', { name: 'x' });
-      expect(service.update).toHaveBeenCalledWith(manager, 's1', { name: 'x' });
-    });
-
-    it('setDefault appelle setDefault', () => {
-      void controller.setDefault(manager, 's1');
-      expect(service.setDefault).toHaveBeenCalledWith(manager, 's1');
-    });
+  it('list appelle list', () => {
+    void controller.list(manager);
+    expect(service.list).toHaveBeenCalledWith(manager);
   });
 });

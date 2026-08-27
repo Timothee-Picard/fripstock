@@ -88,13 +88,18 @@ Company (le compte parent, un gérant)
 
 ## Statuts — customisables mais avec comportement métier
 
-- Les statuts (`Status`) sont définis par entreprise. Le gérant en ajuste le **libellé, la
-  couleur et le choix de celui par défaut** — mais ne peut ni en créer ni en supprimer :
-  le flux (`StatusTransition`) les référence, un statut ajouté n'aurait aucune flèche et
-  resterait inatteignable. C'est précisément pour ça que le comportement tient à des flags
-  et non aux noms. Statuts de base à seeder à la création
+- Les statuts (`Status`) sont définis par entreprise, posés à sa création, et **ne
+  bougent plus ensuite** : ni créés, ni supprimés, ni renommés. Ce sont des rouages
+  internes, qu'**aucun écran n'expose** — l'API n'en garde que la lecture
+  (`GET /statuses`), dont la liste des produits, leur fiche et leur changement de statut
+  ont besoin. Le flux (`StatusTransition`) les référence : un statut ajouté n'aurait
+  aucune flèche et resterait inatteignable. Statuts de base à seeder à la création
   d'une entreprise : "En stock", "En rayon", "Réservé", "Vendu", "Rendu au client",
   "Retiré".
+- Ce qui compte d'un statut n'est pas son nom mais le **comportement porté par ses
+  flags**. Le code ne doit jamais se fier au libellé — la règle vaut même si plus
+  personne ne peut renommer un statut : c'est la lisibilité de l'intention qui est en
+  jeu, pas seulement la robustesse.
 - Trois flags booléens sur `Status`, non désactivables par l'UI mais définis à la création
   du statut, pour piloter la logique métier indépendamment du libellé choisi par
   l'utilisateur :
@@ -123,8 +128,8 @@ Company (le compte parent, un gérant)
   sorti de la réserve, lui imposer un passage par le rayon bloquerait la vente au
   comptoir pour rien.
 - Un **flux** (`StatusTransition`) dit quels passages sont autorisés d'un statut à l'autre.
-  Il est posé à la création de l'entreprise et n'est pas modifiable ; l'écran des statuts
-  l'affiche en lecture seule. Les règles de flags s'appliquent **par-dessus** le flux,
+  Il est posé à la création de l'entreprise et n'est pas modifiable, ni par une route ni
+  par un écran. Les règles de flags s'appliquent **par-dessus** le flux,
   jamais à sa place. Repli : tant qu'aucune transition n'existe, tous les passages sont
   permis — un graphe vide bloquerait tout le stock.
 - Chaque changement de statut est tracé dans `StatusHistory` (produit, statut, qui,
@@ -228,8 +233,10 @@ peut pas ouvrir un contrat sans choisir le déposant qu'il lie. Écrire un dépo
 réservé à `depositors.manage` — gérer des contrats ne donne pas le droit de corriger un
 IBAN.
 
-**Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
-clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
+**Statuts** : aucune permission, parce qu'il n'y a plus rien à autoriser — seule la
+lecture subsiste, et elle est ouverte à tout utilisateur de l'entreprise. N'ajoute pas de
+route d'écriture sans qu'un écran l'appelle : une route sans appelant est une surface
+offerte pour rien.
 
 ## Export CSV
 

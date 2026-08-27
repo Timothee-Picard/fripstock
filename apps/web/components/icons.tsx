@@ -93,17 +93,6 @@ export function AttributesIcon() {
   );
 }
 
-export function StatusesIcon() {
-  return (
-    <svg {...commun}>
-      <circle cx="6" cy="6" r="2.5" />
-      <circle cx="18" cy="18" r="2.5" />
-      <path d="M6 8.5V15a3 3 0 0 0 3 3h6" />
-      <path d="M13 15.5 15.5 18 13 20.5" />
-    </svg>
-  );
-}
-
 export function DepositorIcon() {
   return (
     <svg {...commun}>
@@ -188,7 +177,6 @@ export const NAV_ICONS: Record<NavIcon, () => React.ReactElement> = {
   products: ProductsIcon,
   categories: CategoriesIcon,
   attributes: AttributesIcon,
-  statuses: StatusesIcon,
   depositors: DepositorIcon,
   contracts: ContractIcon,
   shops: ShopIcon,

@@ -36,7 +36,6 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   quelque part).
 - `lib/navigation.ts` — entrées du menu, cookie de repli, titre de section.
 - `lib/form-lines.ts` — lecture des tableaux ligne-par-ligne (lot, contrat).
-- `app/dashboard/statuses/flow.ts` — tracé des flèches du flux.
 - `app/dashboard/counter.tsx` — le comptoir de vente.
 
 **Couverture** : seuils Jest imposés côté API — 100 % lignes, fonctions et

@@ -3,7 +3,6 @@ import { ApiError, apiFetch, dernierAppel, form, resetMocks, revalidatePath } fr
 
 const categories = await import('./categories/actions');
 const attributs = await import('./attributes/actions');
-const statuts = await import('./statuses/actions');
 const boutiques = await import('./shops/actions');
 
 beforeEach(() => resetMocks());
@@ -106,32 +105,6 @@ describe('attributs', () => {
   it('supprime un attribut', async () => {
     await attributs.deleteAttribute({}, form({ id: 'a1' }));
     expect(dernierAppel()).toMatchObject({ route: '/attributes/a1', method: 'DELETE' });
-  });
-});
-
-describe('statuts', () => {
-  it('met à jour libellé et couleur', async () => {
-    await statuts.updateStatus({}, form({ id: 's1', name: 'Au dépôt', color: '#112233' }));
-    expect(dernierAppel()).toMatchObject({
-      route: '/statuses/s1',
-      method: 'PUT',
-      body: { name: 'Au dépôt', color: '#112233' },
-    });
-  });
-
-  it('retombe sur une couleur neutre si aucune n’est donnée', async () => {
-    await statuts.updateStatus({}, form({ id: 's1', name: 'x' }));
-    expect(dernierAppel().body).toMatchObject({ color: '#6b7280' });
-  });
-
-  it('désigne le statut par défaut', async () => {
-    await statuts.setDefaultStatus({}, form({ id: 's1' }));
-    expect(dernierAppel()).toMatchObject({ route: '/statuses/s1/default', method: 'PUT' });
-  });
-
-  it('rafraîchit aussi les produits, dont le badge dépend du statut', async () => {
-    await statuts.setDefaultStatus({}, form({ id: 's1' }));
-    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/products', 'layout');
   });
 });
 

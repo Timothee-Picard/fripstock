@@ -14,7 +14,6 @@ export type NavIcon =
   | 'products'
   | 'categories'
   | 'attributes'
-  | 'statuses'
   | 'depositors'
   | 'contracts'
   | 'shops'
@@ -47,7 +46,6 @@ export const NAVIGATION: NavEntry[] = [
   },
   { href: '/dashboard/categories', label: 'Catégories', icon: 'categories' },
   { href: '/dashboard/attributes', label: 'Attributs', icon: 'attributes' },
-  { href: '/dashboard/statuses', label: 'Statuts', icon: 'statuses' },
   {
     href: '/dashboard/depositors',
     label: 'Clients déposants',
