@@ -189,14 +189,16 @@ permission dans **au moins une** boutique de son entreprise l'a aussi sur le sto
 `/stats/dashboard` ne porte donc **pas** de `@RequirePermission`. Trois droits y ouvrent
 des blocs distincts, et le service n'envoie que ceux auxquels l'utilisateur a droit :
 
-| Bloc                                             | Droit                                       | Contenu                                                          |
-| ------------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------- |
-| `sales`, `byDay`, `topCategories`, `topProducts` | `stats.view`                                | Chiffre d'affaires, marge, panier moyen, courbe, classements     |
-| `stock`, `returns`                               | `stock.view`                                | Stock actif et sa valeur, répartition par statut, taux de retour |
-| `today`                                          | `stats.view` **ou** `products.changeStatus` | Recette du jour. `today.margin` n'est joint qu'avec `stats.view` |
+| Bloc                                                        | Droit                                       | Contenu                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------- |
+| `sales`, `byDay`, `topCategories`, `topProducts`, `returns` | `stats.view`                                | Chiffre d'affaires, marge, panier moyen, courbe, classements, taux de retour |
+| `stock`                                                     | `stock.view`                                | Stock actif et sa valeur, répartition par statut                             |
+| `today`                                                     | `stats.view` **ou** `products.changeStatus` | Recette du jour. `today.margin` n'est joint qu'avec `stats.view`             |
 
 Les deux droits sont indépendants : quelqu'un peut gérer le stock sans connaître les
-marges, et tenir la caisse sans voir ni l'un ni l'autre. Un bloc absent de la réponse
+marges, et tenir la caisse sans voir ni l'un ni l'autre. Le **taux de retour** relève de
+`stats.view` et non de `stock.view` : il ne dit pas ce qu'il y a en boutique, mais si les
+dépôts qu'on accepte se vendent — un jugement sur la sélection, du même ordre que la marge. Un bloc absent de la réponse
 n'est pas une panne, c'est un droit qui manque — ne jamais le renvoyer « pour que
 l'interface le masque », la réponse HTTP est lisible par son destinataire.
 

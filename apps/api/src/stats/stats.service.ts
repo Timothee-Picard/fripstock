@@ -119,8 +119,8 @@ function salesBlock(sold: SoldRow[], from: Date) {
   };
 }
 
-/** État du stock et taux de retour. Réservé à `stock.view`. */
-function stockBlock(stock: StockRow[], consignment: { status: { blocksSale: boolean } }[]) {
+/** État du stock : ce qu'il y a en boutique. Réservé à `stock.view`. */
+function stockBlock(stock: StockRow[]) {
   const byStatus = new Map<
     string,
     { id: string; name: string; color: string; leavesStock: boolean; count: number; value: number }
@@ -133,7 +133,6 @@ function stockBlock(stock: StockRow[], consignment: { status: { blocksSale: bool
   }
   const statuses = [...byStatus.values()].map((s) => ({ ...s, value: round(s.value) }));
   const active = statuses.filter((s) => !s.leavesStock);
-  const returned = consignment.filter((p) => p.status.blocksSale).length;
 
   return {
     stock: {
@@ -141,6 +140,19 @@ function stockBlock(stock: StockRow[], consignment: { status: { blocksSale: bool
       active: active.reduce((t, s) => t + s.count, 0),
       activeValue: round(active.reduce((t, s) => t + s.value, 0)),
     },
+  };
+}
+
+/**
+ * Taux de retour : réservé à `stats.view`, avec les autres chiffres de gestion.
+ *
+ * Il ne dit pas ce qu'il y a en boutique, mais si les dépôts qu'on accepte se
+ * vendent — un jugement sur la sélection, du même ordre que la marge. Il n'a
+ * rien à faire avec l'inventaire.
+ */
+function returnsBlock(consignment: { status: { blocksSale: boolean } }[]) {
+  const returned = consignment.filter((p) => p.status.blocksSale).length;
+  return {
     returns: {
       consignmentOverPeriod: consignment.length,
       returned,
@@ -275,11 +287,11 @@ export class StatsService {
         }),
       // Taux de retour : parmi les articles en dépôt-vente créés sur la période,
       // ceux qui ont fini dans un statut bloquant (rendu, retiré).
-      droits.stock &&
+      droits.sales &&
         this.prisma.product.findMany({
           where: {
             ...company,
-            ...droits.stock,
+            ...droits.sales,
             saleType: 'CONSIGNMENT',
             createdAt: { gte: from, lte: to },
           },
@@ -312,7 +324,8 @@ export class StatsService {
           }
         : {}),
       ...(sold ? salesBlock(sold, from) : {}),
-      ...(stock && consignmentPeriod ? stockBlock(stock, consignmentPeriod) : {}),
+      ...(consignmentPeriod ? returnsBlock(consignmentPeriod) : {}),
+      ...(stock ? stockBlock(stock) : {}),
     };
   }
 }

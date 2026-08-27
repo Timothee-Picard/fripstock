@@ -28,22 +28,15 @@ describe('StatsService', () => {
   let service: StatsService;
 
   /**
-   * Les requêtes du tableau de bord, dans l'ordre du Promise.all.
+   * Résultats des requêtes du tableau de bord, dans leur ordre d'appel.
    *
-   * Elles ne sont pas toutes lancées : un bloc auquel l'utilisateur n'a pas
-   * droit ne déclenche aucune requête, et décale donc les suivantes.
+   * Volontairement positionnel et non nommé : elles ne sont pas toutes
+   * lancées — un bloc auquel l'utilisateur n'a pas droit n'en déclenche
+   * aucune, et décale donc les suivantes. Le reste répond vide.
    */
-  function arrange(
-    sold: unknown[],
-    stock: unknown[] = [],
-    consignment: unknown[] = [],
-    today: unknown[] = [],
-  ) {
-    prisma.product.findMany
-      .mockResolvedValueOnce(sold)
-      .mockResolvedValueOnce(stock)
-      .mockResolvedValueOnce(consignment)
-      .mockResolvedValueOnce(today);
+  function arrange(...resultats: unknown[][]) {
+    for (const resultat of resultats) prisma.product.findMany.mockResolvedValueOnce(resultat);
+    prisma.product.findMany.mockResolvedValue([]);
   }
 
   /**
@@ -157,11 +150,12 @@ describe('StatsService', () => {
       arrange([], []);
       const d = await service.dashboard(employee, {});
       expect(d.stock).toBeDefined();
-      expect(d.returns).toBeDefined();
       // Le chiffre d'affaires n'est pas masqué par l'interface : il n'est
       // jamais calculé, donc jamais dans la réponse.
       expect(d.sales).toBeUndefined();
       expect(d.today).toBeUndefined();
+      // Le taux de retour juge la sélection des dépôts, pas l'inventaire.
+      expect(d.returns).toBeUndefined();
     });
 
     it("ne renvoie que les chiffres de vente à qui n'a que stats.view", async () => {
@@ -169,8 +163,8 @@ describe('StatsService', () => {
       arrange([], []);
       const d = await service.dashboard(employee, {});
       expect(d.sales).toBeDefined();
+      expect(d.returns).toBeDefined();
       expect(d.stock).toBeUndefined();
-      expect(d.returns).toBeUndefined();
     });
 
     it('ouvre la recette du jour à qui tient le comptoir, sans la marge', async () => {
@@ -185,7 +179,7 @@ describe('StatsService', () => {
 
     it('donne la marge du jour dès que stats.view est détenu', async () => {
       prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stats.view')]);
-      arrange([], [vendu({ soldPrice: '50', purchasePrice: '10' })]);
+      arrange([], [], [vendu({ soldPrice: '50', purchasePrice: '10' })]);
       const d = await service.dashboard(employee, {});
       expect(d.today?.margin).toBe(40);
     });
