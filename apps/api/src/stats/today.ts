@@ -21,13 +21,21 @@ function offset(instant: Date, timeZone: string): number {
   return surPlace.getTime() - enUtc.getTime();
 }
 
-/** Début et fin de la journée en cours, en instants UTC comparables en base. */
+/**
+ * Début et fin de la journée en cours, en instants UTC comparables en base,
+ * plus le jour calendaire lui-même.
+ *
+ * `day` n'est pas redondant avec `from` : un instant se reformate dans le
+ * fuseau de celui qui l'affiche, et le serveur Next tourne en UTC — minuit à
+ * Paris y redevenait la veille, et la bannière « Aujourd'hui » datait d'hier.
+ * Une date calendaire ne souffre pas de ce glissement.
+ */
 export function dayBounds(
   now: Date = new Date(),
   timeZone: string = SHOP_TIMEZONE,
-): { from: Date; to: Date } {
+): { from: Date; to: Date; day: string } {
   // `en-CA` rend la date au format AAAA-MM-JJ, directement réutilisable.
   const jour = new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
   const minuitLocal = Date.parse(`${jour}T00:00:00Z`) - offset(now, timeZone);
-  return { from: new Date(minuitLocal), to: new Date(minuitLocal + 86400000 - 1) };
+  return { from: new Date(minuitLocal), to: new Date(minuitLocal + 86400000 - 1), day: jour };
 }

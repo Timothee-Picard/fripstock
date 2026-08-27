@@ -24,6 +24,13 @@ describe('dayBounds', () => {
     expect(iso(from).startsWith('2026-08-26T22')).toBe(true);
   });
 
+  it('rend le jour calendaire local, pas celui de l’instant UTC', () => {
+    // 00 h 30 le 27 à Paris, soit encore le 26 en UTC : la bannière doit dire
+    // le 27, sinon elle date d'hier entre minuit et 2 heures du matin.
+    const { day } = dayBounds(new Date('2026-08-26T22:30:00Z'), 'Europe/Paris');
+    expect(day).toBe('2026-08-27');
+  });
+
   it('couvre exactement vingt-quatre heures', () => {
     const { from, to } = dayBounds(new Date('2026-08-27T12:00:00Z'), 'Europe/Paris');
     expect(to.getTime() - from.getTime()).toBe(86400000 - 1);
