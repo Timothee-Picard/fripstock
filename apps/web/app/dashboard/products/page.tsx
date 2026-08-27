@@ -34,6 +34,9 @@ export default async function ProductsPage({
 }) {
   await requireSession();
   const params = await searchParams;
+  // Retour de l'achat en lot : le nombre d'articles créés vient de l'URL, le
+  // temps d'un rendu, plutôt que d'un état à faire vivre entre deux écrans.
+  const lotCree = Number(params.lot ?? 0) || 0;
 
   const request = new URLSearchParams();
   for (const key of KNOWN_FILTERS) {
@@ -65,11 +68,17 @@ export default async function ProductsPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Produits</h1>
           <p className="mt-1 text-sm text-slate-600">
-            {page.total} product{page.total > 1 ? 's' : ''} — page {page.page} sur {page.pages}
+            {page.total} produit{page.total > 1 ? 's' : ''} — page {page.page} sur {page.pages}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ExportButton />
+          <Link
+            href="/dashboard/products/lot"
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Achat en lot
+          </Link>
           <Link
             href="/dashboard/products/new"
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
@@ -78,6 +87,12 @@ export default async function ProductsPage({
           </Link>
         </div>
       </div>
+
+      {lotCree ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {lotCree} article{lotCree > 1 ? 's' : ''} créé{lotCree > 1 ? 's' : ''} depuis le lot.
+        </p>
+      ) : null}
 
       <Filters shops={shops} categories={categories} statuses={statuses} />
 

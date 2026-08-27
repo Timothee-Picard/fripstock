@@ -14,7 +14,9 @@ import {
   type ApplicableAttribute,
   type NormalizedValue,
 } from './attributes.validation';
+import { splitCost } from './lot-split';
 import type { AssignShopDto } from './dto/assign-shop.dto';
+import type { CreateLotDto } from './dto/create-lot.dto';
 import type { ChangeStatusDto } from './dto/change-status.dto';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { FilterProductsDto } from './dto/filter-products.dto';
@@ -56,6 +58,18 @@ const DETAIL_INCLUDE = {
  * La requête est scopée à l'entreprise, sinon elle permettrait de sonder
  * l'existence de produits d'ailleurs.
  */
+/**
+ * Référence d'un exemplaire dans une ligne de lot.
+ *
+ * Un seul exemplaire garde la référence telle quelle ; plusieurs la suffixent,
+ * sans quoi quatre t-shirts porteraient la même — et le gérant ne saurait plus
+ * lequel il a en main.
+ */
+function reference(base: string | undefined, count: number, rang: number): string | undefined {
+  if (!base) return undefined;
+  return count > 1 ? `${base}-${rang + 1}` : base;
+}
+
 export async function shopOfProduct(
   prisma: PrismaService,
   id: string,
@@ -324,6 +338,70 @@ export class ProductsService {
       },
     });
     return created;
+  }
+
+  /**
+   * Achat en lot : un prix payé, plusieurs articles.
+   *
+   * Le lot est acheté, donc tout est créé en achat-revente. Le prix payé est
+   * réparti au prorata des prix de vente (voir lot-split.ts) : chaque article
+   * porte ainsi un prix d'achat cohérent, sans quoi la marge des statistiques
+   * ne veut rien dire.
+   *
+   * Une ligne de plusieurs exemplaires donne autant de produits distincts, et
+   * non un produit de quantité N : le statut porte sur la ligne entière, on ne
+   * saurait pas en vendre un seul.
+   *
+   * Le tout dans une transaction — un lot à moitié créé serait un stock faux.
+   */
+  async createLot(currentUser: CurrentUser, dto: CreateLotDto) {
+    // Chaque exemplaire devient un article à part entière avant le partage :
+    // c'est bien entre les articles, et non entre les lignes, que le prix payé
+    // doit se répartir.
+    const articles = dto.lines.flatMap((ligne, index) => {
+      // `count` décrit la ligne du lot, pas le produit : il est consommé ici,
+      // et chaque exemplaire devient un article distinct de quantité 1.
+      const { count = 1, ...produit } = ligne;
+      return Array.from({ length: count }, (_, rang) => ({
+        produit,
+        index,
+        reference: reference(produit.reference, count, rang),
+      }));
+    });
+
+    const parts = splitCost(
+      dto.totalPurchasePrice,
+      articles.map((a) => Number(a.produit.salePrice ?? 0)),
+    );
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const ids: string[] = [];
+      for (const [rang, article] of articles.entries()) {
+        try {
+          const produit = await this.createWith(tx, currentUser, {
+            ...article.produit,
+            reference: article.reference,
+            shopId: dto.shopId,
+            saleType: 'RESALE',
+            purchasePrice: parts[rang],
+          });
+          ids.push(produit.id);
+        } catch (error) {
+          // Sans le numéro de ligne, le message est inexploitable sur un lot
+          // d'une vingtaine d'articles.
+          throw new BadRequestException(
+            `Ligne ${article.index + 1} (${article.produit.name}) : ${(error as Error).message}`,
+          );
+        }
+      }
+      return ids;
+    });
+
+    return {
+      count: created.length,
+      totalPurchasePrice: dto.totalPurchasePrice,
+      productIds: created,
+    };
   }
 
   async update(currentUser: CurrentUser, id: string, dto: UpdateProductDto) {

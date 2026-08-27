@@ -11,6 +11,7 @@ import {
 
 const {
   assignShop,
+  createLot,
   changeStatus,
   createProduct,
   deleteProduct,
@@ -206,5 +207,113 @@ describe('deleteProduct', () => {
   it('reste sur place et explique en cas de refus', async () => {
     apiFetch.mockRejectedValue(new ApiError(403, 'Interdit.'));
     await expect(deleteProduct({}, form({ id: 'p1' }))).resolves.toEqual({ error: 'Interdit.' });
+  });
+});
+
+describe('createLot', () => {
+  /** Le tableau poste un `lineId` par ligne, plus ses cellules. */
+  function ligne(id: string, champs: Record<string, string | string[]>) {
+    const out: Record<string, string | string[]> = {};
+    for (const [k, v] of Object.entries(champs)) out[`line:${id}:${k}`] = v;
+    return out;
+  }
+
+  const lot = {
+    totalPurchasePrice: '7',
+    lineId: ['a', 'b'],
+    ...ligne('a', { name: 'T-shirt', categoryId: 'c1', salePrice: '10', count: '4' }),
+    ...ligne('b', { name: 'Chemise', categoryId: 'c1', salePrice: '20', count: '2' }),
+  };
+
+  beforeEach(() => resetMocks({ count: 6 }));
+
+  it("n'envoie que le prix du lot : la répartition appartient à l'API", async () => {
+    await attraperRedirection(createLot({}, form(lot)));
+    const { route, method, body } = dernierAppel();
+    expect([route, method]).toEqual(['/products/lot', 'POST']);
+    expect(body?.totalPurchasePrice).toBe(7);
+    expect(body?.lines).toEqual([
+      expect.objectContaining({ name: 'T-shirt', salePrice: 10, count: 4 }),
+      expect.objectContaining({ name: 'Chemise', salePrice: 20, count: 2 }),
+    ]);
+    // Aucun prix d'achat ne part d'ici.
+    expect(JSON.stringify(body)).not.toContain('purchasePrice"');
+  });
+
+  it('accepte la virgule décimale sur le prix du lot', async () => {
+    await attraperRedirection(createLot({}, form({ ...lot, totalPurchasePrice: '7,50' })));
+    expect(dernierAppel().body?.totalPurchasePrice).toBe(7.5);
+  });
+
+  it('traite un prix de lot absent comme un lot gratuit', async () => {
+    await attraperRedirection(createLot({}, form({ ...lot, totalPurchasePrice: '' })));
+    expect(dernierAppel().body?.totalPurchasePrice).toBe(0);
+  });
+
+  it('ignore les lignes sans nom', async () => {
+    await attraperRedirection(
+      createLot(
+        {},
+        form({
+          totalPurchasePrice: '7',
+          lineId: ['a', 'b'],
+          ...ligne('a', { name: 'T-shirt', categoryId: 'c1' }),
+          ...ligne('b', { name: '  ', categoryId: 'c1' }),
+        }),
+      ),
+    );
+    expect((dernierAppel().body?.lines as unknown[]).length).toBe(1);
+  });
+
+  it("refuse un lot vide sans appeler l'API", async () => {
+    await expect(createLot({}, form({ totalPurchasePrice: '7' }))).resolves.toEqual({
+      error: 'Ajoutez au moins un article au lot.',
+    });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('applique la boutique à tout le lot', async () => {
+    await attraperRedirection(createLot({}, form({ ...lot, shopId: 'b1' })));
+    expect(dernierAppel().body?.shopId).toBe('b1');
+  });
+
+  it('laisse au stock central quand aucune boutique n’est choisie', async () => {
+    await attraperRedirection(createLot({}, form(lot)));
+    expect(dernierAppel().body).not.toHaveProperty('shopId');
+  });
+
+  it('rassemble les attributs de la ligne', async () => {
+    await attraperRedirection(
+      createLot(
+        {},
+        form({
+          totalPurchasePrice: '4',
+          lineId: ['a'],
+          ...ligne('a', {
+            name: 'T-shirt',
+            categoryId: 'c1',
+            'attr:at1': 'o-noir',
+            'attr:at2': ['o-s', 'o-m'],
+          }),
+        }),
+      ),
+    );
+    expect((dernierAppel().body?.lines as { attributes: unknown }[])[0].attributes).toEqual([
+      { attributeDefinitionId: 'at1', value: 'o-noir' },
+      { attributeDefinitionId: 'at2', value: ['o-s', 'o-m'] },
+    ]);
+  });
+
+  it('ramène à la liste en annonçant le nombre d’articles créés', async () => {
+    expect(await attraperRedirection(createLot({}, form(lot)))).toBe('/dashboard/products?lot=6');
+  });
+
+  it('remonte l’erreur de l’API en situant la ligne fautive', async () => {
+    apiFetch.mockRejectedValue(
+      new ApiError(400, "Ligne 2 (Chemise) : Cette catégorie n'appartient pas à votre entreprise."),
+    );
+    await expect(createLot({}, form(lot))).resolves.toEqual({
+      error: "Ligne 2 (Chemise) : Cette catégorie n'appartient pas à votre entreprise.",
+    });
   });
 });

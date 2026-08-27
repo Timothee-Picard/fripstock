@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
+import { cellNumber, readFormLines } from '@/lib/form-lines';
 
 export interface ProductState {
   error?: string;
@@ -85,6 +86,48 @@ export async function createProduct(_state: ProductState, data: FormData): Promi
   // Hors du try : redirect() lève une exception de contrôle que le catch
   // présenterait comme une erreur de création.
   redirect(`/dashboard/products/${id}`);
+}
+
+/**
+ * Achat en lot : un prix payé, plusieurs articles.
+ *
+ * Seul le prix du lot part à l'API — c'est elle qui le répartit entre les
+ * articles, au prorata de leur prix de vente. L'écran en montre l'aperçu, mais
+ * la règle ne doit exister qu'à un seul endroit.
+ */
+export async function createLot(_state: ProductState, data: FormData): Promise<ProductState> {
+  const lines = readFormLines(data)
+    .filter(({ cells }) => cells.name)
+    .map(({ cells, attributes }) => ({
+      name: cells.name,
+      categoryId: cells.categoryId ?? '',
+      reference: cells.reference,
+      description: cells.description,
+      internalNote: cells.internalNote,
+      photoUrl: cells.photoUrl,
+      salePrice: cellNumber(cells.salePrice),
+      count: cellNumber(cells.count),
+      ...(attributes.length > 0 ? { attributes } : {}),
+    }));
+
+  if (lines.length === 0) return { error: 'Ajoutez au moins un article au lot.' };
+
+  let created: { count: number };
+  try {
+    created = await apiFetch<{ count: number }>('/products/lot', {
+      method: 'POST',
+      body: JSON.stringify({
+        totalPurchasePrice: numberOrNothing(data, 'totalPurchasePrice') ?? 0,
+        shopId: String(data.get('shopId') ?? '').trim() || undefined,
+        lines,
+      }),
+    });
+  } catch (error) {
+    return message(error, 'Création du lot impossible.');
+  }
+
+  revalidatePath('/dashboard/products');
+  redirect(`/dashboard/products?lot=${created.count}`);
 }
 
 export async function changeStatus(_state: ProductState, data: FormData): Promise<ProductState> {

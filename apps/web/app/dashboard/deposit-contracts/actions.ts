@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
+import { cellNumber, readFormLines } from '@/lib/form-lines';
 
 export interface ContractState {
   error?: string;
@@ -34,21 +35,6 @@ function count(data: FormData, key: string): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-/** Nombre lu dans une cellule du tableau, virgule décimale comprise. */
-function cellNumber(value: FormDataEntryValue | null): number | undefined {
-  const raw = String(value ?? '')
-    .trim()
-    .replace(',', '.');
-  if (raw === '') return undefined;
-  const n = Number(raw);
-  return Number.isNaN(n) ? undefined : n;
-}
-
-function cellText(value: FormDataEntryValue | null): string | undefined {
-  const raw = String(value ?? '').trim();
-  return raw === '' ? undefined : raw;
-}
-
 /** Un article du tableau, au format attendu par l'API. */
 interface ContractLine {
   name: string;
@@ -66,48 +52,24 @@ interface ContractLine {
 /**
  * Articles saisis dans le tableau du formulaire de contrat.
  *
- * Chaque cellule porte un nom `line:<id>:<champ>`, et l'ordre des lignes vient
- * des `lineId` postés par le tableau — l'identifiant est propre au formulaire,
- * il ne sert qu'à regrouper les cellules d'une même ligne.
- *
  * Une ligne sans nom est ignorée : le tableau garde toujours une ligne vide en
  * bas pour la saisie suivante, elle ne doit pas partir à l'API.
  */
 function readLines(data: FormData): ContractLine[] {
-  return data
-    .getAll('lineId')
-    .map(String)
-    .map((id): ContractLine | null => {
-      const cell = (field: string) => data.get(`line:${id}:${field}`);
-      const name = cellText(cell('name'));
-      if (!name) return null;
-
-      // `keys()` répète une clé autant de fois qu'elle porte de valeurs : sans
-      // le dédoublonnage, un attribut multiselect partirait en double.
-      const attributes = [...new Set(data.keys())]
-        .filter((key) => key.startsWith(`line:${id}:attr:`))
-        .map((key) => ({
-          attributeDefinitionId: key.slice(`line:${id}:attr:`.length),
-          values: data.getAll(key).map(String).filter(Boolean),
-        }))
-        .filter((a) => a.values.length > 0)
-        .map((a) => ({
-          attributeDefinitionId: a.attributeDefinitionId,
-          // Une case cochée seule et un multiselect à une valeur sont
-          // indiscernables ici : l'API normalise selon le type réel.
-          value: a.values.length === 1 ? a.values[0] : a.values,
-        }));
-
+  const shopId = String(data.get('shopId') ?? '').trim() || null;
+  return readFormLines(data)
+    .map(({ cells, attributes }): ContractLine | null => {
+      if (!cells.name) return null;
       return {
-        name,
-        categoryId: String(cell('categoryId') ?? ''),
-        shopId: cellText(data.get('shopId')) ?? null,
-        reference: cellText(cell('reference')),
-        description: cellText(cell('description')),
-        internalNote: cellText(cell('internalNote')),
-        photoUrl: cellText(cell('photoUrl')),
-        salePrice: cellNumber(cell('salePrice')),
-        quantity: cellNumber(cell('quantity')),
+        name: cells.name,
+        categoryId: cells.categoryId ?? '',
+        shopId,
+        reference: cells.reference,
+        description: cells.description,
+        internalNote: cells.internalNote,
+        photoUrl: cells.photoUrl,
+        salePrice: cellNumber(cells.salePrice),
+        quantity: cellNumber(cells.quantity),
         ...(attributes.length > 0 ? { attributes } : {}),
       };
     })

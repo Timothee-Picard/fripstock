@@ -6,6 +6,7 @@ import { manager } from '../test/fixtures';
 describe('ProductsController', () => {
   const service = {
     list: jest.fn(),
+    createLot: jest.fn(),
     exportCsv: jest.fn(),
     detail: jest.fn(),
     create: jest.fn(),
@@ -27,6 +28,7 @@ describe('ProductsController', () => {
     ['exportCsv', 'GET', 'export'],
     ['detail', 'GET', ':id'],
     ['create', 'POST', '/'],
+    ['createLot', 'POST', 'lot'],
     ['update', 'PUT', ':id'],
     ['assignShop', 'PUT', ':id/assign-shop'],
     ['updateSale', 'PUT', ':id/sale'],
@@ -42,6 +44,7 @@ describe('ProductsController', () => {
     ['exportCsv', 'export.csv'],
     ['detail', 'products.view'],
     ['create', 'products.create'],
+    ['createLot', 'products.create'],
     ['update', 'products.update'],
     ['assignShop', 'products.update'],
     ['updateSale', 'products.update'],
@@ -124,6 +127,12 @@ describe('ProductsController', () => {
     it('depositorPayment transmet le drapeau de règlement', () => {
       void controller.depositorPayment(manager, 'p1', { paid: true });
       expect(service.toggleDepositorPayment).toHaveBeenCalledWith(manager, 'p1', true);
+    });
+
+    it('createLot passe le lot entier', () => {
+      const lot = { totalPurchasePrice: 7, lines: [{ name: 'T-shirt', categoryId: 'c1' }] };
+      void controller.createLot(manager, lot);
+      expect(service.createLot).toHaveBeenCalledWith(manager, lot);
     });
 
     it('delete appelle delete', () => {

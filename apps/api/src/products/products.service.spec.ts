@@ -271,6 +271,158 @@ describe('ProductsService', () => {
     });
   });
 
+  describe('createLot', () => {
+    const lot = {
+      totalPurchasePrice: 7,
+      lines: [
+        { name: 'T-shirt', categoryId: 'cat-1', salePrice: 10, count: 4 },
+        { name: 'Chemise', categoryId: 'cat-1', salePrice: 20, count: 2 },
+      ],
+    };
+
+    beforeEach(() => {
+      prisma.category.findFirst.mockResolvedValue({ id: 'cat-1' });
+      prisma.shop.findFirst.mockResolvedValue({ id: SHOP_ID });
+      prisma.product.create.mockResolvedValue(product());
+    });
+
+    /** Prix d'achat effectivement écrits, dans l'ordre de création. */
+    function achats(): number[] {
+      return prisma.product.create.mock.calls.map(
+        (c: [{ data: { purchasePrice: number } }]) => c[0].data.purchasePrice,
+      );
+    }
+
+    it('crée un produit distinct par exemplaire, jamais une quantité', async () => {
+      const { count } = await service.createLot(manager, lot);
+      expect(count).toBe(6);
+      expect(prisma.product.create).toHaveBeenCalledTimes(6);
+      expect(
+        prisma.product.create.mock.calls.every(
+          (c: [{ data: { quantity: number } }]) => c[0].data.quantity === 1,
+        ),
+      ).toBe(true);
+    });
+
+    it('répartit le prix payé au prorata des prix de vente', async () => {
+      await service.createLot(manager, lot);
+      expect(achats()).toEqual([0.88, 0.88, 0.87, 0.87, 1.75, 1.75]);
+    });
+
+    it('la somme des prix d’achat retombe sur le prix payé', async () => {
+      await service.createLot(manager, lot);
+      expect(Math.round(achats().reduce((t, p) => t + p, 0) * 100) / 100).toBe(7);
+    });
+
+    it('achète tout en achat-revente : un lot ne se dépose pas', async () => {
+      await service.createLot(manager, lot);
+      expect(
+        prisma.product.create.mock.calls.every(
+          (c: [{ data: { saleType: string; depositContractId: string | null } }]) =>
+            c[0].data.saleType === 'RESALE' && c[0].data.depositContractId === null,
+        ),
+      ).toBe(true);
+    });
+
+    it('suffixe les références des exemplaires multiples', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 4,
+        lines: [{ name: 'T-shirt', categoryId: 'cat-1', reference: 'BTR6', count: 3 }],
+      });
+      expect(
+        prisma.product.create.mock.calls.map(
+          (c: [{ data: { reference: string } }]) => c[0].data.reference,
+        ),
+      ).toEqual(['BTR6-1', 'BTR6-2', 'BTR6-3']);
+    });
+
+    it('laisse la référence intacte pour un exemplaire unique', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 2,
+        lines: [{ name: 'T-shirt', categoryId: 'cat-1', reference: 'BTR6' }],
+      });
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBe('BTR6');
+    });
+
+    it('accepte une ligne sans référence', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 2,
+        lines: [{ name: 'T-shirt', categoryId: 'cat-1', count: 2 }],
+      });
+      expect(prisma.product.create.mock.calls[0][0].data.reference).toBeNull();
+    });
+
+    it('applique la boutique du lot à tous les articles', async () => {
+      await service.createLot(manager, { ...lot, shopId: SHOP_ID });
+      expect(
+        prisma.product.create.mock.calls.every(
+          (c: [{ data: { shopId: string } }]) => c[0].data.shopId === SHOP_ID,
+        ),
+      ).toBe(true);
+    });
+
+    it('laisse le lot au stock central quand aucune boutique n’est choisie', async () => {
+      await service.createLot(manager, lot);
+      expect(prisma.product.create.mock.calls[0][0].data.shopId).toBeNull();
+    });
+
+    it('partage à parts égales quand aucun prix de vente n’est saisi', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 6,
+        lines: [{ name: 'Vrac', categoryId: 'cat-1', count: 3 }],
+      });
+      expect(achats()).toEqual([2, 2, 2]);
+    });
+
+    it('écrit tout dans une seule transaction', async () => {
+      await service.createLot(manager, lot);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('situe l’erreur sur la ligne fautive', async () => {
+      prisma.category.findFirst.mockResolvedValueOnce({ id: 'cat-1' }).mockResolvedValue(null);
+      await expect(
+        service.createLot(manager, {
+          totalPurchasePrice: 4,
+          lines: [
+            { name: 'T-shirt', categoryId: 'cat-1' },
+            { name: 'Chemise', categoryId: 'pirate' },
+          ],
+        }),
+      ).rejects.toThrow("Ligne 2 (Chemise) : Cette catégorie n'appartient pas à votre entreprise.");
+    });
+
+    it('numérote la ligne, et non l’exemplaire', async () => {
+      prisma.category.findFirst
+        .mockResolvedValueOnce({ id: 'cat-1' })
+        .mockResolvedValueOnce({ id: 'cat-1' })
+        .mockResolvedValue(null);
+      await expect(
+        service.createLot(manager, {
+          totalPurchasePrice: 4,
+          lines: [
+            { name: 'T-shirt', categoryId: 'cat-1', count: 2 },
+            { name: 'Chemise', categoryId: 'pirate' },
+          ],
+        }),
+      ).rejects.toThrow('Ligne 2 (Chemise)');
+    });
+
+    it('rend les identifiants créés, pour rebondir sur le stock', async () => {
+      const { productIds, totalPurchasePrice } = await service.createLot(manager, {
+        totalPurchasePrice: 2,
+        lines: [{ name: 'T-shirt', categoryId: 'cat-1' }],
+      });
+      expect(productIds).toEqual(['p1']);
+      expect(totalPurchasePrice).toBe(2);
+    });
+
+    it('trace la création de chaque article dans son historique', async () => {
+      await service.createLot(manager, lot);
+      expect(prisma.statusHistory.create).toHaveBeenCalledTimes(6);
+    });
+  });
+
   describe('changeStatus', () => {
     beforeEach(() => {
       prisma.status.findFirst.mockResolvedValue(sold);

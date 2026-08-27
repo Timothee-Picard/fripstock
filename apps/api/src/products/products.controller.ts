@@ -6,6 +6,7 @@ import { RequirePermission } from '../common/decorators/require-permission.decor
 import type { CurrentUser } from '../common/types/current-user';
 import { AssignShopDto } from './dto/assign-shop.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
+import { CreateLotDto } from './dto/create-lot.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { FilterProductsDto } from './dto/filter-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -64,6 +65,19 @@ export class ProductsController {
   @RequirePermission('products.create')
   create(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateProductDto) {
     return this.products.create(currentUser, dto);
+  }
+
+  /**
+   * Achat en lot : un prix payé, plusieurs articles.
+   *
+   * Déclarée avant `@Put(':id')` sans ambiguïté possible — c'est un POST sur un
+   * chemin littéral. Aucune boutique n'est visée par l'URL : la règle du stock
+   * central s'applique, comme pour la création d'un produit.
+   */
+  @Post('lot')
+  @RequirePermission('products.create')
+  createLot(@AuthUser() currentUser: CurrentUser, @Body() dto: CreateLotDto) {
+    return this.products.createLot(currentUser, dto);
   }
 
   @Put(':id')

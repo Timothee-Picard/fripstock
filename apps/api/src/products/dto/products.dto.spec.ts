@@ -1,6 +1,7 @@
 import { AssignShopDto } from './assign-shop.dto';
 import { ValueAttributeDto } from './attribute-value.dto';
 import { ChangeStatusDto } from './change-status.dto';
+import { CreateLotDto } from './create-lot.dto';
 import { CreateProductDto } from './create-product.dto';
 import { DepositorPaymentDto } from './depositor-payment.dto';
 import { FilterProductsDto } from './filter-products.dto';
@@ -121,6 +122,68 @@ describe('DTO produits', () => {
 
     it('refuse un type de vente inconnu', () => {
       expect(isValid(FilterProductsDto, { saleType: 'TROC' })).toBe(false);
+    });
+  });
+
+  describe('CreateLotDto', () => {
+    const lot = {
+      totalPurchasePrice: 7,
+      lines: [{ name: 'T-shirt', categoryId: 'c1', salePrice: 10, count: 4 }],
+    };
+
+    it('accepte un lot complet', () => {
+      expect(isValid(CreateLotDto, lot)).toBe(true);
+    });
+
+    it('exige le prix payé et au moins une ligne', () => {
+      const { errors } = validateDto(CreateLotDto, {});
+      expect(errors).toEqual(expect.arrayContaining(['totalPurchasePrice', 'lines']));
+    });
+
+    it('refuse un lot sans ligne', () => {
+      expect(validateDto(CreateLotDto, { totalPurchasePrice: 7, lines: [] }).errors).toContain(
+        'lines',
+      );
+    });
+
+    it('accepte un lot gratuit, mais pas un prix négatif', () => {
+      expect(isValid(CreateLotDto, { ...lot, totalPurchasePrice: 0 })).toBe(true);
+      expect(isValid(CreateLotDto, { ...lot, totalPurchasePrice: -1 })).toBe(false);
+    });
+
+    it('refuse un prix payé à trois décimales', () => {
+      expect(isValid(CreateLotDto, { ...lot, totalPurchasePrice: 1.234 })).toBe(false);
+    });
+
+    it("refuse un prix d'achat par ligne — c'est le lot qui le porte", () => {
+      expect(
+        isValid(CreateLotDto, {
+          totalPurchasePrice: 7,
+          lines: [{ name: 'T-shirt', categoryId: 'c1', purchasePrice: 2 }],
+        }),
+      ).toBe(false);
+    });
+
+    it('refuse une quantité par ligne — chaque exemplaire est un produit', () => {
+      expect(
+        isValid(CreateLotDto, {
+          totalPurchasePrice: 7,
+          lines: [{ name: 'T-shirt', categoryId: 'c1', quantity: 4 }],
+        }),
+      ).toBe(false);
+    });
+
+    it('borne le nombre d’exemplaires par ligne', () => {
+      expect(isValid(CreateLotDto, { ...lot, lines: [{ ...lot.lines[0], count: 0 }] })).toBe(false);
+      expect(isValid(CreateLotDto, { ...lot, lines: [{ ...lot.lines[0], count: 101 }] })).toBe(
+        false,
+      );
+    });
+
+    it('valide chaque ligne comme un produit', () => {
+      expect(
+        validateDto(CreateLotDto, { totalPurchasePrice: 7, lines: [{ salePrice: 10 }] }).errors,
+      ).toContain('lines.0.name');
     });
   });
 });

@@ -1,6 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import {
+  AttributeCell,
+  attributeColumns,
+  attributesByCategory,
+  CELL,
+} from '@/components/attribute-columns';
 import { flattenTree, type AttributeDefinition, type CategoryTree } from '@/lib/types';
 
 /**
@@ -23,9 +29,6 @@ const EXTRA_COLUMNS = [
   { key: 'description', label: 'Description' },
   { key: 'internalNote', label: 'Commentaire' },
 ] as const;
-
-const CELL =
-  'w-full border-0 bg-transparent px-2 py-1.5 text-sm text-slate-900 outline-none focus:bg-sky-50';
 
 let compteur = 0;
 function nextId(): string {
@@ -56,25 +59,16 @@ export function ContractLines({
 
   const categories = useMemo(() => flattenTree(tree), [tree]);
 
-  /** Attributs applicables, par catégorie. */
-  const parCategorie = useMemo(() => {
-    const map = new Map<string, AttributeDefinition[]>();
-    for (const a of attributes) {
-      for (const { categoryId } of a.categories) {
-        map.set(categoryId, [...(map.get(categoryId) ?? []), a]);
-      }
-    }
-    return map;
-  }, [attributes]);
-
-  // Colonnes d'attributs : l'union de ce qu'appellent les catégories choisies,
-  // dans l'ordre du catalogue pour que l'ordre des colonnes soit stable.
-  const colonnes = useMemo(() => {
-    const utiles = new Set(
-      lines.flatMap((l) => (parCategorie.get(l.categoryId) ?? []).map((a) => a.id)),
-    );
-    return attributes.filter((a) => utiles.has(a.id));
-  }, [lines, attributes, parCategorie]);
+  const parCategorie = useMemo(() => attributesByCategory(attributes), [attributes]);
+  const colonnes = useMemo(
+    () =>
+      attributeColumns(
+        attributes,
+        parCategorie,
+        lines.map((l) => l.categoryId),
+      ),
+    [lines, attributes, parCategorie],
+  );
 
   const remplies = lines.length;
 
@@ -265,55 +259,4 @@ export function ContractLines({
       </p>
     </div>
   );
-}
-
-/** Cellule d'attribut, dans la forme la plus compacte possible pour son type. */
-function AttributeCell({ attribute, name }: { attribute: AttributeDefinition; name: string }) {
-  if (attribute.type === 'NUMBER') {
-    return <input name={name} type="number" step="any" className={`${CELL} text-right`} />;
-  }
-  if (attribute.type === 'BOOLEAN') {
-    return (
-      <select name={name} className={CELL} defaultValue="">
-        <option value="">—</option>
-        <option value="true">Oui</option>
-        <option value="false">Non</option>
-      </select>
-    );
-  }
-  if (attribute.type === 'SELECT') {
-    return (
-      <select name={name} className={CELL} defaultValue="">
-        <option value="">—</option>
-        {attribute.options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.value}
-          </option>
-        ))}
-      </select>
-    );
-  }
-  if (attribute.type === 'MULTISELECT') {
-    // Des cases à cocher en ligne plutôt qu'un `select multiple` : le Ctrl-clic
-    // ne s'invente pas, et une cellule doit rester lisible d'un coup d'œil.
-    return (
-      <div className="flex flex-nowrap gap-2 overflow-x-auto px-2 py-1.5">
-        {attribute.options.map((o) => (
-          <label
-            key={o.id}
-            className="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-slate-700"
-          >
-            <input
-              type="checkbox"
-              name={name}
-              value={o.id}
-              className="size-3.5 rounded border-slate-400 accent-slate-900"
-            />
-            {o.value}
-          </label>
-        ))}
-      </div>
-    );
-  }
-  return <input name={name} className={CELL} />;
 }
