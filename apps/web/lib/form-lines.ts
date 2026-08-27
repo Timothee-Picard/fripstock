@@ -51,6 +51,37 @@ export function readFormLines(data: FormData): RawLine[] {
   });
 }
 
+/**
+ * La ligne est-elle restée entièrement vide ?
+ *
+ * La catégorie ne compte pas : le tableau garde une ligne vide en bas et lui
+ * recopie la catégorie de la précédente, par confort de saisie. Une ligne où
+ * seule cette catégorie apparaît est visuellement vide, et doit être ignorée
+ * comme telle.
+ */
+export function isBlank(line: RawLine): boolean {
+  const { categoryId: _inherited, ...saisi } = line.cells;
+  return Object.keys(saisi).length === 0 && line.attributes.length === 0;
+}
+
+/**
+ * Lignes réellement saisies, la ligne vide du bas écartée.
+ *
+ * Une ligne à moitié remplie n'est pas ignorée : la laisser filer ferait
+ * disparaître sans un mot ce que l'utilisateur vient de taper. On la signale,
+ * en la situant.
+ */
+export function usableLines(data: FormData): { lines: RawLine[]; error?: string } {
+  const lines = readFormLines(data);
+  const remplies = lines.filter((l) => !isBlank(l));
+
+  const sansNom = remplies.findIndex((l) => !l.cells.name);
+  if (sansNom !== -1) {
+    return { lines: [], error: `Ligne ${sansNom + 1} : le nom est obligatoire.` };
+  }
+  return { lines: remplies };
+}
+
 /** Nombre lu dans une cellule, virgule décimale comprise. */
 export function cellNumber(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;

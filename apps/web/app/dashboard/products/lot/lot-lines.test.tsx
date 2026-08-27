@@ -183,6 +183,21 @@ describe('LotLines', () => {
     expect(achatDe(1)).toHaveTextContent('10,00 €');
   });
 
+  it('signale un prix saisi sans nom, avant même l’envoi', async () => {
+    rendre(10);
+    await userEvent.type(prixDe(1), '15');
+    expect(nomDe(1)).toHaveAttribute('aria-invalid', 'true');
+    expect(nomDe(1)).toHaveAttribute('title', 'Le nom est obligatoire.');
+
+    await userEvent.type(nomDe(1), 'Robe');
+    expect(nomDe(1)).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('ne signale rien sur une ligne encore intacte', () => {
+    rendre();
+    expect(nomDe(1)).toHaveAttribute('aria-invalid', 'false');
+  });
+
   it('montre une colonne d’achat en lecture seule — la règle vit côté API', () => {
     rendre();
     const entetes = screen.getAllByRole('columnheader').map((th) => th.textContent);

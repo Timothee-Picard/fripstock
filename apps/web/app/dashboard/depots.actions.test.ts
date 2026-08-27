@@ -141,7 +141,7 @@ describe('contrats de dépôt', () => {
       ]);
     });
 
-    it('ignore les lignes laissées vides — le tableau en garde toujours une', async () => {
+    it('ignore la ligne vide gardée en bas du tableau', async () => {
       await attraperRedirection(
         contrats.createContract(
           {},
@@ -149,11 +149,26 @@ describe('contrats de dépôt', () => {
             ...conditions,
             lineId: ['a', 'b'],
             ...ligne('a', { name: 'Robe', categoryId: 'c1' }),
-            ...ligne('b', { name: '  ', categoryId: 'c1' }),
+            ...ligne('b', { categoryId: 'c1' }),
           }),
         ),
       );
       expect(body_products().length).toBe(1);
+    });
+
+    it('refuse une ligne à moitié remplie plutôt que de la perdre', async () => {
+      await expect(
+        contrats.createContract(
+          {},
+          form({
+            ...conditions,
+            lineId: ['a', 'b'],
+            ...ligne('a', { name: 'Robe', categoryId: 'c1' }),
+            ...ligne('b', { categoryId: 'c1', salePrice: '15' }),
+          }),
+        ),
+      ).resolves.toEqual({ error: 'Ligne 2 : le nom est obligatoire.' });
+      expect(apiFetch).not.toHaveBeenCalled();
     });
 
     it("n'envoie pas de tableau d'articles quand aucun n'est saisi", async () => {

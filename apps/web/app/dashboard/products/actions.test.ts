@@ -250,7 +250,22 @@ describe('createLot', () => {
     expect(dernierAppel().body?.totalPurchasePrice).toBe(0);
   });
 
-  it('ignore les lignes sans nom', async () => {
+  it('refuse une ligne à moitié remplie plutôt que de la perdre', async () => {
+    await expect(
+      createLot(
+        {},
+        form({
+          totalPurchasePrice: '7',
+          lineId: ['a', 'b'],
+          ...ligne('a', { name: 'T-shirt', categoryId: 'c1' }),
+          ...ligne('b', { categoryId: 'c1', salePrice: '20' }),
+        }),
+      ),
+    ).resolves.toEqual({ error: 'Ligne 2 : le nom est obligatoire.' });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('ignore la ligne où seule la catégorie est héritée', async () => {
     await attraperRedirection(
       createLot(
         {},
@@ -258,7 +273,7 @@ describe('createLot', () => {
           totalPurchasePrice: '7',
           lineId: ['a', 'b'],
           ...ligne('a', { name: 'T-shirt', categoryId: 'c1' }),
-          ...ligne('b', { name: '  ', categoryId: 'c1' }),
+          ...ligne('b', { categoryId: 'c1' }),
         }),
       ),
     );

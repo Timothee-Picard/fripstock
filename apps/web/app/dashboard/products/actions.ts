@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
-import { cellNumber, readFormLines } from '@/lib/form-lines';
+import { cellNumber, usableLines } from '@/lib/form-lines';
 
 export interface ProductState {
   error?: string;
@@ -96,19 +96,20 @@ export async function createProduct(_state: ProductState, data: FormData): Promi
  * la règle ne doit exister qu'à un seul endroit.
  */
 export async function createLot(_state: ProductState, data: FormData): Promise<ProductState> {
-  const lines = readFormLines(data)
-    .filter(({ cells }) => cells.name)
-    .map(({ cells, attributes }) => ({
-      name: cells.name,
-      categoryId: cells.categoryId ?? '',
-      reference: cells.reference,
-      description: cells.description,
-      internalNote: cells.internalNote,
-      photoUrl: cells.photoUrl,
-      salePrice: cellNumber(cells.salePrice),
-      count: cellNumber(cells.count),
-      ...(attributes.length > 0 ? { attributes } : {}),
-    }));
+  const saisie = usableLines(data);
+  if (saisie.error) return { error: saisie.error };
+
+  const lines = saisie.lines.map(({ cells, attributes }) => ({
+    name: cells.name,
+    categoryId: cells.categoryId ?? '',
+    reference: cells.reference,
+    description: cells.description,
+    internalNote: cells.internalNote,
+    photoUrl: cells.photoUrl,
+    salePrice: cellNumber(cells.salePrice),
+    count: cellNumber(cells.count),
+    ...(attributes.length > 0 ? { attributes } : {}),
+  }));
 
   if (lines.length === 0) return { error: 'Ajoutez au moins un article au lot.' };
 

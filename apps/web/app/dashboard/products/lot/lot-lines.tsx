@@ -221,6 +221,11 @@ export function LotLines({
                 (parCategorie.get(line.categoryId) ?? []).map((a) => a.id),
               );
               const part = repartition[index];
+              // Un prix saisi sans nom serait refusé à l'envoi : autant le dire
+              // tout de suite, plutôt qu'après un aller-retour au serveur.
+              const nomManquant =
+                line.name.trim() === '' &&
+                (line.salePrice.trim() !== '' || line.count.trim() !== '');
               return (
                 <tr key={line.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-2 py-1 text-xs text-slate-500">{index + 1}</td>
@@ -231,8 +236,10 @@ export function LotLines({
                       placeholder="T-shirt uni"
                       value={line.name}
                       onChange={(e) => patch(line.id, 'name', e.target.value)}
-                      className={CELL}
+                      className={nomManquant ? `${CELL} bg-red-50 text-red-900` : CELL}
                       aria-label={`Nom de la ligne ${index + 1}`}
+                      aria-invalid={nomManquant}
+                      title={nomManquant ? 'Le nom est obligatoire.' : undefined}
                     />
                   </td>
                   <td className="p-0">

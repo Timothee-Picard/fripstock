@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
-import { cellNumber, readFormLines } from '@/lib/form-lines';
+import { cellNumber, usableLines } from '@/lib/form-lines';
 
 export interface ContractState {
   error?: string;
@@ -52,35 +52,38 @@ interface ContractLine {
 /**
  * Articles saisis dans le tableau du formulaire de contrat.
  *
- * Une ligne sans nom est ignorée : le tableau garde toujours une ligne vide en
- * bas pour la saisie suivante, elle ne doit pas partir à l'API.
+ * La ligne vide gardée en bas du tableau est écartée ; une ligne à moitié
+ * remplie, elle, arrête la création plutôt que de disparaître en silence.
  */
-function readLines(data: FormData): ContractLine[] {
+function readLines(data: FormData): { lines: ContractLine[]; error?: string } {
   const shopId = String(data.get('shopId') ?? '').trim() || null;
-  return readFormLines(data)
-    .map(({ cells, attributes }): ContractLine | null => {
-      if (!cells.name) return null;
-      return {
-        name: cells.name,
-        categoryId: cells.categoryId ?? '',
-        shopId,
-        reference: cells.reference,
-        description: cells.description,
-        internalNote: cells.internalNote,
-        photoUrl: cells.photoUrl,
-        salePrice: cellNumber(cells.salePrice),
-        quantity: cellNumber(cells.quantity),
-        ...(attributes.length > 0 ? { attributes } : {}),
-      };
-    })
-    .filter((line): line is ContractLine => line !== null);
+  const saisie = usableLines(data);
+  if (saisie.error) return { lines: [], error: saisie.error };
+
+  return {
+    lines: saisie.lines.map(({ cells, attributes }) => ({
+      name: cells.name,
+      categoryId: cells.categoryId ?? '',
+      shopId,
+      reference: cells.reference,
+      description: cells.description,
+      internalNote: cells.internalNote,
+      photoUrl: cells.photoUrl,
+      salePrice: cellNumber(cells.salePrice),
+      quantity: cellNumber(cells.quantity),
+      ...(attributes.length > 0 ? { attributes } : {}),
+    })),
+  };
 }
 
 export async function createContract(
   _state: ContractState,
   data: FormData,
 ): Promise<ContractState> {
-  const products = readLines(data);
+  const saisie = readLines(data);
+  if (saisie.error) return { error: saisie.error };
+  const products = saisie.lines;
+
   let id: string;
   try {
     const created = await apiFetch<{ id: string }>('/deposit-contracts', {
