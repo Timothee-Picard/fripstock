@@ -14,7 +14,6 @@ export default async function DepositorsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Clients déposants</h1>
         <p className="mt-1 text-sm text-slate-600">
           Les personnes qui vous confient des articles en dépôt-vente. Rattachés à
           l&apos;entreprise, pas à une boutique : un déposant peut avoir des articles dans plusieurs

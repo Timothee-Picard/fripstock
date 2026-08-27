@@ -13,7 +13,6 @@ export default async function CategoriesPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Catégories</h1>
         <p className="mt-1 text-sm text-slate-600">
           Définies au niveau de l&apos;entreprise et partagées par toutes ses boutiques. Une
           catégorie ne peut être supprimée que si elle n&apos;a ni sous-catégorie ni produit. Chaque

@@ -1,3 +1,5 @@
+import type { NavIcon } from '@/lib/navigation';
+
 /**
  * Icônes en SVG inline : trois traits chacune, aucune dépendance à charger.
  * Elles héritent de la couleur du texte et se dimensionnent en `em`, donc
@@ -162,3 +164,33 @@ export function CollapseIcon({ collapsed }: { collapsed: boolean }) {
     </svg>
   );
 }
+
+/** Trois traits : le déclencheur du menu sur mobile. */
+export function MenuIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+export function CloseIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+/** La clé d'icône portée par l'entrée, résolue en composant côté client. */
+export const NAV_ICONS: Record<NavIcon, () => React.ReactElement> = {
+  dashboard: DashboardIcon,
+  products: ProductsIcon,
+  categories: CategoriesIcon,
+  attributes: AttributesIcon,
+  statuses: StatusesIcon,
+  depositors: DepositorIcon,
+  contracts: ContractIcon,
+  shops: ShopIcon,
+  users: UsersIcon,
+};

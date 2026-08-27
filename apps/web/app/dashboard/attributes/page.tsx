@@ -19,7 +19,6 @@ export default async function AttributesPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Attributs</h1>
         <p className="mt-1 text-sm text-slate-600">
           Taille, couleur, matière… Définis au niveau de l&apos;entreprise, puis rattachés aux
           catégories qui les utilisent. Un sac n&apos;a pas de taille, une robe si.

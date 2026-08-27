@@ -13,7 +13,6 @@ export default async function StatusesPage() {
   if (!session.isManager) {
     return (
       <div className="max-w-3xl space-y-4">
-        <h1 className="text-xl font-semibold text-slate-900">Statuts</h1>
         <p className="text-sm text-slate-600">
           Le cycle de vie des produits, défini par le gérant de l&apos;entreprise.
         </p>
@@ -31,7 +30,6 @@ export default async function StatusesPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Statuts</h1>
         <p className="mt-1 text-sm text-slate-600">
           Le cycle de vie de vos produits. Les flèches disent quels passages sont autorisés ; le
           comportement coché à la création — et non le nom — décide de ce que l&apos;application

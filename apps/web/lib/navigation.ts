@@ -63,3 +63,27 @@ export const NAVIGATION: NavEntry[] = [
   { href: '/dashboard/shops', label: 'Boutiques', icon: 'shops' },
   { href: '/dashboard/users', label: 'Utilisateurs', icon: 'users', manager: true },
 ];
+
+/** Écrans hors menu qui méritent quand même un titre dans l'en-tête. */
+const HORS_MENU: { href: string; label: string }[] = [
+  { href: '/dashboard/profile', label: 'Mon profil' },
+];
+
+/**
+ * Titre de l'écran courant, pour l'en-tête.
+ *
+ * Le préfixe le plus long gagne : `/dashboard` préfixe toutes les routes, et
+ * sans cette règle chaque écran s'appellerait « Tableau de bord ».
+ *
+ * On s'arrête volontairement à la **section**. Une sous-page garde son propre
+ * titre, plus précis, et l'en-tête dit alors d'où elle vient — « Produits »
+ * au-dessus de « Nouveau produit ». Nommer ici chaque sous-route obligerait à
+ * tenir une seconde table des routes, qui dériverait de la vraie.
+ */
+export function sectionTitle(pathname: string): string | null {
+  const candidats = [...NAVIGATION, ...HORS_MENU].filter(
+    (e) => pathname === e.href || pathname.startsWith(`${e.href}/`),
+  );
+  if (candidats.length === 0) return null;
+  return candidats.reduce((a, b) => (b.href.length > a.href.length ? b : a)).label;
+}

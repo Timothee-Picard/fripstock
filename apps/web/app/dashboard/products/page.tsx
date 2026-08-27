@@ -77,7 +77,6 @@ export default async function ProductsPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Produits</h1>
           <p className="mt-1 text-sm text-slate-600">
             {page.total} produit{page.total > 1 ? 's' : ''} — page {page.page} sur {page.pages}
           </p>

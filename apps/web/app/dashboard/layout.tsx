@@ -1,4 +1,6 @@
+import { MobileNav } from '@/components/mobile-nav';
 import { NotificationBell } from '@/components/notification-bell';
+import { PageTitle } from '@/components/page-title';
 import { Sidebar } from '@/components/sidebar';
 import { ShopSelector } from '@/components/shop-selector';
 import { apiFetch } from '@/lib/api';
@@ -28,9 +30,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <Sidebar session={session} entries={entries} initialCollapsed={collapsed} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-4 border-b border-slate-200 bg-white px-6 py-3">
-          <ShopSelector shops={session.shops} />
-          <div className="ml-auto">
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          {/* Le déclencheur du menu mobile en premier : c'est le seul moyen de
+              naviguer sous 640 px, où la colonne de gauche est masquée. */}
+          <MobileNav session={session} entries={entries} />
+          <PageTitle />
+          <div className="ml-auto flex items-center gap-3">
+            <ShopSelector shops={session.shops} />
             <NotificationBell data={notifications} />
           </div>
         </header>

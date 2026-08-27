@@ -4,34 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { logout } from '@/app/(auth)/actions';
-import {
-  AttributesIcon,
-  CategoriesIcon,
-  CollapseIcon,
-  ContractIcon,
-  DashboardIcon,
-  DepositorIcon,
-  LogoutIcon,
-  ProductsIcon,
-  ShopIcon,
-  StatusesIcon,
-  UsersIcon,
-} from '@/components/icons';
-import { SIDEBAR_COOKIE, type NavEntry, type NavIcon } from '@/lib/navigation';
+import { CollapseIcon, LogoutIcon, NAV_ICONS } from '@/components/icons';
+import { SIDEBAR_COOKIE, type NavEntry } from '@/lib/navigation';
 import type { Session } from '@/lib/types';
-
-/** La clé d'icône portée par l'entrée, résolue en composant côté client. */
-const ICONES: Record<NavIcon, () => React.ReactElement> = {
-  dashboard: DashboardIcon,
-  products: ProductsIcon,
-  categories: CategoriesIcon,
-  attributes: AttributesIcon,
-  statuses: StatusesIcon,
-  depositors: DepositorIcon,
-  contracts: ContractIcon,
-  shops: ShopIcon,
-  users: UsersIcon,
-};
 
 /** Un an : le choix de replier le menu n'a pas de raison d'expirer. */
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -100,7 +75,7 @@ export function Sidebar({
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         {entries.map((entry) => {
-          const Icone = ICONES[entry.icon];
+          const Icone = NAV_ICONS[entry.icon];
           // `/dashboard` est le préfixe de tout : sans l'égalité stricte, le
           // tableau de bord resterait actif sur chacun des autres écrans.
           const actif =

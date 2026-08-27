@@ -52,7 +52,6 @@ export default async function DepositContractsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Contrats de dépôt</h1>
           <p className="mt-1 text-sm text-slate-600">
             Chaque contrat lie un déposant à une période et à une commission. Les articles qui y
             sont rattachés passent en dépôt-vente.
