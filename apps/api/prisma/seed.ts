@@ -57,8 +57,84 @@ const CATEGORIES: { name: string; attributes: string[] }[] = [
   { name: 'Robe', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
   { name: 'Haut', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
   { name: 'Chemise', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
+  { name: 'Pantalon', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
+  { name: 'Manteau', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
   { name: 'Chaussures', attributes: ['Taille', 'Couleur', 'Marque'] },
   { name: 'Sac', attributes: ['Couleur', 'Matière', 'Marque'] },
+  { name: 'Accessoire', attributes: ['Couleur', 'Matière', 'Marque'] },
+];
+
+/**
+ * Dates relatives à l'instant du seed.
+ *
+ * Une date figée sortirait de la fenêtre par défaut du tableau de bord dès le
+ * mois suivant, et les graphiques se retrouveraient vides sur une base fraîche.
+ */
+function ilYA(jours: number, heure = 14): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - jours);
+  d.setHours(heure, 30, 0, 0);
+  return d;
+}
+
+function dans(jours: number): Date {
+  return ilYA(-jours, 0);
+}
+
+const BOUTIQUES = [
+  { name: 'Boutique Centre-ville', address: '12 rue des Lilas, Lyon' },
+  { name: 'Boutique Gare', address: '3 place de la Gare, Lyon' },
+  { name: 'Boutique Marché', address: '48 avenue du Marché, Villeurbanne' },
+];
+
+const DEPOSANTS = [
+  {
+    lastName: 'Martin',
+    firstName: 'Sophie',
+    code: 'MAR',
+    email: 'sophie.martin@example.test',
+    phone: '0612345678',
+    iban: 'FR7630001007941234567890185',
+    defaultCommission: 40,
+  },
+  {
+    lastName: 'Durand',
+    firstName: 'Jean',
+    code: 'DUR',
+    email: 'jean.durand@example.test',
+    phone: '0623456789',
+    iban: 'FR7630004000031234567890143',
+    defaultCommission: 50,
+  },
+  {
+    lastName: 'Nguyen',
+    firstName: 'Linh',
+    code: 'NGU',
+    phone: '0634567890',
+    defaultCommission: 35,
+  },
+  {
+    lastName: 'Bonnet',
+    firstName: 'Claire',
+    code: 'BON',
+    email: 'claire.bonnet@example.test',
+    defaultCommission: 45,
+  },
+];
+
+/**
+ * Contrats de dépôt. Sophie Martin en a deux à la fois — c'est permis, et le
+ * relevé du déposant les additionne : ses articles se numérotent D-MAR-001,
+ * 002… sans repartir de zéro à chaque contrat.
+ */
+const CONTRATS = [
+  { key: 'martin-ete', depositor: 'Martin', from: 70, to: -25, commission: 40, notify: 7 },
+  { key: 'martin-hiver', depositor: 'Martin', from: 10, to: -80, commission: 35, notify: 10 },
+  // Échéance dans trois jours : l'alerte doit apparaître sur le tableau de bord.
+  { key: 'durand', depositor: 'Durand', from: 40, to: -3, commission: 50, notify: 7 },
+  { key: 'nguyen', depositor: 'Nguyen', from: 25, to: -45, commission: 35, notify: 5 },
+  // Déjà échu : le job d'échéance doit le passer en EXPIRED.
+  { key: 'bonnet', depositor: 'Bonnet', from: 120, to: 10, commission: 45, notify: 7 },
 ];
 
 async function seedTemplates() {
@@ -114,16 +190,15 @@ async function main() {
     },
   });
 
-  let shop = await prisma.shop.findFirst({
-    where: { companyId: company.id, name: 'Boutique Centre-ville' },
-  });
-  shop ??= await prisma.shop.create({
-    data: {
-      companyId: company.id,
-      name: 'Boutique Centre-ville',
-      address: '12 rue des Lilas, Lyon',
-    },
-  });
+  const shops = new Map<string, string>();
+  for (const b of BOUTIQUES) {
+    let boutique = await prisma.shop.findFirst({
+      where: { companyId: company.id, name: b.name },
+    });
+    boutique ??= await prisma.shop.create({ data: { ...b, companyId: company.id } });
+    shops.set(b.name, boutique.id);
+  }
+  console.log(`  ${shops.size} boutiques`);
 
   // --- Demo employee, with limited rights ---------------------------------
   const employee = await prisma.user.upsert({
@@ -143,15 +218,24 @@ async function main() {
     },
   });
 
-  await prisma.shopAccess.upsert({
-    where: { userId_shopId: { userId: employee.id, shopId: shop.id } },
-    update: { permissions: DEMO_EMPLOYEE_PERMISSIONS },
-    create: {
-      userId: employee.id,
-      shopId: shop.id,
-      permissions: DEMO_EMPLOYEE_PERMISSIONS,
+  // Deux boutiques sur trois, avec des droits différents : la troisième doit
+  // rester invisible pour lui, et le stock central lui reste ouvert dès qu'il
+  // détient la permission quelque part (voir CLAUDE.md).
+  const ACCES_EMPLOYE: { shop: string; permissions: PermissionMap }[] = [
+    { shop: BOUTIQUES[0].name, permissions: DEMO_EMPLOYEE_PERMISSIONS },
+    {
+      shop: BOUTIQUES[1].name,
+      permissions: { 'products.view': true, 'products.changeStatus': true, 'stats.view': true },
     },
-  });
+  ];
+  for (const acces of ACCES_EMPLOYE) {
+    const shopId = shops.get(acces.shop)!;
+    await prisma.shopAccess.upsert({
+      where: { userId_shopId: { userId: employee.id, shopId } },
+      update: { permissions: acces.permissions },
+      create: { userId: employee.id, shopId, permissions: acces.permissions },
+    });
+  }
 
   // --- Statuses and their flow --------------------------------------------
   const statuses = new Map<string, string>();
@@ -252,116 +336,535 @@ async function main() {
   }
   console.log(`  ${CATEGORIES.length + 1} catégories`);
 
-  // --- Depositor and contract ---------------------------------------------
-  let depositor = await prisma.depositor.findFirst({
-    where: { companyId: company.id, lastName: 'Martin', firstName: 'Sophie' },
-  });
-  depositor ??= await prisma.depositor.create({
-    data: {
-      companyId: company.id,
-      lastName: 'Martin',
-      firstName: 'Sophie',
-      email: 'sophie.martin@example.test',
-      phone: '0612345678',
-      iban: 'FR7630001007941234567890185',
-      // 40% for the shop, so 60% for the depositor.
-      defaultCommission: 40,
-      // Code used in this depositor's product references (the MAR of D-MAR-001).
-      code: 'MAR',
-    },
-  });
+  // --- Depositors and contracts -------------------------------------------
+  const depositors = new Map<string, { id: string; code: string; commission: number }>();
+  for (const d of DEPOSANTS) {
+    let deposant = await prisma.depositor.findFirst({
+      where: { companyId: company.id, lastName: d.lastName, firstName: d.firstName },
+    });
+    deposant ??= await prisma.depositor.create({ data: { ...d, companyId: company.id } });
+    depositors.set(d.lastName, {
+      id: deposant.id,
+      code: d.code,
+      commission: d.defaultCommission,
+    });
+  }
+  console.log(`  ${depositors.size} déposants`);
 
-  let contract = await prisma.depositContract.findFirst({
-    where: { depositorId: depositor.id },
-  });
-  contract ??= await prisma.depositContract.create({
-    data: {
-      depositorId: depositor.id,
-      startDate: new Date('2026-08-01T00:00:00Z'),
-      endDate: new Date('2026-10-30T00:00:00Z'),
-      commission: depositor.defaultCommission,
-      notifyBeforeDays: 5,
-    },
-  });
+  const contracts = new Map<string, { id: string; commission: number; depositor: string }>();
+  for (const c of CONTRATS) {
+    const deposant = depositors.get(c.depositor)!;
+    let contrat = await prisma.depositContract.findFirst({
+      where: { depositorId: deposant.id, startDate: ilYA(c.from, 0) },
+    });
+    contrat ??= await prisma.depositContract.create({
+      data: {
+        depositorId: deposant.id,
+        startDate: ilYA(c.from, 0),
+        endDate: dans(-c.to),
+        commission: c.commission,
+        notifyBeforeDays: c.notify,
+      },
+    });
+    contracts.set(c.key, {
+      id: contrat.id,
+      commission: c.commission,
+      depositor: c.depositor,
+    });
+  }
+  console.log(`  ${contracts.size} contrats de dépôt (dont deux pour Sophie Martin)`);
 
   // --- Demo products ------------------------------------------------------
-  const products = [
+  /**
+   * Un stock volontairement varié : les trois boutiques et le stock central,
+   * les deux modes de vente, tous les statuts, et des ventes réparties sur les
+   * six dernières semaines — dont quelques-unes du jour, pour que le bandeau
+   * « Aujourd'hui » et les courbes aient de quoi montrer.
+   */
+  interface Entree {
+    name: string;
+    category: string;
+    /** Nom de la boutique, ou `null` pour le stock central. */
+    shop: string | null;
+    status: string;
+    contract?: string;
+    purchasePrice?: number;
+    salePrice: number;
+    /** Renseigné pour un article vendu : prix encaissé et ancienneté en jours. */
+    soldPrice?: number;
+    soldDaysAgo?: number;
+    depositorPaid?: boolean;
+    options: Record<string, string>;
+    brand: string;
+  }
+
+  const [CV, GA, MA] = BOUTIQUES.map((b) => b.name);
+
+  const products: Entree[] = [
+    // --- Achat-revente, en stock ------------------------------------------
     {
-      reference: 'A-0001',
       name: 'Robe fleurie été',
       category: 'Robe',
-      status: 'En stock',
-      saleType: 'RESALE' as SaleType,
+      shop: CV,
+      status: 'En rayon',
       purchasePrice: 8,
       salePrice: 25,
       options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
       brand: 'Zara',
     },
     {
-      reference: 'A-0002',
       name: 'Chemise en lin',
       category: 'Chemise',
-      status: 'En stock',
-      saleType: 'RESALE' as SaleType,
+      shop: CV,
+      status: 'En rayon',
       purchasePrice: 5,
       salePrice: 18,
       options: { Taille: 'L', Couleur: 'Blanc', Matière: 'Lin' },
       brand: 'Uniqlo',
     },
     {
-      reference: 'D-MAR-001',
+      name: 'Jean brut droit',
+      category: 'Pantalon',
+      shop: CV,
+      status: 'En rayon',
+      purchasePrice: 6,
+      salePrice: 22,
+      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      brand: "Levi's",
+    },
+    {
+      name: 'Pull col rond',
+      category: 'Haut',
+      shop: GA,
+      status: 'En rayon',
+      purchasePrice: 4,
+      salePrice: 15,
+      options: { Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      brand: 'Monoprix',
+    },
+    {
+      name: 'Manteau laine long',
+      category: 'Manteau',
+      shop: GA,
+      status: 'En rayon',
+      purchasePrice: 20,
+      salePrice: 65,
+      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      brand: 'Sandro',
+    },
+    {
+      name: 'Trench beige',
+      category: 'Manteau',
+      shop: MA,
+      status: 'En rayon',
+      purchasePrice: 15,
+      salePrice: 48,
+      options: { Taille: 'L', Couleur: 'Beige', Matière: 'Coton' },
+      brand: 'Burberry',
+    },
+    {
+      name: 'Baskets cuir blanches',
+      category: 'Chaussures',
+      shop: MA,
+      status: 'En rayon',
+      purchasePrice: 12,
+      salePrice: 35,
+      options: { Taille: 'M', Couleur: 'Blanc' },
+      brand: 'Adidas',
+    },
+    {
+      name: 'Ceinture cuir',
+      category: 'Accessoire',
+      shop: CV,
+      status: 'En rayon',
+      purchasePrice: 3,
+      salePrice: 12,
+      options: { Couleur: 'Noir', Matière: 'Cuir' },
+      brand: 'Sans marque',
+    },
+    {
+      name: 'Écharpe laine',
+      category: 'Accessoire',
+      shop: GA,
+      status: 'En stock',
+      purchasePrice: 2,
+      salePrice: 9,
+      options: { Couleur: 'Rouge', Matière: 'Laine' },
+      brand: 'Sans marque',
+    },
+    {
+      name: 'Chemise oversize',
+      category: 'Chemise',
+      shop: null,
+      status: 'En stock',
+      purchasePrice: 4,
+      salePrice: 16,
+      options: { Taille: 'XL', Couleur: 'Vert', Matière: 'Coton' },
+      brand: 'Bershka',
+    },
+    {
+      name: 'Robe noire droite',
+      category: 'Robe',
+      shop: null,
+      status: 'En stock',
+      purchasePrice: 7,
+      salePrice: 24,
+      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      brand: 'Mango',
+    },
+    {
+      name: 'Sac bandoulière',
+      category: 'Sac',
+      shop: null,
+      status: 'En stock',
+      purchasePrice: 9,
+      salePrice: 28,
+      options: { Couleur: 'Beige', Matière: 'Cuir' },
+      brand: 'Lancel',
+    },
+
+    // --- Achat-revente, vendus --------------------------------------------
+    {
+      name: 'Veste en jean',
+      category: 'Manteau',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 10,
+      salePrice: 32,
+      soldPrice: 32,
+      soldDaysAgo: 0,
+      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      brand: "Levi's",
+    },
+    {
+      name: 'T-shirt rayé',
+      category: 'Haut',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 2,
+      salePrice: 10,
+      soldPrice: 8,
+      soldDaysAgo: 0,
+      options: { Taille: 'S', Couleur: 'Blanc', Matière: 'Coton' },
+      brand: 'Petit Bateau',
+    },
+    {
+      name: 'Bottines cuir',
+      category: 'Chaussures',
+      shop: GA,
+      status: 'Vendu',
+      purchasePrice: 14,
+      salePrice: 42,
+      soldPrice: 42,
+      soldDaysAgo: 1,
+      options: { Taille: 'M', Couleur: 'Noir' },
+      brand: 'Minelli',
+    },
+    {
+      name: 'Jupe plissée',
+      category: 'Robe',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 5,
+      salePrice: 19,
+      soldPrice: 19,
+      soldDaysAgo: 3,
+      options: { Taille: 'M', Couleur: 'Vert', Matière: 'Synthétique' },
+      brand: 'Zara',
+    },
+    {
+      name: 'Sweat à capuche',
+      category: 'Haut',
+      shop: MA,
+      status: 'Vendu',
+      purchasePrice: 6,
+      salePrice: 20,
+      soldPrice: 18,
+      soldDaysAgo: 6,
+      options: { Taille: 'L', Couleur: 'Gris', Matière: 'Coton' },
+      brand: 'Nike',
+    },
+    {
+      name: 'Pantalon chino',
+      category: 'Pantalon',
+      shop: GA,
+      status: 'Vendu',
+      purchasePrice: 7,
+      salePrice: 24,
+      soldPrice: 24,
+      soldDaysAgo: 9,
+      options: { Taille: 'L', Couleur: 'Beige', Matière: 'Coton' },
+      brand: 'Celio',
+    },
+    {
+      name: 'Blouse fleurie',
+      category: 'Chemise',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 4,
+      salePrice: 17,
+      soldPrice: 15,
+      soldDaysAgo: 14,
+      options: { Taille: 'S', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      brand: 'Promod',
+    },
+    {
+      name: 'Cabas toile',
+      category: 'Sac',
+      shop: MA,
+      status: 'Vendu',
+      purchasePrice: 3,
+      salePrice: 14,
+      soldPrice: 14,
+      soldDaysAgo: 18,
+      options: { Couleur: 'Bleu', Matière: 'Coton' },
+      brand: 'Sans marque',
+    },
+    {
+      name: 'Doudoune sans manches',
+      category: 'Manteau',
+      shop: GA,
+      status: 'Vendu',
+      purchasePrice: 11,
+      salePrice: 34,
+      soldPrice: 30,
+      soldDaysAgo: 24,
+      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Synthétique' },
+      brand: 'Uniqlo',
+    },
+    {
+      name: 'Mocassins daim',
+      category: 'Chaussures',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 9,
+      salePrice: 29,
+      soldPrice: 29,
+      soldDaysAgo: 31,
+      options: { Taille: 'L', Couleur: 'Beige' },
+      brand: 'Sans marque',
+    },
+
+    // --- Dépôt-vente, contrat d'été de Sophie Martin ------------------------
+    {
       name: 'Sac à main cuir',
       category: 'Sac',
+      shop: CV,
       status: 'En rayon',
-      saleType: 'CONSIGNMENT' as SaleType,
+      contract: 'martin-ete',
       salePrice: 60,
-      onContract: true,
       options: { Couleur: 'Noir', Matière: 'Cuir' },
       brand: 'Lancel',
     },
     {
-      reference: 'D-MAR-002',
+      name: 'Robe de soirée',
+      category: 'Robe',
+      shop: CV,
+      status: 'Réservé',
+      contract: 'martin-ete',
+      salePrice: 85,
+      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      brand: 'Maje',
+    },
+    {
       name: 'Bottines daim',
       category: 'Chaussures',
+      shop: CV,
       status: 'Vendu',
-      saleType: 'CONSIGNMENT' as SaleType,
+      contract: 'martin-ete',
       salePrice: 45,
       soldPrice: 40,
-      onContract: true,
-      sold: true,
-      options: { Taille: 'S', Couleur: 'Beige' },
+      soldDaysAgo: 0,
+      depositorPaid: false,
+      options: { Taille: 'M', Couleur: 'Beige' },
       brand: 'Minelli',
+    },
+    {
+      name: 'Foulard soie',
+      category: 'Accessoire',
+      shop: CV,
+      status: 'Vendu',
+      contract: 'martin-ete',
+      salePrice: 30,
+      soldPrice: 30,
+      soldDaysAgo: 12,
+      depositorPaid: true,
+      options: { Couleur: 'Rouge', Matière: 'Synthétique' },
+      brand: 'Hermès',
+    },
+    {
+      name: 'Chemisier blanc',
+      category: 'Chemise',
+      shop: CV,
+      status: 'Rendu au client',
+      contract: 'martin-ete',
+      salePrice: 22,
+      options: { Taille: 'M', Couleur: 'Blanc', Matière: 'Coton' },
+      brand: 'Comptoir des Cotonniers',
+    },
+
+    // --- Dépôt-vente, second contrat de Sophie Martin -----------------------
+    {
+      name: 'Manteau camel',
+      category: 'Manteau',
+      shop: GA,
+      status: 'En rayon',
+      contract: 'martin-hiver',
+      salePrice: 95,
+      options: { Taille: 'M', Couleur: 'Beige', Matière: 'Laine' },
+      brand: 'Sézane',
+    },
+    {
+      name: 'Pull cachemire',
+      category: 'Haut',
+      shop: GA,
+      status: 'En rayon',
+      contract: 'martin-hiver',
+      salePrice: 55,
+      options: { Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      brand: 'Eric Bompard',
+    },
+
+    // --- Dépôt-vente, Jean Durand (échéance proche) -------------------------
+    {
+      name: 'Blouson cuir',
+      category: 'Manteau',
+      shop: GA,
+      status: 'En rayon',
+      contract: 'durand',
+      salePrice: 120,
+      options: { Taille: 'L', Couleur: 'Noir', Matière: 'Cuir' },
+      brand: 'Schott',
+    },
+    {
+      name: 'Sneakers montantes',
+      category: 'Chaussures',
+      shop: GA,
+      status: 'Vendu',
+      contract: 'durand',
+      salePrice: 50,
+      soldPrice: 45,
+      soldDaysAgo: 4,
+      depositorPaid: false,
+      options: { Taille: 'L', Couleur: 'Blanc' },
+      brand: 'Converse',
+    },
+    {
+      name: 'Sac à dos toile',
+      category: 'Sac',
+      shop: GA,
+      status: 'En stock',
+      contract: 'durand',
+      salePrice: 38,
+      options: { Couleur: 'Vert', Matière: 'Coton' },
+      brand: 'Eastpak',
+    },
+
+    // --- Dépôt-vente, Linh Nguyen -------------------------------------------
+    {
+      name: 'Robe portefeuille',
+      category: 'Robe',
+      shop: MA,
+      status: 'En rayon',
+      contract: 'nguyen',
+      salePrice: 42,
+      options: { Taille: 'S', Couleur: 'Bleu', Matière: 'Synthétique' },
+      brand: 'Ba&sh',
+    },
+    {
+      name: 'Veste tailleur',
+      category: 'Manteau',
+      shop: MA,
+      status: 'Vendu',
+      contract: 'nguyen',
+      salePrice: 70,
+      soldPrice: 65,
+      soldDaysAgo: 8,
+      depositorPaid: true,
+      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      brand: 'Claudie Pierlot',
+    },
+    {
+      name: 'Ballerines cuir',
+      category: 'Chaussures',
+      shop: MA,
+      status: 'Retiré',
+      contract: 'nguyen',
+      salePrice: 28,
+      options: { Taille: 'S', Couleur: 'Rouge' },
+      brand: 'Repetto',
+    },
+
+    // --- Dépôt-vente, Claire Bonnet (contrat échu) --------------------------
+    {
+      name: 'Robe vintage',
+      category: 'Robe',
+      shop: MA,
+      status: 'Rendu au client',
+      contract: 'bonnet',
+      salePrice: 40,
+      options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
+      brand: 'Sans marque',
+    },
+    {
+      name: 'Sac vernis',
+      category: 'Sac',
+      shop: MA,
+      status: 'Vendu',
+      contract: 'bonnet',
+      salePrice: 55,
+      soldPrice: 50,
+      soldDaysAgo: 40,
+      depositorPaid: true,
+      options: { Couleur: 'Rouge', Matière: 'Synthétique' },
+      brand: 'Vanessa Bruno',
     },
   ];
 
-  // Counters aligned with the references written above: the next product
-  // created through the API continues the sequence instead of colliding.
-  await prisma.company.update({ where: { id: company.id }, data: { productCounter: 2 } });
-  await prisma.depositor.update({ where: { id: depositor.id }, data: { productCounter: 2 } });
+  // Les références suivent la règle de l'application : compteur d'entreprise
+  // pour un achat, compteur du déposant pour un dépôt. Les compteurs sont
+  // ensuite posés à leur valeur atteinte, sans quoi le prochain produit créé
+  // par l'API buterait sur la contrainte d'unicité.
+  let compteurAchat = 0;
+  const compteurDepot = new Map<string, number>();
 
   for (const entry of products) {
+    const contrat = entry.contract ? contracts.get(entry.contract)! : null;
+    const deposant = contrat ? depositors.get(contrat.depositor)! : null;
+
+    let reference: string;
+    if (deposant) {
+      const rang = (compteurDepot.get(deposant.code) ?? 0) + 1;
+      compteurDepot.set(deposant.code, rang);
+      reference = `D-${deposant.code}-${String(rang).padStart(3, '0')}`;
+    } else {
+      compteurAchat += 1;
+      reference = `A-${String(compteurAchat).padStart(4, '0')}`;
+    }
+
     const existing = await prisma.product.findFirst({
-      where: { companyId: company.id, reference: entry.reference },
+      where: { companyId: company.id, reference },
     });
     if (existing) continue;
 
+    const vendu = entry.soldPrice !== undefined;
     const product = await prisma.product.create({
       data: {
         companyId: company.id,
-        shopId: shop.id,
+        shopId: entry.shop ? shops.get(entry.shop)! : null,
         categoryId: categories.get(entry.category)!,
         statusId: statuses.get(entry.status)!,
-        reference: entry.reference,
+        reference,
         name: entry.name,
-        saleType: entry.saleType,
-        purchasePrice: entry.purchasePrice ?? null,
+        saleType: contrat ? 'CONSIGNMENT' : ('RESALE' as SaleType),
+        purchasePrice: contrat ? null : (entry.purchasePrice ?? null),
         salePrice: entry.salePrice,
         soldPrice: entry.soldPrice ?? null,
-        depositContractId: entry.onContract ? contract.id : null,
-        // Commission frozen at sale time, never read back from the contract.
-        appliedCommission: entry.sold ? contract.commission : null,
-        depositorPaid: entry.saleType === 'CONSIGNMENT' ? false : null,
-        soldAt: entry.sold ? new Date('2026-08-20T14:30:00Z') : null,
+        depositContractId: contrat?.id ?? null,
+        // Commission figée à la vente, jamais relue depuis le contrat.
+        appliedCommission: vendu && contrat ? contrat.commission : null,
+        depositorPaid: contrat ? (entry.depositorPaid ?? false) : null,
+        soldAt: vendu ? ilYA(entry.soldDaysAgo ?? 0, 11 + (compteurAchat % 8)) : null,
       },
     });
 
@@ -398,13 +901,28 @@ async function main() {
       },
     });
   }
+
+  await prisma.company.update({
+    where: { id: company.id },
+    data: { productCounter: compteurAchat },
+  });
+  for (const [code, rang] of compteurDepot) {
+    const deposant = [...depositors.values()].find((d) => d.code === code)!;
+    await prisma.depositor.update({
+      where: { id: deposant.id },
+      data: { productCounter: rang },
+    });
+  }
+
   console.log(`  ${products.length} produits`);
 
   console.log('\nComptes de démonstration (développement uniquement) :');
   console.log(`  gérant   ${MANAGER_EMAIL}  / ${DEMO_PASSWORD}`);
   console.log(`  employé  ${EMPLOYEE_EMAIL} / ${DEMO_PASSWORD}`);
-  console.log(`           accès à « ${shop.name} », permissions :`);
-  console.log(`           ${Object.keys(DEMO_EMPLOYEE_PERMISSIONS).join(', ')}`);
+  for (const acces of ACCES_EMPLOYE) {
+    console.log(`           « ${acces.shop} » : ${Object.keys(acces.permissions).join(', ')}`);
+  }
+  console.log(`           aucun accès à « ${BOUTIQUES[2].name} »`);
 }
 
 main()
