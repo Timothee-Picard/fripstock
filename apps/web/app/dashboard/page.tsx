@@ -46,6 +46,7 @@ export default async function PageTableauDeBord({
   // Boutique choisie dans l'en-tête. Absente : toutes celles que la session
   // autorise — l'API applique la même règle, elle ne croit pas l'écran.
   const shopId = typeof params.shopId === 'string' ? params.shopId : undefined;
+  const shopName = session.shops.find((b) => b.shopId === shopId)?.name;
 
   const requete = new URLSearchParams();
   if (from) requete.set('from', `${from}T00:00:00.000Z`);
@@ -77,22 +78,30 @@ export default async function PageTableauDeBord({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Bonjour {session.firstName}</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          {session.company.name} — {shopName ?? 'toutes les boutiques'}
+        </p>
+      </div>
+
+      {/* Le comptoir dépend de la boutique choisie en haut, pas de la période :
+          il était jusqu'ici collé aux raccourcis 7 jours / 3 mois, qui ne le
+          concernent en rien. */}
+      {hasPermission(session, 'products.changeStatus') ? (
+        <Counter shopId={shopId} shopName={shopName} />
+      ) : null}
+
+      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Bonjour {session.firstName}</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {session.company.name} — du {new Date(stats.period.from).toLocaleDateString('fr-FR')} au{' '}
+          <h2 className="text-lg font-semibold text-slate-900">Statistiques</h2>
+          <p className="mt-0.5 text-sm text-slate-600">
+            du {new Date(stats.period.from).toLocaleDateString('fr-FR')} au{' '}
             {new Date(stats.period.to).toLocaleDateString('fr-FR')}
           </p>
         </div>
         <PeriodSelector />
       </div>
-
-      {/* Le comptoir en tête : c'est le geste du quotidien, tout le reste est
-          de la lecture. */}
-      {hasPermission(session, 'products.changeStatus') ? (
-        <Counter shopId={shopId} shopName={session.shops.find((b) => b.shopId === shopId)?.name} />
-      ) : null}
 
       {/* La journée en cours passe avant la période : c'est la question qu'on
           se pose en fermant la boutique. */}

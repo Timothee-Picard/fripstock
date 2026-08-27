@@ -216,8 +216,8 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-slate-900">Vendre des articles</h2>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-base font-semibold text-slate-900">Vendre des articles</h2>
         <p className="text-xs text-slate-600">
           Référence de l&apos;étiquette, ou nom d&apos;article —{' '}
           {shopName ?? 'toutes les boutiques'}.
@@ -225,7 +225,7 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
       </div>
 
       <form
-        className="mt-3 flex gap-2"
+        className="mt-4 flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           // Une proposition surlignée l'emporte : c'est celle que l'œil suit.
@@ -252,7 +252,7 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
           aria-controls="comptoir-propositions"
           aria-autocomplete="list"
           aria-activedescendant={actif >= 0 ? `comptoir-option-${actif}` : undefined}
-          className={`${CHAMP} max-w-xs font-mono`}
+          className={`${CHAMP} max-w-xs font-mono text-base`}
         />
         <Button type="submit" variant="secondary" disabled={cherche || saisie.trim() === ''}>
           {cherche ? '…' : 'Ajouter'}
