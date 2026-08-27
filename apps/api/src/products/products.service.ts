@@ -712,13 +712,19 @@ export class ProductsService {
   }
 
   /**
-   * Référence suivante pour un article qu'on est en train de créer.
+   * Référence suivante pour un article qui entre en stock, ou qui change
+   * d'origine.
    *
    * Le compteur est incrémenté par la base, dans la transaction en cours : deux
    * employés qui enregistrent au même moment obtiennent deux numéros, là où un
-   * `max + 1` lu puis réécrit leur donnerait le même.
+   * `max + 1` lu puis réécrit leur donnerait le même. Il n'est jamais rendu :
+   * une référence libérée par une renumérotation ne sera pas réattribuée, ce
+   * qui évite qu'une vieille étiquette désigne un jour un autre article.
+   *
+   * Exposé pour le rattachement à un contrat de dépôt, qui propose de
+   * renuméroter l'article qu'il fait changer de camp.
    */
-  private async nextReference(
+  async nextReference(
     tx: Prisma.TransactionClient,
     currentUser: CurrentUser,
     saleType: 'RESALE' | 'CONSIGNMENT',

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { ManagerOnly } from '../common/decorators/manager.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -60,8 +60,11 @@ export class DepositContractsController {
     @AuthUser() currentUser: CurrentUser,
     @Param('id') id: string,
     @Param('productId') productId: string,
+    // En query et non dans le corps : un DELETE qui porte un corps est mal
+    // supporté par les clients HTTP.
+    @Query('renumber') renumber?: string,
   ) {
-    return this.contracts.detachProduct(currentUser, id, productId);
+    return this.contracts.detachProduct(currentUser, id, productId, renumber === 'true');
   }
 
   @Put(':id')

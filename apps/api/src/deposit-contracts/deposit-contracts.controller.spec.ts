@@ -83,7 +83,7 @@ describe('DepositContractsController', () => {
 
     it('detach appelle detachProduct', () => {
       void controller.detach(manager, 'c1', 'p1');
-      expect(service.detachProduct).toHaveBeenCalledWith(manager, 'c1', 'p1');
+      expect(service.detachProduct).toHaveBeenCalledWith(manager, 'c1', 'p1', false);
     });
 
     it('update appelle update', () => {
@@ -94,6 +94,11 @@ describe('DepositContractsController', () => {
     it('deadlines déclenche la passe d’échéances à la main', async () => {
       await expect(controller.deadlines()).resolves.toEqual({ notified: 1, expired: 0 });
       expect(job.run).toHaveBeenCalled();
+    });
+
+    it('detach renumérote quand la query le demande', () => {
+      void controller.detach(manager, 'c1', 'p1', 'true');
+      expect(service.detachProduct).toHaveBeenCalledWith(manager, 'c1', 'p1', true);
     });
 
     it('delete appelle delete', () => {

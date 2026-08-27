@@ -10,6 +10,7 @@ const depositor = { id: 'dep-1', companyId: COMPANY_ID, defaultCommission: 40 };
 const contract = {
   id: 'c1',
   depositorId: 'dep-1',
+  depositor: { id: 'dep-1', lastName: 'Martin', firstName: 'Sophie' },
   startDate: new Date('2026-01-01'),
   endDate: new Date('2026-06-01'),
   commission: 40,
@@ -18,12 +19,15 @@ const contract = {
 
 describe('DepositContractsService', () => {
   let prisma: PrismaMock;
-  let products: { createWith: jest.Mock };
+  let products: { createWith: jest.Mock; nextReference: jest.Mock };
   let service: DepositContractsService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    products = { createWith: jest.fn().mockResolvedValue({ id: 'p1' }) };
+    products = {
+      createWith: jest.fn().mockResolvedValue({ id: 'p1' }),
+      nextReference: jest.fn().mockResolvedValue('D-MAR-003'),
+    };
     service = new DepositContractsService(asPrisma(prisma), products as unknown as ProductsService);
   });
 
@@ -247,8 +251,8 @@ describe('DepositContractsService', () => {
     it('bascule en dépôt-vente et efface le prix d’achat', async () => {
       prisma.product.findMany.mockResolvedValue([enStock]);
       await service.attachProducts(manager, 'c1', { productIds: ['p1'] });
-      expect(prisma.product.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['p1'] } },
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
         data: {
           depositContractId: 'c1',
           saleType: 'CONSIGNMENT',
@@ -256,6 +260,37 @@ describe('DepositContractsService', () => {
           depositorPaid: false,
         },
       });
+    });
+
+    it('garde la référence par défaut — elle est écrite sur l’étiquette', async () => {
+      prisma.product.findMany.mockResolvedValue([enStock]);
+      await service.attachProducts(manager, 'c1', { productIds: ['p1'] });
+      expect(prisma.product.update.mock.calls[0][0].data).not.toHaveProperty('reference');
+      expect(products.nextReference).not.toHaveBeenCalled();
+    });
+
+    it('renumérote sur demande, depuis le compteur du déposant', async () => {
+      prisma.product.findMany.mockResolvedValue([enStock]);
+      products.nextReference.mockResolvedValue('D-MAR-003');
+      await service.attachProducts(manager, 'c1', { productIds: ['p1'], renumber: true });
+      expect(products.nextReference).toHaveBeenCalledWith(
+        expect.anything(),
+        manager,
+        'CONSIGNMENT',
+        { depositorId: 'dep-1' },
+      );
+      expect(prisma.product.update.mock.calls[0][0].data.reference).toBe('D-MAR-003');
+    });
+
+    it('donne une référence par article rattaché', async () => {
+      prisma.product.findMany.mockResolvedValue([enStock, { ...enStock, id: 'p2' }]);
+      products.nextReference.mockResolvedValueOnce('D-MAR-003').mockResolvedValueOnce('D-MAR-004');
+      await service.attachProducts(manager, 'c1', { productIds: ['p1', 'p2'], renumber: true });
+      expect(
+        prisma.product.update.mock.calls.map(
+          (c: [{ data: { reference: string } }]) => c[0].data.reference,
+        ),
+      ).toEqual(['D-MAR-003', 'D-MAR-004']);
     });
 
     it('refuse un produit déjà sur un autre contrat, en nommant le déposant', async () => {
@@ -284,7 +319,7 @@ describe('DepositContractsService', () => {
         { ...enStock, depositContractId: 'c1', depositContract: { id: 'c1', depositor: {} } },
       ]);
       await service.attachProducts(manager, 'c1', { productIds: ['p1'] });
-      expect(prisma.product.updateMany).toHaveBeenCalled();
+      expect(prisma.product.update).toHaveBeenCalled();
     });
 
     it("refuse un produit qui n'appartient pas à l'entreprise", async () => {
@@ -313,13 +348,27 @@ describe('DepositContractsService', () => {
       prisma.depositContract.findFirst.mockResolvedValue({ ...contract, products: [] });
     });
 
-    it('repasse le produit en achat-revente', async () => {
+    it('repasse le produit en achat-revente, référence inchangée', async () => {
       prisma.product.findFirst.mockResolvedValue({ id: 'p1', status: { isSale: false } });
       await service.detachProduct(manager, 'c1', 'p1');
       expect(prisma.product.update).toHaveBeenCalledWith({
         where: { id: 'p1' },
         data: { depositContractId: null, saleType: 'RESALE', depositorPaid: null },
       });
+      expect(products.nextReference).not.toHaveBeenCalled();
+    });
+
+    it('renumérote sur demande, en article acheté', async () => {
+      prisma.product.findFirst.mockResolvedValue({ id: 'p1', status: { isSale: false } });
+      products.nextReference.mockResolvedValue('A-0042');
+      await service.detachProduct(manager, 'c1', 'p1', true);
+      expect(products.nextReference).toHaveBeenCalledWith(
+        expect.anything(),
+        manager,
+        'RESALE',
+        null,
+      );
+      expect(prisma.product.update.mock.calls[0][0].data.reference).toBe('A-0042');
     });
 
     it('refuse un produit absent de ce contrat', async () => {

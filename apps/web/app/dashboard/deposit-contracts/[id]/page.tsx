@@ -132,7 +132,11 @@ export default async function DepositContractPage({ params }: { params: Promise<
         )}
       </section>
 
-      <AttachForm contractId={contract.id} candidates={candidates} />
+      <AttachForm
+        contractId={contract.id}
+        code={contract.depositor.code ?? 'XXX'}
+        candidates={candidates}
+      />
     </div>
   );
 }

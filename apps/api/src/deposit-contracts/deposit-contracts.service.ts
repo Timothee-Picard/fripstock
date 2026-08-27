@@ -13,7 +13,9 @@ import type { UpdateContractDto } from './dto/update-contract.dto';
 import type { AttachProductsDto } from './dto/attach-products.dto';
 
 const INCLUDE = {
-  depositor: { select: { id: true, lastName: true, firstName: true, defaultCommission: true } },
+  depositor: {
+    select: { id: true, lastName: true, firstName: true, code: true, defaultCommission: true },
+  },
   _count: { select: { products: true } },
 } satisfies Prisma.DepositContractInclude;
 
@@ -149,7 +151,7 @@ export class DepositContractsService {
    * contrat d'alors, le rattacher ailleurs falsifierait un relevé.
    */
   async attachProducts(currentUser: CurrentUser, id: string, dto: AttachProductsDto) {
-    await this.detail(currentUser, id);
+    const contract = await this.detail(currentUser, id);
 
     const products = await this.prisma.product.findMany({
       where: { id: { in: dto.productIds }, companyId: currentUser.companyId },
@@ -189,22 +191,40 @@ export class DepositContractsService {
       );
     }
 
-    await this.prisma.product.updateMany({
-      where: { id: { in: dto.productIds } },
-      data: {
-        depositContractId: id,
-        saleType: 'CONSIGNMENT',
-        // L'article appartient au déposant : le prix d'achat n'a plus de sens.
-        purchasePrice: null,
-        depositorPaid: false,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      for (const produit of products) {
+        // La référence est écrite sur l'étiquette : on ne la refait que si on
+        // l'a demandé, en sachant qu'il faudra retourner ré-étiqueter.
+        const reference = dto.renumber
+          ? await this.products.nextReference(tx, currentUser, 'CONSIGNMENT', {
+              depositorId: contract.depositor.id,
+            })
+          : undefined;
+
+        await tx.product.update({
+          where: { id: produit.id },
+          data: {
+            depositContractId: id,
+            saleType: 'CONSIGNMENT',
+            // L'article appartient au déposant : le prix d'achat n'a plus de sens.
+            purchasePrice: null,
+            depositorPaid: false,
+            ...(reference ? { reference } : {}),
+          },
+        });
+      }
     });
 
     return this.detail(currentUser, id);
   }
 
-  /** Détache un produit de son contrat et le repasse en achat-revente. */
-  async detachProduct(currentUser: CurrentUser, id: string, productId: string) {
+  /**
+   * Détache un produit de son contrat et le repasse en achat-revente.
+   *
+   * `renumber` lui redonne une référence d'article acheté : à demander
+   * seulement si l'étiquette peut être refaite.
+   */
+  async detachProduct(currentUser: CurrentUser, id: string, productId: string, renumber = false) {
     await this.detail(currentUser, id);
     const product = await this.prisma.product.findFirst({
       where: { id: productId, depositContractId: id, companyId: currentUser.companyId },
@@ -217,9 +237,20 @@ export class DepositContractsService {
       );
     }
 
-    await this.prisma.product.update({
-      where: { id: productId },
-      data: { depositContractId: null, saleType: 'RESALE', depositorPaid: null },
+    await this.prisma.$transaction(async (tx) => {
+      const reference = renumber
+        ? await this.products.nextReference(tx, currentUser, 'RESALE', null)
+        : undefined;
+
+      await tx.product.update({
+        where: { id: productId },
+        data: {
+          depositContractId: null,
+          saleType: 'RESALE',
+          depositorPaid: null,
+          ...(reference ? { reference } : {}),
+        },
+      });
     });
     return this.detail(currentUser, id);
   }

@@ -142,7 +142,11 @@ export async function attachProducts(
   try {
     await apiFetch(`/deposit-contracts/${id}/products`, {
       method: 'POST',
-      body: JSON.stringify({ productIds }),
+      body: JSON.stringify({
+        productIds,
+        // Décoché par défaut : la référence est déjà collée sur le vêtement.
+        renumber: data.get('renumber') === 'on',
+      }),
     });
   } catch (error) {
     return message(error, 'Rattachement impossible.');
@@ -155,9 +159,11 @@ export async function attachProducts(
 export async function detachProduct(_state: ContractState, data: FormData): Promise<ContractState> {
   const id = String(data.get('id'));
   try {
-    await apiFetch(`/deposit-contracts/${id}/products/${String(data.get('productId'))}`, {
-      method: 'DELETE',
-    });
+    const renumber = data.get('renumber') === 'on' ? '?renumber=true' : '';
+    await apiFetch(
+      `/deposit-contracts/${id}/products/${String(data.get('productId'))}${renumber}`,
+      { method: 'DELETE' },
+    );
   } catch (error) {
     return message(error, 'Détachement impossible.');
   }

@@ -77,6 +77,13 @@ Company (le compte parent, un gérant)
   dans la transaction de création : un `max + 1` lu puis réécrit donnerait le même numéro
   à deux employés simultanés. La paire (`companyId`, `reference`) est **unique**.
   Champ `sku` séparé, nullable, prévu pour un futur scan QR code, non utilisé pour l'instant.
+- **La référence ne change jamais toute seule** : elle est écrite sur l'étiquette collée
+  au vêtement. Rattacher un article à un contrat de dépôt, ou l'en détacher, propose la
+  renumérotation (`renumber`) mais ne l'impose pas — décochée par défaut, puisqu'elle
+  oblige à refaire l'étiquette. Un numéro libéré n'est jamais réattribué : une vieille
+  étiquette ne doit pas désigner un jour un autre article.
+- **Un produit n'appartient qu'à un contrat de dépôt à la fois.** Le rattacher à un second
+  est refusé — le déplacer en silence le retirerait du relevé du premier déposant.
 - Une seule photo par produit pour l'instant (`photoUrl`), stockée sur MinIO.
 - Champs `nom`, `description`, `internalNote` : texte libre.
 

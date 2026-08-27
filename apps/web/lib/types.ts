@@ -273,7 +273,13 @@ export interface DepositContract {
   notifyBeforeDays: number;
   status: ContractStatus;
   notifiedAt: string | null;
-  depositor: { id: string; lastName: string; firstName: string | null; defaultCommission: string };
+  depositor: {
+    id: string;
+    lastName: string;
+    firstName: string | null;
+    code: string | null;
+    defaultCommission: string;
+  };
   _count: { products: number };
   products?: ProductSummary[];
 }

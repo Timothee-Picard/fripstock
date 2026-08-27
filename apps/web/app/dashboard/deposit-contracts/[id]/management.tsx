@@ -117,9 +117,12 @@ export function ContractForm({
 
 export function AttachForm({
   contractId,
+  code,
   candidates,
 }: {
   contractId: string;
+  /** Code du déposant, pour montrer à quoi ressemblera la nouvelle référence. */
+  code: string;
   /** Produits non vendus, encore rattachables. */
   candidates: ProductSummary[];
 }) {
@@ -161,6 +164,20 @@ export function AttachForm({
               </label>
             ))}
           </div>
+          <label className="flex items-start gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              name="renumber"
+              className="mt-0.5 size-4 rounded border-slate-400 accent-slate-900"
+            />
+            <span>
+              Renuméroter en référence de dépôt (D-{code}-…)
+              <span className="mt-0.5 block text-xs text-slate-600">
+                À cocher seulement si vous pouvez refaire les étiquettes : l&apos;ancienne référence
+                est déjà collée sur le vêtement.
+              </span>
+            </span>
+          </label>
           <Button type="submit" disabled={pending}>
             {pending ? 'Rattachement…' : 'Rattacher'}
           </Button>
@@ -180,9 +197,20 @@ export function DetachButton({
   const [state, action, pending] = useActionState(detachProduct, INITIAL_STATE);
 
   return (
-    <form action={action} className="inline">
+    <form action={action} className="inline-flex items-center gap-2">
       <input type="hidden" name="id" value={contractId} />
       <input type="hidden" name="productId" value={product.id} />
+      <label
+        className="inline-flex items-center gap-1 text-xs text-slate-600"
+        title="Lui redonner une référence d'article acheté. Suppose de refaire l'étiquette."
+      >
+        <input
+          type="checkbox"
+          name="renumber"
+          className="size-3.5 rounded border-slate-400 accent-slate-900"
+        />
+        renuméroter
+      </label>
       <button
         type="submit"
         disabled={pending}

@@ -265,13 +265,18 @@ describe('contrats de dépôt', () => {
     });
   });
 
-  it('rattache des produits en une fois', async () => {
+  it('rattache des produits en une fois, sans les renuméroter', async () => {
     await contrats.attachProducts({}, form({ id: 'c1', productId: ['p1', 'p2'] }));
     expect(dernierAppel()).toMatchObject({
       route: '/deposit-contracts/c1/products',
       method: 'POST',
-      body: { productIds: ['p1', 'p2'] },
+      body: { productIds: ['p1', 'p2'], renumber: false },
     });
+  });
+
+  it('demande la renumérotation quand la case est cochée', async () => {
+    await contrats.attachProducts({}, form({ id: 'c1', productId: ['p1'], renumber: 'on' }));
+    expect(dernierAppel().body?.renumber).toBe(true);
   });
 
   it('refuse un rattachement vide sans appeler l’API', async () => {
@@ -281,12 +286,17 @@ describe('contrats de dépôt', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it('détache un produit précis', async () => {
+  it('détache un produit précis, référence inchangée', async () => {
     await contrats.detachProduct({}, form({ id: 'c1', productId: 'p1' }));
     expect(dernierAppel()).toMatchObject({
       route: '/deposit-contracts/c1/products/p1',
       method: 'DELETE',
     });
+  });
+
+  it('demande la renumérotation en query, un DELETE ne portant pas de corps', async () => {
+    await contrats.detachProduct({}, form({ id: 'c1', productId: 'p1', renumber: 'on' }));
+    expect(dernierAppel().route).toBe('/deposit-contracts/c1/products/p1?renumber=true');
   });
 
   it('déclenche la passe d’échéances et résume ce qui s’est passé', async () => {
