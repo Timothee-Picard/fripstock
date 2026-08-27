@@ -15,4 +15,9 @@ COPY . .
 
 EXPOSE 3001
 
-CMD ["npm", "run", "start:dev"]
+# Le client Prisma se génère au démarrage, et non à l'installation : le schéma
+# n'est pas encore copié quand `npm ci` tourne, et `src/generated/` est ignoré
+# par git — sur un dépôt fraîchement cloné, il n'existe pas et Nest ne démarre
+# pas du tout. En local, le dossier traînant d'une génération précédente, la
+# panne restait invisible jusqu'à la CI.
+CMD ["sh", "-c", "npx --no -- prisma generate && npm run start:dev"]

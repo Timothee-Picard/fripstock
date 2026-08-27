@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
-	install hooks format migrate seed studio check check-format check-lint check-types check-db \
+	install hooks format generate migrate seed studio check check-format check-lint check-types check-db \
 	check-test check-build check-commits release
 
 help: ## Affiche cette aide
@@ -82,7 +82,18 @@ format: ## Reformate tout le dépôt (Prettier + schéma Prisma)
 		./scripts/node-run.sh apps/api npx --no -- prisma format; \
 	fi
 
-check: check-format check-lint check-types check-db check-test check-build ## Lance toutes les vérifications (identique à la CI)
+generate: ## Génère le client Prisma à partir du schéma
+	@echo "--> client prisma"
+	@# `src/generated/` est ignoré par git : sur un dépôt fraîchement cloné il
+	@# n'existe pas, et sans lui chaque type Prisma devient un type d'erreur —
+	@# le lint rendait alors un millier de « Unsafe ... of a type that could
+	@# not be resolved ». Invisible en local, où le dossier traîne d'une
+	@# génération précédente ; fatal en CI.
+	@if [ -f apps/api/prisma/schema.prisma ]; then \
+		./scripts/node-run.sh apps/api npx --no -- prisma generate; \
+	fi
+
+check: generate check-format check-lint check-types check-db check-test check-build ## Lance toutes les vérifications (identique à la CI)
 	@echo "==> make check : tout est vert"
 
 check-format: ## Vérifie le formatage Prettier
