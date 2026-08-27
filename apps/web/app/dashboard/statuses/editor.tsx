@@ -1,10 +1,11 @@
 'use client';
 
-import { Background, Controls, MarkerType, ReactFlow, type Edge, type Node } from '@xyflow/react';
+import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import { FlowEdge } from './flow-edge';
+import { flowEdges, nodePosition } from './flow';
 import { setDefaultStatus, updateStatus } from './actions';
 import { StatusNodeView } from './status-node';
 import { Alert } from '@/components/field';
@@ -43,7 +44,7 @@ export function StatusEditor({ statuses }: { statuses: Status[] }) {
       statuses.map((s, i) => ({
         id: s.id,
         type: 'status',
-        position: { x: s.positionX ?? (i % 3) * 260, y: s.positionY ?? Math.floor(i / 3) * 130 },
+        position: nodePosition(s, i),
         data: { status: s },
         selected: s.id === selectionId,
         draggable: false,
@@ -53,23 +54,7 @@ export function StatusEditor({ statuses }: { statuses: Status[] }) {
     [statuses, selectionId],
   );
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      statuses.flatMap((s) =>
-        s.flowDefined
-          ? s.allowedTargets.map((cibleId) => ({
-              id: `${s.id}->${cibleId}`,
-              source: s.id,
-              target: cibleId,
-              type: 'flux',
-              selectable: false,
-              deletable: false,
-              markerEnd: { type: MarkerType.ArrowClosed },
-            }))
-          : [],
-      ),
-    [statuses],
-  );
+  const edges = useMemo<Edge[]>(() => flowEdges(statuses), [statuses]);
 
   const selection = statuses.find((s) => s.id === selectionId);
 

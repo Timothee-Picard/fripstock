@@ -1,8 +1,10 @@
 /**
  * Default flow created with a new company.
  *
- * The positions draw the normal path of an item from left to right, with the
- * exits below. The manager rearranges them afterwards.
+ * The positions draw the item's path from left to right, one column per stage:
+ * intake, then the shop floor, then the three ways out. Grouping every
+ * `leavesStock` status in the last column keeps the active path readable — it
+ * is the one a manager follows every day.
  */
 export const BASE_STATUSES = [
   {
@@ -13,7 +15,7 @@ export const BASE_STATUSES = [
     blocksSale: false,
     leavesStock: false,
     positionX: 0,
-    positionY: 120,
+    positionY: 150,
   },
   {
     name: 'En rayon',
@@ -22,7 +24,7 @@ export const BASE_STATUSES = [
     isSale: false,
     blocksSale: false,
     leavesStock: false,
-    positionX: 260,
+    positionX: 320,
     positionY: 40,
   },
   {
@@ -32,8 +34,8 @@ export const BASE_STATUSES = [
     isSale: false,
     blocksSale: false,
     leavesStock: false,
-    positionX: 260,
-    positionY: 200,
+    positionX: 320,
+    positionY: 260,
   },
   {
     name: 'Vendu',
@@ -42,8 +44,8 @@ export const BASE_STATUSES = [
     isSale: true,
     blocksSale: false,
     leavesStock: true,
-    positionX: 540,
-    positionY: 40,
+    positionX: 660,
+    positionY: 20,
   },
   {
     name: 'Rendu au client',
@@ -52,8 +54,8 @@ export const BASE_STATUSES = [
     isSale: false,
     blocksSale: true,
     leavesStock: true,
-    positionX: 540,
-    positionY: 200,
+    positionX: 660,
+    positionY: 170,
   },
   {
     name: 'Retiré',
@@ -62,7 +64,7 @@ export const BASE_STATUSES = [
     isSale: false,
     blocksSale: true,
     leavesStock: true,
-    positionX: 540,
+    positionX: 660,
     positionY: 320,
   },
 ] as const;

@@ -22,12 +22,27 @@ export function StatusNodeView({ data, selected }: NodeProps<StatusNode>) {
       }`}
       style={{ border: `2px solid ${status.color}` }}
     >
-      {/* Une poignée de chaque côté : on tire de la droite d'un statut vers la
-          gauche du suivant pour autoriser ce passage. */}
+      {/* Quatre poignées, deux par sens de lecture.
+          Les côtés portent la progression : on sort à droite, on entre à
+          gauche. Le bas porte les retours — « Vendu » qui revient « En
+          rayon » — qui passent sous le schéma au lieu de le traverser. */}
       <Handle
+        id="avant-in"
         type="target"
         position={Position.Left}
         className="!size-3 !border-2 !border-white !bg-slate-600"
+      />
+      <Handle
+        id="retour-in"
+        type="target"
+        position={Position.Bottom}
+        className="!size-2 !border-2 !border-white !bg-slate-400"
+      />
+      <Handle
+        id="retour-out"
+        type="source"
+        position={Position.Bottom}
+        className="!size-2 !border-2 !border-white !bg-slate-400"
       />
       <div
         className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
@@ -40,6 +55,7 @@ export function StatusNodeView({ data, selected }: NodeProps<StatusNode>) {
         {brands.length > 0 ? brands.join(' · ') : 'ordinaire'}
       </div>
       <Handle
+        id="avant-out"
         type="source"
         position={Position.Right}
         className="!size-3 !border-2 !border-white !bg-slate-600"

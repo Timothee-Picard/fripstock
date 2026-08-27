@@ -1,23 +1,25 @@
 'use client';
 
-import { BaseEdge, getSmoothStepPath, Position, useNodes, type EdgeProps } from '@xyflow/react';
-import { useMemo } from 'react';
+import { BaseEdge, getSmoothStepPath, Position, type EdgeProps } from '@xyflow/react';
 
-/** Espace laissé sous le statut le plus bas du trajet. */
-const MARGE = 45;
-const LARGEUR_DEFAUT = 170;
-const HAUTEUR_DEFAUT = 62;
+/** Profondeur du couloir de retour, calculée par l'éditeur. */
+export interface FlowEdgeData extends Record<string, unknown> {
+  /** Ordonnée du passage sous le schéma. Absente pour une progression. */
+  depth?: number;
+}
 
 /**
  * Flèche entre deux statuts.
  *
- * Les poignées sont à droite (départ) et à gauche (arrivée). Un passage vers la
- * gauche — un retour, comme « Vendu » qui revient « En rayon » — traverserait
- * donc tout ce qui se trouve entre les deux.
+ * Deux tracés, parce qu'il y a deux sens de lecture. Une **progression** va de
+ * la droite d'un statut vers la gauche du suivant. Un **retour** — « Vendu »
+ * qui revient « En rayon » — sort par le bas et rentre par le bas, en passant
+ * sous tout le schéma : tiré de droite à gauche comme les autres, il
+ * traverserait les statuts qui le séparent de sa cible.
  *
- * Ces flèches-là passent sous les statuts. Un décalage fixe ne suffirait pas :
- * il faut descendre sous le plus bas des statuts effectivement situés dans le
- * couloir horizontal parcouru, sinon la flèche traverse celui du dessous.
+ * Les retours sont en pointillés : sans cette distinction, un schéma dense se
+ * lit comme un plat de spaghettis où rien ne dit ce qui avance et ce qui
+ * revient en arrière.
  */
 export function FlowEdge({
   id,
@@ -25,41 +27,26 @@ export function FlowEdge({
   sourceY,
   targetX,
   targetY,
+  sourcePosition,
+  targetPosition,
   markerEnd,
   style,
-  selected,
+  data,
 }: EdgeProps) {
-  const nodes = useNodes();
-
-  // Marge : deux statuts quasi alignés produisent aussi un tracé qui repasse
-  // sur eux.
-  const back = targetX < sourceX + 40;
-
-  const bas = useMemo(() => {
-    if (!back) return undefined;
-    const gauche = Math.min(sourceX, targetX) - 20;
-    const droite = Math.max(sourceX, targetX) + 20;
-
-    let plusBas = Math.max(sourceY, targetY);
-    for (const n of nodes) {
-      const x = n.position.x;
-      const width = n.measured?.width ?? LARGEUR_DEFAUT;
-      // On ignore les statuts hors du couloir parcouru.
-      if (x + width < gauche || x > droite) continue;
-      plusBas = Math.max(plusBas, n.position.y + (n.measured?.height ?? HAUTEUR_DEFAUT));
-    }
-    return plusBas + MARGE;
-  }, [back, nodes, sourceX, sourceY, targetX, targetY]);
+  const retour = sourcePosition === Position.Bottom;
+  const depth = (data as FlowEdgeData | undefined)?.depth;
 
   const [chemin] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    borderRadius: 12,
-    ...(bas !== undefined ? { centerY: bas } : {}),
+    sourcePosition,
+    targetPosition,
+    borderRadius: 10,
+    // `centerY` fixe la profondeur du couloir : les retours s'y étagent, sinon
+    // ils se superposent tous sur la même ligne et on n'en distingue plus un.
+    ...(retour && depth !== undefined ? { centerY: depth } : {}),
   });
 
   return (
@@ -69,8 +56,9 @@ export function FlowEdge({
       markerEnd={markerEnd}
       style={{
         ...style,
-        strokeWidth: selected ? 3 : 1.5,
-        stroke: selected ? '#0f172a' : '#94a3b8',
+        strokeWidth: 1.5,
+        stroke: retour ? '#cbd5e1' : '#94a3b8',
+        ...(retour ? { strokeDasharray: '5 4' } : {}),
       }}
     />
   );
