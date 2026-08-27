@@ -158,6 +158,31 @@ describe('LotLines', () => {
     expect(screen.getByRole('status')).toHaveTextContent('1 article');
   });
 
+  it('donne à un article non étiqueté la moyenne des autres', async () => {
+    rendre(45);
+    await userEvent.type(nomDe(1), 'Robe');
+    await userEvent.type(prixDe(1), '10');
+    await userEvent.type(nomDe(2), 'Sac');
+    await userEvent.type(prixDe(2), '20');
+    await userEvent.type(nomDe(3), 'À trier');
+    // La ligne 3 n'a pas de prix : elle compte pour 15, la moyenne des deux.
+    expect(achatDe(1)).toHaveTextContent('10,00 €');
+    expect(achatDe(2)).toHaveTextContent('20,00 €');
+    expect(achatDe(3)).toHaveTextContent('15,00 €');
+  });
+
+  it('laisse à zéro un article explicitement donné', async () => {
+    rendre(30);
+    await userEvent.type(nomDe(1), 'Robe');
+    await userEvent.type(prixDe(1), '10');
+    await userEvent.type(nomDe(2), 'Sac');
+    await userEvent.type(prixDe(2), '20');
+    await userEvent.type(nomDe(3), 'Cadeau');
+    await userEvent.type(prixDe(3), '0');
+    expect(achatDe(3)).toHaveTextContent('0,00 €');
+    expect(achatDe(1)).toHaveTextContent('10,00 €');
+  });
+
   it('montre une colonne d’achat en lecture seule — la règle vit côté API', () => {
     rendre();
     const entetes = screen.getAllByRole('columnheader').map((th) => th.textContent);

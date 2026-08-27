@@ -49,14 +49,22 @@ interface Line {
   count: string;
 }
 
-function nombre(valeur: string): number {
+/**
+ * Prix de vente d'une cellule, ou `null` si elle est vide.
+ *
+ * La nuance décide de la répartition : une cellule vide veut dire « pas encore
+ * étiqueté » et prend la moyenne des autres, alors qu'un zéro saisi est un
+ * article donné, qui ne porte rien du lot.
+ */
+function prix(valeur: string): number | null {
+  if (valeur.trim() === '') return null;
   const n = Number(valeur.replace(',', '.'));
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function exemplaires(valeur: string): number {
-  const n = Math.floor(nombre(valeur));
-  return n > 0 ? n : 1;
+  const n = Math.floor(Number(valeur.replace(',', '.')));
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 export function LotLines({
@@ -99,7 +107,7 @@ export function LotLines({
     const debuts = counts.map((_, i) => counts.slice(0, i).reduce((t, n) => t + n, 0));
 
     const poids = lines.flatMap((l, i) =>
-      Array.from({ length: counts[i] }, () => nombre(l.salePrice)),
+      Array.from({ length: counts[i] }, () => prix(l.salePrice)),
     );
     const parts = splitCost(totalPurchasePrice, poids);
 
@@ -119,7 +127,8 @@ export function LotLines({
   const totalVente =
     Math.round(
       lines.reduce(
-        (t, l, i) => (repartition[i].active ? t + nombre(l.salePrice) * exemplaires(l.count) : t),
+        (t, l, i) =>
+          repartition[i].active ? t + (prix(l.salePrice) ?? 0) * exemplaires(l.count) : t,
         0,
       ) * 100,
     ) / 100;
@@ -171,7 +180,8 @@ export function LotLines({
       <p className="text-sm text-slate-600">
         Une ligne par modèle. « Nombre » crée autant de produits distincts, chacun vendable
         séparément — quatre t-shirts identiques donnent quatre articles, pas un article en quatre
-        exemplaires. Le prix d&apos;achat se calcule tout seul, au prorata du prix de vente.
+        exemplaires. Le prix d&apos;achat se calcule tout seul, au prorata du prix de vente ; un
+        article laissé sans prix compte pour la moyenne des autres.
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">

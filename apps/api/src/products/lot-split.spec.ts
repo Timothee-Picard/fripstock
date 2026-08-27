@@ -28,11 +28,45 @@ describe('splitCost', () => {
     expect(parts).toEqual([5, 5]);
   });
 
-  it('partage à parts égales quand aucun prix de vente n’est donné', () => {
-    expect(splitCost(6, [0, 0, 0])).toEqual([2, 2, 2]);
+  describe('prix de vente manquants', () => {
+    it('partage à parts égales quand aucun prix n’est fixé', () => {
+      expect(splitCost(6, [null, null, null])).toEqual([2, 2, 2]);
+    });
+
+    it('donne à un article sans prix la moyenne des autres', () => {
+      // Deux articles à 10 et 20 : le troisième compte pour 15.
+      expect(splitCost(45, [10, 20, null])).toEqual([10, 20, 15]);
+    });
+
+    it('ne fait pas porter tout le lot aux seuls articles étiquetés', () => {
+      // Sans cette règle, le t-shirt non étiqueté prendrait zéro et les trois
+      // autres paieraient le lot entier.
+      const parts = splitCost(40, [10, 10, 10, null]);
+      expect(parts).toEqual([10, 10, 10, 10]);
+    });
+
+    it('applique la moyenne à chacun des articles sans prix', () => {
+      expect(splitCost(60, [20, 40, null, null])).toEqual([10, 20, 15, 15]);
+    });
+
+    it('distingue un prix à zéro d’un prix absent', () => {
+      // Zéro est un prix décidé : l'article est donné, il ne porte rien.
+      expect(splitCost(30, [10, 20, 0])).toEqual([10, 20, 0]);
+      // Absent veut dire « pas encore su » : il prend la moyenne.
+      expect(splitCost(45, [10, 20, null])).toEqual([10, 20, 15]);
+    });
+
+    it('retombe sur des parts égales si tous les prix fixés valent zéro', () => {
+      expect(splitCost(6, [0, 0, null])).toEqual([2, 2, 2]);
+    });
+
+    it('retombe exactement sur le prix payé, moyenne comprise', () => {
+      const parts = splitCost(7, [10, 20, null]);
+      expect(somme(parts)).toBe(7);
+    });
   });
 
-  it('partage à parts égales aussi quand la liste est vide de poids utiles', () => {
+  it('partage à parts égales aussi quand tous les poids sont nuls', () => {
     expect(splitCost(1, [0, 0, 0])).toEqual([0.34, 0.33, 0.33]);
   });
 
@@ -41,7 +75,7 @@ describe('splitCost', () => {
     expect(splitCost(1, [1, 1, 1])).toEqual([0.34, 0.33, 0.33]);
   });
 
-  it('traite un poids négatif comme nul', () => {
+  it('traite un poids négatif comme un prix à zéro', () => {
     expect(splitCost(4, [-5, 10, 10])).toEqual([0, 2, 2]);
   });
 

@@ -374,6 +374,30 @@ describe('ProductsService', () => {
       expect(achats()).toEqual([2, 2, 2]);
     });
 
+    it('donne à un article non étiqueté la moyenne des autres', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 45,
+        lines: [
+          { name: 'Robe', categoryId: 'cat-1', salePrice: 10 },
+          { name: 'Sac', categoryId: 'cat-1', salePrice: 20 },
+          { name: 'À trier', categoryId: 'cat-1' },
+        ],
+      });
+      expect(achats()).toEqual([10, 20, 15]);
+    });
+
+    it('laisse à zéro un article explicitement donné', async () => {
+      await service.createLot(manager, {
+        totalPurchasePrice: 30,
+        lines: [
+          { name: 'Robe', categoryId: 'cat-1', salePrice: 10 },
+          { name: 'Sac', categoryId: 'cat-1', salePrice: 20 },
+          { name: 'Cadeau', categoryId: 'cat-1', salePrice: 0 },
+        ],
+      });
+      expect(achats()).toEqual([10, 20, 0]);
+    });
+
     it('écrit tout dans une seule transaction', async () => {
       await service.createLot(manager, lot);
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);

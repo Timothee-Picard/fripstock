@@ -369,9 +369,11 @@ export class ProductsService {
       }));
     });
 
+    // `null` et non zéro pour un prix de vente absent : la répartition doit
+    // pouvoir distinguer « pas encore étiqueté » de « donné ».
     const parts = splitCost(
       dto.totalPurchasePrice,
-      articles.map((a) => Number(a.produit.salePrice ?? 0)),
+      articles.map((a) => a.produit.salePrice ?? null),
     );
 
     const created = await this.prisma.$transaction(async (tx) => {

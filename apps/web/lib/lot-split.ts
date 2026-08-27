@@ -6,15 +6,29 @@
  * rendre les mêmes centimes, sinon l'aperçu ment — d'où des tests identiques
  * des deux côtés.
  */
-export function splitCost(total: number, weights: number[]): number[] {
+
+/**
+ * Poids d'un article : son prix de vente, ou `null` s'il n'est pas encore fixé.
+ * `0` est un prix décidé — un article donné — et ne porte donc rien du lot.
+ */
+export type Weight = number | null | undefined;
+
+export function splitCost(total: number, weights: Weight[]): number[] {
   if (weights.length === 0) return [];
 
-  const cents = Math.round(total * 100);
-  const somme = weights.reduce((t, w) => t + Math.max(0, w), 0);
-  const utiles = somme > 0 ? weights.map((w) => Math.max(0, w)) : weights.map(() => 1);
-  const totalPoids = utiles.reduce((t, w) => t + w, 0);
+  // Un article non étiqueté a quand même coûté quelque chose : il prend la
+  // moyenne de ceux dont le prix est connu, plutôt que zéro.
+  const fixes = weights.filter((w): w is number => w !== null && w !== undefined);
+  const sommeFixes = fixes.reduce((t, w) => t + Math.max(0, w), 0);
+  const moyenne = fixes.length > 0 ? sommeFixes / fixes.length : 0;
 
-  const exactes = utiles.map((w) => (cents * w) / totalPoids);
+  const utiles = weights.map((w) => (w === null || w === undefined ? moyenne : Math.max(0, w)));
+  const totalPoids = utiles.reduce((t, w) => t + w, 0);
+  const finaux = totalPoids > 0 ? utiles : weights.map(() => 1);
+  const sommePoids = finaux.reduce((t, w) => t + w, 0);
+
+  const cents = Math.round(total * 100);
+  const exactes = finaux.map((w) => (cents * w) / sommePoids);
   const planchers = exactes.map(Math.floor);
   let reste = cents - planchers.reduce((t, c) => t + c, 0);
 
