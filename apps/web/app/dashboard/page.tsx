@@ -43,13 +43,18 @@ export default async function PageTableauDeBord({
   const session = await requireSession();
   const params = await searchParams;
   const from = typeof params.from === 'string' ? params.from : undefined;
+  // Boutique choisie dans l'en-tête. Absente : toutes celles que la session
+  // autorise — l'API applique la même règle, elle ne croit pas l'écran.
+  const shopId = typeof params.shopId === 'string' ? params.shopId : undefined;
+
+  const requete = new URLSearchParams();
+  if (from) requete.set('from', `${from}T00:00:00.000Z`);
+  if (shopId) requete.set('shopId', shopId);
 
   let stats: Dashboard | null = null;
   let denied = false;
   try {
-    stats = await apiFetch<Dashboard>(
-      `/stats/dashboard${from ? `?from=${from}T00:00:00.000Z` : ''}`,
-    );
+    stats = await apiFetch<Dashboard>(`/stats/dashboard?${requete.toString()}`);
   } catch (error) {
     // Un employé sans `stats.view` n'a pas à tomber sur une page en erreur.
     if (error instanceof ApiError && error.status === 403) denied = true;
@@ -86,7 +91,7 @@ export default async function PageTableauDeBord({
       {/* Le comptoir en tête : c'est le geste du quotidien, tout le reste est
           de la lecture. */}
       {hasPermission(session, 'products.changeStatus') ? (
-        <Counter shops={session.shops.map((b) => ({ id: b.shopId, name: b.name }))} />
+        <Counter shopId={shopId} shopName={session.shops.find((b) => b.shopId === shopId)?.name} />
       ) : null}
 
       {/* La journée en cours passe avant la période : c'est la question qu'on

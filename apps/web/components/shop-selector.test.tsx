@@ -1,8 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ShopSelector } from './shop-selector';
 import type { ShopAccess } from '@/lib/types';
+
+const push = vi.fn();
+let params = new URLSearchParams();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => '/dashboard',
+  useSearchParams: () => params,
+}));
+
+const { ShopSelector } = await import('./shop-selector');
 
 const shop = (id: string, name: string): ShopAccess => ({
   shopId: id,
@@ -12,57 +22,58 @@ const shop = (id: string, name: string): ShopAccess => ({
 });
 
 const deux = [shop('b1', 'Centre-ville'), shop('b2', 'Gare')];
+const selecteur = () => screen.getByRole('combobox');
 
 describe('ShopSelector', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    push.mockClear();
+    params = new URLSearchParams();
+  });
 
   it('ne s’affiche pas avec une seule boutique — il n’y a rien à choisir', () => {
     const { container } = render(<ShopSelector shops={[shop('b1', 'Centre-ville')]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('ne s’affiche pas non plus sans boutique', () => {
-    const { container } = render(<ShopSelector shops={[]} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('propose toutes les boutiques dès qu’il y en a deux', () => {
+  it('propose « Toutes les boutiques » en plus de chacune', () => {
     render(<ShopSelector shops={deux} />);
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Toutes les boutiques',
       'Centre-ville',
       'Gare',
     ]);
   });
 
-  it('mémorise le choix pour la prochaine visite', async () => {
+  it('écrit le choix dans l’URL, pour que le serveur le lise', async () => {
     render(<ShopSelector shops={deux} />);
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'b2');
-    expect(localStorage.getItem('fripstock.activeShop')).toBe('b2');
+    await userEvent.selectOptions(selecteur(), 'b2');
+    expect(push).toHaveBeenCalledWith('/dashboard?shopId=b2');
   });
 
-  it('restaure le choix mémorisé au montage', async () => {
-    localStorage.setItem('fripstock.activeShop', 'b2');
+  it('retire le paramètre pour « Toutes les boutiques »', async () => {
+    params = new URLSearchParams({ shopId: 'b2' });
     render(<ShopSelector shops={deux} />);
-    expect(await screen.findByRole('combobox')).toHaveValue('b2');
+    await userEvent.selectOptions(selecteur(), '');
+    expect(push).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('ignore un choix mémorisé qui ne correspond plus à aucune boutique', () => {
-    localStorage.setItem('fripstock.activeShop', 'boutique-fermee');
+  it('reprend la boutique lue dans l’URL', () => {
+    params = new URLSearchParams({ shopId: 'b2' });
     render(<ShopSelector shops={deux} />);
-    expect(screen.getByRole('combobox')).toHaveValue('b1');
+    expect(selecteur()).toHaveValue('b2');
   });
 
-  it('reste utilisable quand le stockage est bloqué, en navigation privée', async () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('bloqué');
-    });
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('bloqué');
-    });
+  it('conserve les autres paramètres, comme la période', async () => {
+    params = new URLSearchParams({ from: '2026-08-01' });
     render(<ShopSelector shops={deux} />);
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'b2');
-    expect(screen.getByRole('combobox')).toHaveValue('b2');
-    setItem.mockRestore();
-    vi.restoreAllMocks();
+    await userEvent.selectOptions(selecteur(), 'b1');
+    expect(String(push.mock.calls[0][0])).toContain('from=2026-08-01');
+  });
+
+  it('repart de la première page : la pagination ne vaut plus', async () => {
+    params = new URLSearchParams({ page: '3' });
+    render(<ShopSelector shops={deux} />);
+    await userEvent.selectOptions(selecteur(), 'b1');
+    expect(String(push.mock.calls[0][0])).not.toContain('page=');
   });
 });

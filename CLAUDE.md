@@ -184,6 +184,12 @@ donc aucune ligne `ShopAccess` ne les couvre. Règle : un utilisateur qui possè
 permission dans **au moins une** boutique de son entreprise l'a aussi sur le stock central
 (un employé doit pouvoir créer un produit avant de savoir dans quelle boutique il ira).
 
+**Statistiques** : sans boutique précisée, un employé ne voit que les chiffres des
+boutiques où il détient `stats.view`, plus le stock central. La permission accordée sur
+une boutique ne doit pas livrer le chiffre d'affaires des autres. Le sélecteur de
+boutique de l'en-tête écrit son choix dans l'URL (`?shopId=`), lue côté serveur —
+l'API applique la restriction de son côté, elle ne fait pas confiance à l'écran.
+
 **Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
 clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
 

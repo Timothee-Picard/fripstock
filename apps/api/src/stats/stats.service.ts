@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { readPermissions } from '../common/permissions';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -45,6 +46,31 @@ export class StatsService {
    * - stock actif → statut `leavesStock = false`
    * - rendu       → statut `blocksSale`
    */
+  /**
+   * Boutiques dont un employé peut voir les chiffres, faute de boutique
+   * précisée.
+   *
+   * Le gérant voit toute son entreprise. Un employé ne voit que les boutiques
+   * où il détient `stats.view` : sans ce filtre, la permission accordée sur une
+   * boutique lui livrait le chiffre d'affaires de toutes les autres.
+   *
+   * Le stock central est inclus, comme partout : il n'appartient à aucune
+   * boutique, et la permission détenue quelque part y donne accès (CLAUDE.md).
+   */
+  private async shopRestriction(currentUser: CurrentUser): Promise<Prisma.ProductWhereInput> {
+    if (currentUser.isManager) return {};
+
+    const accesses = await this.prisma.shopAccess.findMany({
+      where: { userId: currentUser.userId, shop: { companyId: currentUser.companyId } },
+      select: { shopId: true, permissions: true },
+    });
+    const visibles = accesses
+      .filter((a) => readPermissions(a.permissions)['stats.view'] === true)
+      .map((a) => a.shopId);
+
+    return { OR: [{ shopId: null }, { shopId: { in: visibles } }] };
+  }
+
   async dashboard(currentUser: CurrentUser, filters: PeriodDto) {
     const to = filters.to ? new Date(filters.to) : new Date();
     const from = filters.from
@@ -63,7 +89,7 @@ export class StatsService {
 
     const base: Prisma.ProductWhereInput = {
       companyId: currentUser.companyId,
-      ...(filters.shopId ? { shopId: filters.shopId } : {}),
+      ...(filters.shopId ? { shopId: filters.shopId } : await this.shopRestriction(currentUser)),
     };
 
     // La journée en cours, indépendante de la période choisie : c'est la

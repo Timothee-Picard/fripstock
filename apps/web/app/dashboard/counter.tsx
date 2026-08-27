@@ -35,7 +35,7 @@ function nombre(valeur: string | null): number {
 const CHAMP =
   'w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900';
 
-export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
+export function Counter({ shopId, shopName }: { shopId?: string; shopName?: string }) {
   const [state, action, pending] = useActionState(sellBasket, {});
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [saisie, setSaisie] = useState('');
@@ -98,21 +98,56 @@ export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
     champ.current?.focus();
   }
 
-  async function chercher(terme: string) {
+  /** Articles vendables correspondant à la saisie, dans la boutique choisie. */
+  async function rechercher(terme: string, signal?: AbortSignal): Promise<ProductSummary[]> {
+    const params = new URLSearchParams({ q: terme });
+    if (shopId) params.set('shopId', shopId);
+    const reponse = await fetch(`/api/products/search?${params.toString()}`, { signal });
+    return reponse.ok ? ((await reponse.json()) as ProductSummary[]) : [];
+  }
+
+  // Autocomplétion : les propositions suivent la frappe, après une courte
+  // pause. Sans elle, chaque caractère lancerait une requête.
+  useEffect(() => {
+    const terme = saisie.trim();
+    if (terme.length < 2) return;
+    const controller = new AbortController();
+    const minuteur = setTimeout(() => {
+      rechercher(terme, controller.signal)
+        .then(setPropositions)
+        .catch(() => {
+          // Requête annulée par la frappe suivante, ou API indisponible : la
+          // validation par Entrée reste possible et dira ce qui ne va pas.
+        });
+    }, 200);
+    return () => {
+      clearTimeout(minuteur);
+      controller.abort();
+    };
+    // `rechercher` est stable pour un `shopId` donné.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saisie, shopId]);
+
+  // Les propositions ne s'affichent qu'à partir de deux caractères. C'est
+  // dérivé du champ plutôt que remis à zéro dans l'effet : effacer sa saisie
+  // doit vider la liste tout de suite, sans attendre un rendu de plus.
+  const affichees = saisie.trim().length < 2 ? [] : propositions;
+
+  /**
+   * Validation au clavier.
+   *
+   * Une référence exacte entre sans un clic — c'est le geste du comptoir, et
+   * demain celui de la douchette. Une seule proposition entre aussi : hésiter
+   * devant une liste d'un élément n'aurait pas de sens.
+   */
+  async function valider(terme: string) {
     setCherche(true);
     setErreur(null);
     try {
-      const params = new URLSearchParams({ q: terme });
-      if (shops.length === 1) params.set('shopId', shops[0].id);
-      const reponse = await fetch(`/api/products/search?${params.toString()}`);
-      const trouves = reponse.ok ? ((await reponse.json()) as ProductSummary[]) : [];
-
-      // Référence exacte : on ajoute sans faire cliquer.
+      const trouves = affichees.length > 0 ? affichees : await rechercher(terme);
       const exact = trouves.find((p) => p.reference?.toLowerCase() === terme.toLowerCase());
-      if (exact) {
-        ajouter(exact);
-        return;
-      }
+      if (exact) return ajouter(exact);
+      if (trouves.length === 1) return ajouter(trouves[0]);
       if (trouves.length === 0) {
         setErreur(`Aucun article vendable ne correspond à « ${terme} ».`);
         setPropositions([]);
@@ -131,7 +166,8 @@ export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium text-slate-900">Vendre des articles</h2>
         <p className="text-xs text-slate-600">
-          Tapez la référence de l&apos;étiquette, ou un nom d&apos;article.
+          Référence de l&apos;étiquette, ou nom d&apos;article —{' '}
+          {shopName ?? 'toutes les boutiques'}.
         </p>
       </div>
 
@@ -140,14 +176,16 @@ export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
         onSubmit={(e) => {
           e.preventDefault();
           const terme = saisie.trim();
-          if (terme) void chercher(terme);
+          if (terme) void valider(terme);
         }}
       >
         <input
           ref={champ}
           autoFocus
           value={saisie}
-          onChange={(e) => setSaisie(e.target.value)}
+          // Les espaces sautent à la frappe : une référence copiée depuis un
+          // tableur en traîne souvent, et une douchette en ajoute parfois.
+          onChange={(e) => setSaisie(e.target.value.replace(/\s+/g, ''))}
           placeholder="A-0042"
           aria-label="Référence ou nom de l'article"
           className={`${CHAMP} max-w-xs font-mono`}
@@ -159,9 +197,9 @@ export function Counter({ shops }: { shops: { id: string; name: string }[] }) {
 
       {erreur ? <p className="mt-2 text-sm text-red-700">{erreur}</p> : null}
 
-      {propositions.length > 0 ? (
+      {affichees.length > 0 ? (
         <ul className="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
-          {propositions.map((p) => (
+          {affichees.map((p) => (
             <li key={p.id}>
               <button
                 type="button"

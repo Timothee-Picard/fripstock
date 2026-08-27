@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { StatsService } from './stats.service';
 import { asPrisma, createPrismaMock, type PrismaMock } from '../test/prisma-mock';
-import { COMPANY_ID, SHOP_ID, manager } from '../test/fixtures';
+import { COMPANY_ID, SHOP_ID, employee, manager } from '../test/fixtures';
 
 const vendu = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 'p1',
@@ -68,6 +68,52 @@ describe('StatsService', () => {
       await expect(
         service.dashboard(manager, { from: '2026-02-01', to: '2026-01-01' }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('portée par boutique', () => {
+    it('ne filtre pas pour un gérant : il voit toute son entreprise', async () => {
+      arrange([], []);
+      await service.dashboard(manager, {});
+      expect(prisma.product.findMany.mock.calls[1][0].where).toEqual({ companyId: COMPANY_ID });
+      expect(prisma.shopAccess.findMany).not.toHaveBeenCalled();
+    });
+
+    it("limite l'employé aux boutiques où il a stats.view", async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([
+        { shopId: 'b1', permissions: { 'products.view': true } },
+        { shopId: 'b2', permissions: { 'stats.view': true } },
+      ]);
+      arrange([], []);
+      await service.dashboard(employee, {});
+      // b1 est écartée : il y travaille, mais n'a pas le droit d'en voir les
+      // chiffres. Sans ce filtre, une permission sur b2 livrait tout.
+      expect(prisma.product.findMany.mock.calls[1][0].where).toEqual({
+        companyId: COMPANY_ID,
+        OR: [{ shopId: null }, { shopId: { in: ['b2'] } }],
+      });
+    });
+
+    it('laisse le stock central visible, il n’est à aucune boutique', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([]);
+      arrange([], []);
+      await service.dashboard(employee, {});
+      const where = prisma.product.findMany.mock.calls[1][0].where as {
+        OR: { shopId: unknown }[];
+      };
+      expect(where.OR[0]).toEqual({ shopId: null });
+      expect(where.OR[1]).toEqual({ shopId: { in: [] } });
+    });
+
+    it('applique la même restriction aux quatre requêtes', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([
+        { shopId: 'b2', permissions: { 'stats.view': true } },
+      ]);
+      arrange([], []);
+      await service.dashboard(employee, {});
+      for (const appel of prisma.product.findMany.mock.calls) {
+        expect(appel[0].where.OR).toEqual([{ shopId: null }, { shopId: { in: ['b2'] } }]);
+      }
     });
   });
 
