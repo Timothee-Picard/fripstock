@@ -11,6 +11,7 @@ export interface RouteInfo {
   public: boolean;
   managerOnly: boolean;
   permissions?: string[];
+  permissionMode?: 'all' | 'any';
   shopSourceParam?: string;
 }
 
@@ -26,12 +27,15 @@ export function route(controller: new (...args: never[]) => object, name: string
     throw new Error(`${controller.name} n'a pas de méthode ${name}`);
   }
   const source = Reflect.getMetadata(SHOP_SOURCE_KEY, handler) as { param: string } | undefined;
+  const regle = Reflect.getMetadata(PERMISSION_KEY, handler) as
+    { mode: 'all' | 'any'; permissions: string[] } | undefined;
   return {
     method: RequestMethod[Reflect.getMetadata(METHOD_METADATA, handler) as number],
     path: Reflect.getMetadata(PATH_METADATA, handler) as string,
     public: Reflect.getMetadata(PUBLIC_KEY, handler) === true,
     managerOnly: Reflect.getMetadata(MANAGER_KEY, handler) === true,
-    permissions: Reflect.getMetadata(PERMISSION_KEY, handler) as string[] | undefined,
+    permissions: regle?.permissions,
+    permissionMode: regle?.mode,
     shopSourceParam: source?.param,
   };
 }

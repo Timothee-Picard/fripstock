@@ -59,7 +59,9 @@ export default async function DepositContractsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <DeadlinesButton />
+          {/* La passe d'échéances est réservée au gérant : la proposer à un
+              employé ne mène qu'à un refus. */}
+          {session.isManager ? <DeadlinesButton /> : null}
           {depositors.length === 0 ? null : peutCreer ? (
             <Link
               href="/dashboard/deposit-contracts/new"

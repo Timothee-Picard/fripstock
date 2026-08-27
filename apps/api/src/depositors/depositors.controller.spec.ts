@@ -31,16 +31,18 @@ describe('DepositorsController', () => {
     expect(route(DepositorsController, name)).toMatchObject({ method, path });
   });
 
+  // Lire s'ouvre à qui gère les contrats : on ne peut pas en ouvrir un sans
+  // choisir son déposant. Écrire reste réservé à `depositors.manage`.
   it.each([
-    ['list', 'depositors.manage'],
-    ['detail', 'depositors.manage'],
-    ['products', 'depositors.manage'],
-    ['statement', 'depositors.manage'],
-    ['create', 'depositors.manage'],
-    ['update', 'depositors.manage'],
-    ['delete', 'depositors.manage'],
-  ])('%s exige la permission %s', (name, permission) => {
-    expect(route(DepositorsController, name).permissions).toEqual([permission].flat());
+    ['list', ['depositors.manage', 'deposits.manage'], 'any'],
+    ['detail', ['depositors.manage', 'deposits.manage'], 'any'],
+    ['products', ['depositors.manage', 'deposits.manage'], 'any'],
+    ['statement', ['depositors.manage', 'deposits.manage'], 'any'],
+    ['create', ['depositors.manage'], 'all'],
+    ['update', ['depositors.manage'], 'all'],
+    ['delete', ['depositors.manage'], 'all'],
+  ])('%s exige %s (%s)', (name, permissions, mode) => {
+    expect(route(DepositorsController, name)).toMatchObject({ permissions, permissionMode: mode });
   });
 
   describe('délégation', () => {

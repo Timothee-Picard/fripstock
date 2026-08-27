@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { AuthUser } from '../common/decorators/current-user.decorator';
-import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import {
+  RequireAnyPermission,
+  RequirePermission,
+} from '../common/decorators/require-permission.decorator';
 import type { CurrentUser } from '../common/types/current-user';
 import { DepositorsService } from './depositors.service';
 import { CreateDepositorDto } from './dto/create-depositor.dto';
@@ -13,28 +16,34 @@ import { UpdateDepositorDto } from './dto/update-depositor.dto';
  */
 @Controller('depositors')
 export class DepositorsController {
+  /*
+   * Lire les déposants s'ouvre aussi à `deposits.manage` : on ne peut pas
+   * ouvrir un contrat sans choisir le déposant qu'il lie. Écrire reste réservé
+   * à `depositors.manage` — gérer des contrats ne donne pas le droit de
+   * corriger un IBAN.
+   */
   constructor(private readonly depositors: DepositorsService) {}
 
   @Get()
-  @RequirePermission('depositors.manage')
+  @RequireAnyPermission('depositors.manage', 'deposits.manage')
   list(@AuthUser() currentUser: CurrentUser) {
     return this.depositors.list(currentUser);
   }
 
   @Get(':id')
-  @RequirePermission('depositors.manage')
+  @RequireAnyPermission('depositors.manage', 'deposits.manage')
   detail(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.depositors.detail(currentUser, id);
   }
 
   @Get(':id/products')
-  @RequirePermission('depositors.manage')
+  @RequireAnyPermission('depositors.manage', 'deposits.manage')
   products(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.depositors.products(currentUser, id);
   }
 
   @Get(':id/statement')
-  @RequirePermission('depositors.manage')
+  @RequireAnyPermission('depositors.manage', 'deposits.manage')
   statement(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.depositors.statement(currentUser, id);
   }

@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { SHOP_SOURCE_KEY, type ShopSource } from '../decorators/shop-source.decorator';
-import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
+import { PERMISSION_KEY, type PermissionRule } from '../decorators/require-permission.decorator';
 import { PERMISSION_LABELS, readPermissions, type Permission } from '../permissions';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../types/current-user';
@@ -33,11 +33,12 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const permissions = this.reflector.getAllAndOverride<Permission[]>(PERMISSION_KEY, [
+    const rule = this.reflector.getAllAndOverride<PermissionRule>(PERMISSION_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (!permissions || permissions.length === 0) return true;
+    if (!rule || rule.permissions.length === 0) return true;
+    const { mode, permissions } = rule;
 
     const request = context.switchToHttp().getRequest<Request & { user?: CurrentUser }>();
     const user = request.user;
@@ -51,6 +52,7 @@ export class PermissionsGuard implements CanActivate {
     if (shopId === null) {
       // Cas 3 : stock central. Chaque permission s'évalue séparément — la
       // détenir quelque part suffit, comme partout ailleurs.
+      const detenues: Permission[] = [];
       for (const permission of permissions) {
         const compte = await this.prisma.shopAccess.count({
           where: {
@@ -61,8 +63,10 @@ export class PermissionsGuard implements CanActivate {
             permissions: { path: [permission], equals: true },
           },
         });
-        if (compte === 0) this.deny(permission, false);
+        if (compte > 0) detenues.push(permission);
+        else if (mode === 'all') this.deny(permission, false);
       }
+      if (detenues.length === 0) this.deny(permissions[0], false);
       return true;
     }
 
@@ -79,6 +83,12 @@ export class PermissionsGuard implements CanActivate {
     });
 
     const detenues = readPermissions(accesses?.permissions);
+    if (mode === 'any') {
+      // Le refus nomme la première : c'est celle qui gouverne la route, les
+      // autres n'en sont que des équivalents acceptés.
+      if (!permissions.some((p) => detenues[p] === true)) this.deny(permissions[0], true);
+      return true;
+    }
     for (const permission of permissions) {
       if (detenues[permission] !== true) this.deny(permission, true);
     }

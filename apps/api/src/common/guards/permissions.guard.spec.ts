@@ -38,8 +38,9 @@ describe('PermissionsGuard', () => {
   }
 
   function mount(options: {
-    /** Une seule permission, ou plusieurs : elles se cumulent. */
+    /** Une seule permission, ou plusieurs — cumulées, sauf `mode: 'any'`. */
     permission?: Permission | Permission[];
+    mode?: 'all' | 'any';
     source?: ShopSource;
     accesTrouve?: { permissions: unknown } | null;
     compteStockCentral?: number;
@@ -49,7 +50,7 @@ describe('PermissionsGuard', () => {
         key === PERMISSION_KEY
           ? options.permission === undefined
             ? undefined
-            : [options.permission].flat()
+            : { mode: options.mode ?? 'all', permissions: [options.permission].flat() }
           : key === SHOP_SOURCE_KEY
             ? options.source
             : undefined,
@@ -125,6 +126,51 @@ describe('PermissionsGuard', () => {
       const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
       expect(count).toHaveBeenCalled();
+    });
+  });
+
+  describe('au moins une permission (RequireAnyPermission)', () => {
+    it('accepte qui n’en détient qu’une', async () => {
+      const { guard } = mount({
+        mode: 'any',
+        permission: ['depositors.manage', 'deposits.manage'],
+        accesTrouve: { permissions: { 'deposits.manage': true } },
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('refuse qui n’en détient aucune, en nommant la première', async () => {
+      const { guard } = mount({
+        mode: 'any',
+        permission: ['depositors.manage', 'deposits.manage'],
+        accesTrouve: { permissions: { 'products.view': true } },
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(
+        "Vous n'avez pas le droit « Gérer les déposants » sur cette boutique.",
+      );
+    });
+
+    it('suffit d’en détenir une quelque part sur le stock central', async () => {
+      const { guard, count } = mount({
+        mode: 'any',
+        permission: ['depositors.manage', 'deposits.manage'],
+      });
+      // La première est introuvable, la seconde l'est : ça passe.
+      count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+      const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('refuse quand aucune n’est détenue nulle part', async () => {
+      const { guard } = mount({
+        mode: 'any',
+        permission: ['depositors.manage', 'deposits.manage'],
+        compteStockCentral: 0,
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     });
   });
 

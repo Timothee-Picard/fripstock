@@ -50,9 +50,10 @@ describe('décorateurs', () => {
   });
 
   it('@RequirePermission enregistre la clé demandée', () => {
-    expect(Reflect.getMetadata(PERMISSION_KEY, Cible.prototype.permission)).toEqual([
-      'products.view',
-    ]);
+    expect(Reflect.getMetadata(PERMISSION_KEY, Cible.prototype.permission)).toEqual({
+      mode: 'all',
+      permissions: ['products.view'],
+    });
   });
 
   it('@ShopFromResource enregistre le paramètre et son résolveur', () => {

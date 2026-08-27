@@ -223,6 +223,12 @@ en faisait une porte dérobée vers la création de produits. Ce lien n'a rien d
 de l'écran : partout où il se manifeste — bouton masqué, page refusée, case à cocher des
 accès — il doit être **écrit**, sinon le refus passe pour une panne.
 
+**`@RequireAnyPermission` pour une lecture qu'un second droit rend indispensable** : la
+liste des déposants s'ouvre à `depositors.manage` **ou** `deposits.manage`, parce qu'on ne
+peut pas ouvrir un contrat sans choisir le déposant qu'il lie. Écrire un déposant reste
+réservé à `depositors.manage` — gérer des contrats ne donne pas le droit de corriger un
+IBAN.
+
 **Statuts** : leur CRUD est réservé au gérant (`isManager`), comme les boutiques — pas de
 clé de permission fine, puisqu'ils sont personnalisables _par le gérant_.
 
