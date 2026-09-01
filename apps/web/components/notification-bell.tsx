@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { markRead } from '@/app/dashboard/notifications/actions';
+import { formatDate } from '@/lib/dates';
 import type { Notifications } from '@/lib/types';
 
 /**
@@ -94,7 +95,7 @@ export function NotificationBell({
                   >
                     <p>{n.message}</p>
                     <div className="mt-1 flex items-center gap-3 text-xs text-slate-600">
-                      <span>{new Date(n.createdAt).toLocaleDateString('fr-FR')}</span>
+                      <span>{formatDate(n.createdAt)}</span>
                       {n.depositContractId ? (
                         <Link
                           href={`/dashboard/deposit-contracts/${n.depositContractId}`}

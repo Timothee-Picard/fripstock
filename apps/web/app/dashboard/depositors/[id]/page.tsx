@@ -3,6 +3,7 @@ import { DeleteDepositorButton, EditDepositor } from '../forms';
 import { StatusBadge } from '@/components/status-badge';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
+import { formatDate } from '@/lib/dates';
 import { requireSession } from '@/lib/session';
 import {
   eurosNumber,
@@ -109,7 +110,7 @@ export default async function DepositorPage({ params }: { params: Promise<{ id: 
                       ) : null}
                     </td>
                     <td className="px-3 py-2 text-slate-700">
-                      {l.soldAt ? new Date(l.soldAt).toLocaleDateString('fr-FR') : '—'}
+                      {l.soldAt ? formatDate(l.soldAt) : '—'}
                     </td>
                     <td className="px-3 py-2 text-slate-700">{eurosNumber(l.soldPrice)}</td>
                     <td className="px-3 py-2 text-slate-700">{l.commission} %</td>
@@ -160,8 +161,7 @@ export default async function DepositorPage({ params }: { params: Promise<{ id: 
                   href={`/dashboard/deposit-contracts/${c.id}`}
                   className="text-slate-900 underline-offset-2 hover:underline"
                 >
-                  {new Date(c.startDate).toLocaleDateString('fr-FR')} →{' '}
-                  {new Date(c.endDate).toLocaleDateString('fr-FR')}
+                  {formatDate(c.startDate)} → {formatDate(c.endDate)}
                 </Link>
                 <StatusBadge
                   status={{

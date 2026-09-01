@@ -271,6 +271,17 @@ offerte pour rien.
   Pour ceux-là, le `where` doit **toujours** filtrer via la relation parente
   (`where: { client: { companyId } }`) — un `where: { id }` seul sur ces tables est une
   fuite inter-entreprises, pas un raccourci acceptable.
+- **Toute date affichée passe par `apps/web/lib/dates.ts`**, jamais par un
+  `toLocaleDateString` direct. Le serveur Next tourne en UTC et le navigateur dans le
+  fuseau de son utilisateur : sans `timeZone` explicite, les deux écrivent des heures
+  différentes et React refuse l'hydratation. Le fuseau d'affichage est celui de la
+  **boutique** (`SHOP_TIMEZONE`), pas celui du lecteur — une vente encaissée à 23 h 30 à
+  Paris appartient à cette soirée-là, y compris relue d'ailleurs. La constante existe des
+  deux côtés (`apps/api/src/stats/today.ts` et `apps/web/lib/dates.ts`) et les deux
+  doivent bouger ensemble.
+- Un **jour calendaire** (`AAAA-MM-JJ`, ce que renvoie l'API pour `today.date` et
+  `byDay`) n'est pas un instant : il se formate avec `formatCalendarDay`, qui le lit à
+  midi UTC pour qu'aucun décalage ne le fasse glisser sur la veille ou le lendemain.
 - Écrire les tests au fur et à mesure n'est pas demandé pour le MVP, sauf mention
   contraire dans un prompt d'étape.
 

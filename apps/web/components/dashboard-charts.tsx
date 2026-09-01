@@ -16,6 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import { eurosNumber, type Dashboard } from '@/lib/types';
+import { formatCalendarDay } from '@/lib/dates';
 
 const AXE = { fontSize: 12, fill: '#475569' };
 
@@ -67,8 +68,10 @@ const PAR_STATUT = {
   value: 'count',
 } as const satisfies Record<string, keyof Stock['byStatus'][number]>;
 
-function jourCourt(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+// `day` est un jour calendaire (AAAA-MM-JJ) renvoyé par l'API, pas un instant :
+// il se formate donc avec `formatCalendarDay`, qui ne peut pas le faire glisser.
+function jourCourt(day: string): string {
+  return formatCalendarDay(day, { day: '2-digit', month: '2-digit' });
 }
 
 /**
@@ -90,7 +93,7 @@ export function SalesCurve({ data }: { data: ByDay }) {
         <YAxis tick={AXE} tickLine={false} axisLine={false} />
         <Tooltip
           formatter={enEuros("Chiffre d'affaires")}
-          labelFormatter={(l: unknown) => new Date(String(l)).toLocaleDateString('fr-FR')}
+          labelFormatter={(l: unknown) => formatCalendarDay(String(l))}
         />
         <Line
           type="monotone"
@@ -108,7 +111,10 @@ export function SalesCurve({ data }: { data: ByDay }) {
  * Répartition du stock par statut.
  *
  * Les couleurs viennent de la base : ce sont celles que le gérant a choisies
- * pour ses statuts, donc celles qu'il reconnaît sur les fiches produit.
+ * pour ses statuts, donc les teintes qu'il retrouve sur les pastilles des
+ * fiches produit. Pleines ici, alors que la pastille n'en garde qu'une version
+ * pâle : une part de camembert est une grande surface sans texte dessus, et
+ * des tons pâles s'y distingueraient mal les uns des autres.
  */
 export function StockPie({ data }: { data: Stock['byStatus'] }) {
   const withStock = data.filter((s) => s.count > 0);

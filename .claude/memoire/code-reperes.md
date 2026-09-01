@@ -36,6 +36,10 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   quelque part).
 - `lib/navigation.ts` — entrées du menu, cookie de repli, titre de section.
 - `lib/form-lines.ts` — lecture des tableaux ligne-par-ligne (lot, contrat).
+- `lib/dates.ts` — **toute** date affichée passe par là, dans le fuseau boutique.
+  Un `toLocaleDateString` sans `timeZone` casse l'hydratation : le serveur est en
+  UTC, le navigateur non. `formatCalendarDay` pour un `AAAA-MM-JJ`, qui n'est pas
+  un instant. **Jumeau** de `SHOP_TIMEZONE` dans `stats/today.ts` côté API.
 - `app/dashboard/counter.tsx` — le comptoir de vente.
 
 **Couverture** : seuils Jest imposés côté API — 100 % lignes, fonctions et

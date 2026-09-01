@@ -425,6 +425,25 @@ Le sélecteur de période ne s'affiche pas au-dessus du seul stock : celui-ci es
 de l'instant, sa requête ne porte aucune borne de date, et proposer « 7 jours / 3 mois »
 promettrait un filtre qui ne filtre rien.
 
+**Toutes les dates affichées le sont dans le fuseau de la boutique**, via
+`apps/web/lib/dates.ts`, et jamais dans celui du navigateur. Un `toLocaleDateString` sans
+`timeZone` explicite rendait « 14:55 » côté serveur — le conteneur Next tourne en UTC — et
+« 16:55 » côté client : React détectait la différence et refusait d'hydrater l'historique
+des statuts. Le fuseau de la boutique est aussi la bonne réponse métier, indépendamment du
+bug : une vente encaissée à 23 h 30 à Paris appartient à cette soirée-là, y compris relue
+depuis un autre fuseau.
+
+La constante `SHOP_TIMEZONE` existe **des deux côtés** — `apps/api/src/stats/today.ts` y
+découpe les journées, `apps/web/lib/dates.ts` y formate l'affichage — et les deux doivent
+bouger ensemble. Elle est écrite en dur plutôt que lue dans l'environnement : Next fige les
+variables `NEXT_PUBLIC_*` à la construction de l'image, donc une valeur posée dans
+`docker-compose.yml` ne serait honorée qu'en développement.
+
+Un **jour calendaire** (`AAAA-MM-JJ`, ce que l'API renvoie pour `today.date` et pour la
+courbe des ventes) n'est pas un instant : `formatCalendarDay` le lit à midi UTC, ce qui
+laisse douze heures de marge de chaque côté et l'empêche de glisser sur la veille ou le
+lendemain.
+
 ### Le comptoir
 
 Le tableau de bord porte de quoi encaisser plusieurs articles d'un coup — le cas d'un
