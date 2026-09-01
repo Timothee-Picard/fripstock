@@ -21,6 +21,10 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
 - `products/removal-scope.ts` — **qui voit quels retraits**, la règle à un seul
   endroit : l'annonce à retirer vaut pour toute l'entreprise, le vêtement à
   décrocher exige `products.manage` + `products.view` sur sa boutique.
+- `deposit-contracts/contract-pdf.ts` — la mise en page du contrat signé
+  (`pdfkit`). Rien d'autre ne dessine de PDF : le service n'y passe que des
+  nombres et des dates, pas des `Decimal` ni des objets Prisma. Se relit en
+  ouvrant le fichier produit, pas en lisant le code.
 - `statuses/statuses.defaults.ts` — les 7 statuts et 20 transitions posés à la
   création d'une entreprise. En ajouter un impose une **migration de données** pour
   les entreprises existantes : les statuts sont figés après coup.

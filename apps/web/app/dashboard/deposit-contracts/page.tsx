@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { DeadlinesButton } from './forms';
-import { ViewIcon } from '@/components/icons';
+import { PdfIcon, ViewIcon } from '@/components/icons';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/dates';
@@ -129,14 +129,27 @@ export default async function DepositContractsPage() {
                       <span className={`rounded px-2 py-0.5 text-xs ${e.css}`}>{e.label}</span>
                     </td>
                     <td className="px-4 py-2">
-                      <Link
-                        href={`/dashboard/deposit-contracts/${c.id}`}
-                        title="Voir le contrat"
-                        aria-label={`Ouvrir le contrat de ${c.depositor.lastName}`}
-                        className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                      >
-                        <ViewIcon />
-                      </Link>
+                      <div className="flex items-center gap-1">
+                        <Link
+                          href={`/dashboard/deposit-contracts/${c.id}`}
+                          title="Voir le contrat"
+                          aria-label={`Ouvrir le contrat de ${c.depositor.lastName}`}
+                          className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                        >
+                          <ViewIcon />
+                        </Link>
+                        {/* Un lien nu, et non un bouton : le PDF est servi par une
+                            route qui rattache le jeton du cookie httpOnly, et le
+                            navigateur le télécharge sans passer par du JavaScript. */}
+                        <a
+                          href={`/api/deposit-contracts/${c.id}/pdf`}
+                          title="Télécharger le contrat en PDF"
+                          aria-label={`Télécharger le contrat de ${c.depositor.lastName} en PDF`}
+                          className="inline-flex rounded p-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                        >
+                          <PdfIcon />
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 );

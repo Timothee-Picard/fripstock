@@ -219,6 +219,66 @@ describe('DepositContractsService', () => {
     });
   });
 
+  describe('pdf', () => {
+    const fiche = {
+      id: 'c1',
+      startDate: new Date('2026-01-01'),
+      endDate: new Date('2026-06-01'),
+      commission: 40,
+      depositor: {
+        lastName: 'Martin',
+        firstName: 'Sophie',
+        code: 'MAR',
+        address: '3 rue Neuve',
+        phone: null,
+        email: null,
+        iban: 'FR76 1234',
+        company: { name: 'Friperie Étoile' },
+      },
+      products: [{ reference: 'D-MAR-001', name: 'Robe', salePrice: 35 }],
+    };
+
+    it('scope par le déposant, comme le reste du module', async () => {
+      prisma.depositContract.findFirst.mockResolvedValue(fiche);
+      await service.pdf(manager, 'c1');
+      expect(prisma.depositContract.findFirst.mock.calls[0][0].where).toEqual({
+        id: 'c1',
+        ...SCOPE,
+      });
+    });
+
+    it("charge les coordonnées complètes que la fiche d'écran ne porte pas", async () => {
+      prisma.depositContract.findFirst.mockResolvedValue(fiche);
+      await service.pdf(manager, 'c1');
+      // L'IBAN et l'adresse s'impriment sur le contrat signé : les omettre
+      // aurait rendu un papier incomplet sans la moindre erreur.
+      const include = prisma.depositContract.findFirst.mock.calls[0][0].include;
+      expect(include.depositor.include.company).toEqual({ select: { name: true } });
+      expect(include.products.orderBy).toEqual({ reference: 'asc' });
+    });
+
+    it('rend un PDF et le nom de fichier qui va avec', async () => {
+      prisma.depositContract.findFirst.mockResolvedValue(fiche);
+      const { fileName, body } = await service.pdf(manager, 'c1');
+      expect(fileName).toBe('contrat-MAR-2026-01-01.pdf');
+      expect(body.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    });
+
+    it('accepte un article sans prix affiché', async () => {
+      prisma.depositContract.findFirst.mockResolvedValue({
+        ...fiche,
+        products: [{ reference: null, name: 'Lot', salePrice: null }],
+      });
+      const { body } = await service.pdf(manager, 'c1');
+      expect(body.length).toBeGreaterThan(0);
+    });
+
+    it("refuse le contrat d'une autre entreprise", async () => {
+      prisma.depositContract.findFirst.mockResolvedValue(null);
+      await expect(service.pdf(manager, 'c1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('delete', () => {
     it('supprime un contrat sans produit', async () => {
       prisma.depositContract.findFirst.mockResolvedValue({ ...contract, products: [] });

@@ -8,6 +8,7 @@ import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { ProductsService } from '../products/products.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { contractFileName, renderContractPdf, type ContractPdfData } from './contract-pdf';
 import type { CreateContractDto } from './dto/create-contract.dto';
 import type { UpdateContractDto } from './dto/update-contract.dto';
 import type { AttachProductsDto } from './dto/attach-products.dto';
@@ -55,6 +56,52 @@ export class DepositContractsService {
     });
     if (!contract) throw new NotFoundException('Contrat de dépôt introuvable.');
     return contract;
+  }
+
+  /**
+   * Le contrat en PDF, prêt à imprimer et à signer.
+   *
+   * Requête à part et non `detail` : le papier porte les coordonnées complètes
+   * du déposant, IBAN compris, que la fiche d'écran ne charge pas. Les articles
+   * sont rangés par référence — c'est dans cet ordre que le déposant les
+   * étale sur le comptoir, pas dans celui de leur saisie.
+   */
+  async pdf(currentUser: CurrentUser, id: string): Promise<{ fileName: string; body: Buffer }> {
+    const contract = await this.prisma.depositContract.findFirst({
+      where: { id, ...this.scope(currentUser) },
+      include: {
+        depositor: { include: { company: { select: { name: true } } } },
+        products: {
+          orderBy: { reference: 'asc' },
+          select: { reference: true, name: true, salePrice: true },
+        },
+      },
+    });
+    if (!contract) throw new NotFoundException('Contrat de dépôt introuvable.');
+
+    const data: ContractPdfData = {
+      id: contract.id,
+      companyName: contract.depositor.company.name,
+      depositor: {
+        lastName: contract.depositor.lastName,
+        firstName: contract.depositor.firstName,
+        code: contract.depositor.code,
+        address: contract.depositor.address,
+        phone: contract.depositor.phone,
+        email: contract.depositor.email,
+        iban: contract.depositor.iban,
+      },
+      startDate: contract.startDate,
+      endDate: contract.endDate,
+      commission: Number(contract.commission),
+      products: contract.products.map((p) => ({
+        reference: p.reference,
+        name: p.name,
+        salePrice: p.salePrice === null ? null : Number(p.salePrice),
+      })),
+    };
+
+    return { fileName: contractFileName(data), body: await renderContractPdf(data) };
   }
 
   async create(currentUser: CurrentUser, dto: CreateContractDto) {

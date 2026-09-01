@@ -19,6 +19,7 @@ const photos = await import('./photos/route');
 const photo = await import('./photos/[...key]/route');
 const attributs = await import('./categories/[id]/attributes/route');
 const recherche = await import('./products/search/route');
+const contrat = await import('./deposit-contracts/[id]/pdf/route');
 
 /** Une réponse d'API avec un corps diffusable. */
 function amont(status: number, headers: Record<string, string> = {}, corps = 'contenu') {
@@ -75,6 +76,49 @@ describe('GET /api/export', () => {
   it('relaie le refus de l’API plutôt que de servir un fichier vide', async () => {
     vi.mocked(fetch).mockResolvedValue(amont(403, {}, ''));
     const r = await exporter.GET(new Request('http://x/api/export'));
+    expect(r.status).toBe(403);
+  });
+});
+
+describe('GET /api/deposit-contracts/[id]/pdf', () => {
+  const params = { params: Promise.resolve({ id: 'c1' }) };
+
+  it('refuse sans session — le lien ne porte pas de jeton', async () => {
+    get.mockReturnValue(undefined);
+    const r = await contrat.GET(new Request('http://x'), params);
+    expect(r.status).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('rattache le jeton du cookie httpOnly', async () => {
+    vi.mocked(fetch).mockResolvedValue(amont(200));
+    await contrat.GET(new Request('http://x'), params);
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(String(url)).toContain('/deposit-contracts/c1/pdf');
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer jeton');
+  });
+
+  it('recopie le nom de fichier proposé par l’API', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      amont(200, {
+        'content-type': 'application/pdf',
+        'content-disposition': 'attachment; filename="contrat-MAR-2026-09-01.pdf"',
+      }),
+    );
+    const r = await contrat.GET(new Request('http://x'), params);
+    expect(r.headers.get('content-disposition')).toContain('contrat-MAR-2026-09-01.pdf');
+  });
+
+  it('retombe sur un nom générique si l’API n’en donne pas', async () => {
+    vi.mocked(fetch).mockResolvedValue(amont(200));
+    const r = await contrat.GET(new Request('http://x'), params);
+    expect(r.headers.get('content-disposition')).toContain('contrat.pdf');
+    expect(r.headers.get('content-type')).toBe('application/pdf');
+  });
+
+  it('relaie le refus plutôt que de servir un fichier vide', async () => {
+    vi.mocked(fetch).mockResolvedValue(amont(403, {}, ''));
+    const r = await contrat.GET(new Request('http://x'), params);
     expect(r.status).toBe(403);
   });
 });

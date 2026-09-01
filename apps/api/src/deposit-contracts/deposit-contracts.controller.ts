@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { ManagerOnly } from '../common/decorators/manager.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -26,6 +38,28 @@ export class DepositContractsController {
   @RequirePermission('deposits.manage')
   detail(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
     return this.contracts.detail(currentUser, id);
+  }
+
+  /**
+   * Le contrat en PDF, à imprimer et faire signer.
+   *
+   * Un dépôt se conclut sur papier : le déposant repart avec la liste de ce
+   * qu'il a confié. Même droit que la fiche — qui peut lire le contrat peut
+   * l'imprimer, il n'y a rien de plus dedans.
+   */
+  @Get(':id/pdf')
+  @RequirePermission('deposits.manage')
+  async pdf(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { fileName, body } = await this.contracts.pdf(currentUser, id);
+    response.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${fileName}"`,
+    });
+    return new StreamableFile(body);
   }
 
   /**
