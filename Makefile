@@ -3,8 +3,8 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
-	install hooks format generate migrate seed studio check check-format check-lint check-types check-db \
-	check-test check-build check-commits release
+	install hooks format generate migrate seed studio check check-fast check-format check-lint \
+	check-types check-db check-test check-build check-commits release
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -95,6 +95,18 @@ generate: ## Génère le client Prisma à partir du schéma
 
 check: generate check-format check-lint check-types check-db check-test check-build ## Lance toutes les vérifications (identique à la CI)
 	@echo "==> make check : tout est vert"
+
+# Sous-ensemble STRICT de `check`, jamais une seconde définition : la liste
+# ci-dessous ne doit contenir que des cibles que `check` lance déjà, sinon les
+# deux divergent et un `check-fast` vert ne veut plus rien dire.
+#
+# Ce qui en est absent — tests et build — pèse la moitié du temps et dispose du
+# meilleur filet : la CI les rejoue sur chaque PR, et un test rouge découvert
+# trois minutes plus tard coûte un commit de rattrapage. Ce qui y reste casse
+# plus discrètement : une migration absente du dépôt ne se voit qu'au prochain
+# clone, et on la cherche alors ailleurs.
+check-fast: generate check-format check-lint check-types check-db ## Vérifications rapides (sans tests ni build) — ce que lance le hook pre-push
+	@echo "==> make check-fast : vert. Tests et build restent à la charge de la CI."
 
 check-format: ## Vérifie le formatage Prettier
 	@echo "--> format"

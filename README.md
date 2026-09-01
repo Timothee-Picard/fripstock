@@ -498,7 +498,19 @@ make check
 ```
 
 Génération du client Prisma, format, lint, typage, dérive du schéma, tests et build des
-deux apps — exactement ce que lance la CI. Le hook `pre-push` l'exécute automatiquement.
+deux apps — exactement ce que lance la CI. **À passer avant d'ouvrir une PR.**
+
+Le hook `pre-push` n'exécute pas celle-là mais `make check-fast` : le même jeu **sans les
+tests ni le build**, soit une minute et demie au lieu de trois. Ce n'est pas un
+allègement au jugé — c'est le partage entre ce qui a un filet et ce qui n'en a pas. Un
+test rouge, la CI le rattrape en trois minutes et il coûte un commit de rattrapage ; une
+migration absente du dépôt, elle, ne se manifeste qu'au prochain clone, et on la cherche
+alors ailleurs. `check-fast` garde donc la dérive Prisma, le typage et le lint, et laisse
+partir ce que la CI rejoue de toute façon.
+
+`check-fast` est un **sous-ensemble strict** de `check` : il ne redéfinit rien, il
+n'énumère que des cibles que `check` lance déjà. Une vérification ajoutée à l'une n'a
+jamais à être recopiée dans l'autre.
 
 La cible **se suffit à elle-même**, et c'est la règle : `apps/api/src/generated/` est
 ignoré par git, donc absent d'un clone frais. Sans lui, chaque type Prisma devient un type
@@ -507,16 +519,22 @@ ne démarre pas. Invisible en local, où le dossier traîne d'une génération p
 fatal en CI. Toute étape supposant un artefact non versionné doit donc le produire
 elle-même.
 
-| Cible                               | Effet                                        |
-| ----------------------------------- | -------------------------------------------- |
-| `make check`                        | Toutes les vérifications                     |
-| `make check-format` … `check-build` | Une vérification isolée                      |
-| `make format`                       | Reformate tout le dépôt                      |
-| `make install`                      | Réinstalle les dépendances et pose les hooks |
+| Cible                               | Effet                                            |
+| ----------------------------------- | ------------------------------------------------ |
+| `make check`                        | Toutes les vérifications — ce que lance la CI    |
+| `make check-fast`                   | Sans tests ni build — ce que lance le `pre-push` |
+| `make check-format` … `check-build` | Une vérification isolée                          |
+| `make format`                       | Reformate tout le dépôt                          |
+| `make install`                      | Réinstalle les dépendances et pose les hooks     |
 
 Les hooks se contournent avec `--no-verify` : ils sont là pour le retour rapide,
-**la CI est le seul filet qui ne se contourne pas**. Les deux lancent les mêmes
+**la CI est le seul filet qui ne se contourne pas**. Les deux lancent des
 cibles `make`, jamais des commandes recopiées.
+
+**Angle mort à connaître** : la CI se déclenche sur les push vers `main` et sur les pull
+requests. Une branche de travail poussée **sans PR ouverte** ne déclenche rien — ses tests
+et son build ne tournent donc nulle part tant que la PR n'existe pas, puisque le
+`pre-push` ne les lance plus.
 
 Les cibles passent par `scripts/node-run.sh`, qui exécute **toujours dans les
 conteneurs** dès que Docker est disponible — même si Node est installé sur la machine.

@@ -11,9 +11,14 @@ images Alpine (musl) et sont illisibles par la glibc de l'hôte.
 `./scripts/node-run.sh` est relatif à la **racine du dépôt** : il faut y être.
 Après un `cd apps/api` dans une commande précédente, le chemin ne résout plus.
 
-**Vérifications** : toujours `make check`, jamais les commandes recopiées — c'est
-exactement ce que lance la CI, et la cible génère d'abord le client Prisma.
-`make format` avant, sinon `check-format` échoue sur du Prettier.
+**Vérifications** : toujours une cible `make`, jamais les commandes recopiées.
+`make check` est le jeu complet, celui de la CI ; `make check-fast` est le même
+sans tests ni build (~1 min 30 contre ~3 min), et c'est ce que lance le hook
+`pre-push`. Les deux génèrent d'abord le client Prisma. `make format` avant,
+sinon `check-format` échoue sur du Prettier.
+
+Avant de déclarer une tâche finie, c'est `make check` qu'il faut : `check-fast`
+ne dit rien des tests ni du build.
 
 **Écrire une migration à la main.** `make migrate` lance `prisma migrate dev`,
 qui est interactif et ne crée **rien** quand le schéma n'a pas bougé. Pour une

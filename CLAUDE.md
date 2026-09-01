@@ -318,16 +318,22 @@ doc croirait encore à tort**.
 - **Versions en tags `vX.Y.Z`** (semver), posés par `make release` : le script calcule le
   bump depuis les commits conventionnels et le propose, l'humain valide. Tant que la
   version majeure est `0`, un breaking change ne bump que le mineur.
-- **`make check` avant de pousser** — client Prisma, format, lint, types, dérive Prisma,
+- **`make check` avant une PR** — client Prisma, format, lint, types, dérive Prisma,
   tests, build. C'est exactement ce que lance la CI ; ne recopie jamais ces commandes
   ailleurs, appelle la cible.
+- **`make check-fast` à chaque push**, lancé par le hook `pre-push` : le même jeu sans les
+  tests ni le build, une minute et demie au lieu de trois. Le partage n'est pas une
+  question de temps mais de filet : la CI rejoue tests et build sur chaque PR, tandis
+  qu'une dérive Prisma ne se manifeste qu'au prochain clone. C'est un **sous-ensemble
+  strict** de `check` — n'y mets jamais une vérification que `check` ne lance pas, sinon
+  les deux divergent et un `check-fast` vert ne veut plus rien dire.
 - **La cible doit se suffire à elle-même.** `apps/api/src/generated/` est ignoré par git :
   sur un dépôt fraîchement cloné il n'existe pas, et sans lui chaque type Prisma devient
   un type d'erreur — mille « Unsafe ... of a type that could not be resolved » au lint, et
   une API qui ne démarre pas. Invisible en local, où le dossier traîne d'une génération
-  précédente. `make check` génère donc le client en premier, et le conteneur `api` le
-  génère à son démarrage. Toute étape supposant un artefact non versionné doit le produire
-  elle-même : la CI part toujours d'un clone nu.
+  précédente. `make check` et `make check-fast` génèrent donc le client en premier, et le
+  conteneur `api` le génère à son démarrage. Toute étape supposant un artefact non
+  versionné doit le produire elle-même : la CI part toujours d'un clone nu.
 
 ## Ce qui n'est PAS dans le scope pour l'instant
 
