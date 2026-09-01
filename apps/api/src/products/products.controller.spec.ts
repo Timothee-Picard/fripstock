@@ -19,6 +19,7 @@ describe('ProductsController', () => {
     setOnline: jest.fn(),
     markRemovalDone: jest.fn(),
     markRemovalsDone: jest.fn(),
+    listRemovals: jest.fn(),
     delete: jest.fn(),
   } as unknown as ProductsService;
   const controller = new ProductsController(service);
@@ -30,6 +31,7 @@ describe('ProductsController', () => {
   it.each([
     ['list', 'GET', '/'],
     ['exportCsv', 'GET', 'export'],
+    ['removals', 'GET', 'removals'],
     ['detail', 'GET', ':id'],
     ['create', 'POST', '/'],
     ['createLot', 'POST', 'lot'],
@@ -71,6 +73,7 @@ describe('ProductsController', () => {
     ['sellMany', ['products.changeStatus', 'online.manage']],
     ['removalDone', ['online.manage', 'products.manage']],
     ['removalsDone', ['online.manage', 'products.manage']],
+    ['removals', ['online.manage', 'products.manage']],
     ['changeStatus', ['products.changeStatus', 'online.manage']],
   ])('%s accepte l’un ou l’autre de %s', (name, permissions) => {
     const info = route(ProductsController, name);
@@ -139,6 +142,11 @@ describe('ProductsController', () => {
         isOnline: true,
         onlinePrice: 25,
       });
+    });
+
+    it('removals appelle listRemovals avec la recherche', () => {
+      void controller.removals(manager, 'bott');
+      expect(service.listRemovals).toHaveBeenCalledWith(manager, 'bott');
     });
 
     it('removalsDone appelle markRemovalsDone', () => {

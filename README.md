@@ -406,6 +406,24 @@ pour des lignes qu'on n'y lit pas. L'aperçu dit ce qu'il montre (« 5 sur 30 »
 muet se lirait comme « il n'en reste que cinq » — et renvoie à l'écran des retraits pour
 le reste.
 
+**Les deux corvées n'ont pas le même périmètre.** Retirer une annonce est un travail de
+site : `online.manage` porte sur tous les produits de l'entreprise, quelle que soit la
+boutique qui détient l'article — le borner laisserait des annonces vendues sans personne
+pour les ôter. Décrocher un vêtement, à l'inverse, demande d'aller dans le rayon : il faut
+sur cette boutique-là le droit d'agir sur ses produits **et** celui de les voir. La règle
+vit à un seul endroit, `products/removal-scope.ts`, que le tableau de bord et l'écran des
+retraits appliquent tous les deux. La recette du jour y échappe : un total ne nomme
+personne.
+
+L'écran des retraits passe donc par une route dédiée (`GET /products/removals`) plutôt que
+par un filtre de la liste des produits, dont le filtrage générique ne sait pas distinguer
+les deux périmètres.
+
+Le périmètre de la **liste des produits** suit la même correction. Il se lisait sur
+l'existence d'une ligne `ShopAccess` ; depuis que les droits d'entreprise y sont recopiés,
+une ligne existe sur toutes les boutiques dès qu'on gère le catalogue ou le site. Il se lit
+maintenant sur `products.view`.
+
 **Cet écran range par endroit où aller**, et non par statut : la boutique en ligne d'abord,
 puis une section par boutique. C'est la forme d'une tournée — on retire les annonces du
 site en une fois, puis on passe au Centre-ville avec sa liste. Mélanger les deux obligerait

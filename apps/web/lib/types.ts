@@ -455,6 +455,12 @@ export interface RemovalList {
   total: number;
 }
 
+/** Réponse de `GET /products/removals` : la liste entière, bornée, plus le total. */
+export interface RemovalPage {
+  products: RemovalItem[];
+  total: number;
+}
+
 export interface Dashboard {
   period: { from: string; to: string };
   /**

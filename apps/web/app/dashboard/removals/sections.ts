@@ -1,4 +1,4 @@
-import type { ProductSummary } from '@/lib/types';
+import type { RemovalItem } from '@/lib/types';
 
 /**
  * Un endroit où il faut se rendre, et ce qu'on y a à faire.
@@ -13,7 +13,7 @@ export interface RemovalSection {
   key: string;
   title: string;
   hint: string;
-  items: ProductSummary[];
+  items: RemovalItem[];
 }
 
 const EN_LIGNE = 'online';
@@ -26,7 +26,7 @@ const SANS_BOUTIQUE = 'central';
  * Les boutiques sortent dans l'ordre alphabétique, et la boutique en ligne
  * passe en tête : c'est la seule qui se traite sans se déplacer.
  */
-export function grouperRetraits(products: ProductSummary[]): RemovalSection[] {
+export function grouperRetraits(products: RemovalItem[]): RemovalSection[] {
   const parEndroit = new Map<string, RemovalSection>();
 
   for (const product of products) {

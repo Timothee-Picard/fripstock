@@ -18,6 +18,9 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   transactionnel réutilisé par les contrats), lot, vente multiple, changement de
   statut, filtres et tri partagés entre la liste et l'export.
 - `products/references.ts` — génération `A-0042` / `D-MAR-001`, code déposant.
+- `products/removal-scope.ts` — **qui voit quels retraits**, la règle à un seul
+  endroit : l'annonce à retirer vaut pour toute l'entreprise, le vêtement à
+  décrocher exige `products.manage` + `products.view` sur sa boutique.
 - `statuses/statuses.defaults.ts` — les 7 statuts et 20 transitions posés à la
   création d'une entreprise. En ajouter un impose une **migration de données** pour
   les entreprises existantes : les statuts sont figés après coup.

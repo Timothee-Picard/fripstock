@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { grouperRetraits } from './sections';
-import type { ProductSummary } from '@/lib/types';
+import type { RemovalItem } from '@/lib/types';
 
 const article = (
   id: string,
   enLigne: boolean,
   shop: { id: string; name: string } | null,
-): ProductSummary =>
+): RemovalItem =>
   ({
     id,
     name: `Article ${id}`,
     shop,
     status: { id: 's', name: enLigne ? 'Vendu en ligne' : 'Vendu', isOnlineSale: enLigne },
-  }) as ProductSummary;
+  }) as RemovalItem;
 
 const gare = { id: 'b2', name: 'Boutique Gare' };
 const centre = { id: 'b1', name: 'Boutique Centre-ville' };
@@ -48,7 +48,7 @@ describe('grouperRetraits', () => {
     const menteur = {
       ...article('a', false, gare),
       status: { id: 's', name: 'Vendu en ligne', isOnlineSale: false },
-    } as ProductSummary;
+    } as RemovalItem;
     expect(grouperRetraits([menteur])[0].title).toBe('Boutique en ligne');
   });
 

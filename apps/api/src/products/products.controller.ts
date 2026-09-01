@@ -60,6 +60,19 @@ export class ProductsController {
     return csv;
   }
 
+  /**
+   * Tous les retraits à faire.
+   *
+   * Déclarée AVANT `@Get(':id')`, comme l'export : NestJS matche dans l'ordre
+   * de déclaration. Aucune boutique n'est visée par l'URL — le service applique
+   * les deux périmètres, qui ne sont pas les mêmes selon la corvée.
+   */
+  @Get('removals')
+  @RequireAnyPermission('online.manage', 'products.manage')
+  removals(@AuthUser() currentUser: CurrentUser, @Query('search') search?: string) {
+    return this.products.listRemovals(currentUser, search);
+  }
+
   @Get(':id')
   @RequirePermission('products.view')
   @ShopFromResource('id', shopOfProduct)

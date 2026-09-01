@@ -73,8 +73,14 @@ describe('ProductsService', () => {
       expect(where).not.toHaveProperty('OR');
     });
 
-    it("restreint l'employé à ses boutiques, plus le stock central", async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([{ shopId: SHOP_ID }]);
+    it("restreint l'employé aux boutiques dont il voit les produits", async () => {
+      // Pas « où il a une ligne d'accès » : les droits d'entreprise sont
+      // recopiés sur toutes les boutiques, donc une ligne existe partout dès
+      // qu'on gère le catalogue ou le site.
+      prisma.shopAccess.findMany.mockResolvedValue([
+        { shopId: SHOP_ID, permissions: { 'products.view': true } },
+        { shopId: 'shop-sans-vue', permissions: { 'online.manage': true } },
+      ]);
       await service.list(employee, {});
       expect(prisma.product.findMany.mock.calls[0][0].where.OR).toEqual([
         { shopId: null },
@@ -946,6 +952,88 @@ describe('ProductsService', () => {
       });
     });
 
+    describe('listRemovals', () => {
+      it('rend les deux corvées, chacune reconnue par le flag du statut', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager);
+        const where = prisma.product.findMany.mock.calls[0][0].where;
+        expect(where.pendingRemoval).toBe(true);
+        expect(where.AND[0].OR).toEqual([
+          { status: { isOnlineSale: false } },
+          { status: { isOnlineSale: true } },
+        ]);
+      });
+
+      it('donne toutes les annonces à qui gère le site, sans filtre de boutique', async () => {
+        // Retirer une annonce est un travail de site : le borner aux boutiques
+        // visibles laisserait des annonces sans personne pour les ôter.
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'online.manage': true } },
+        ]);
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(employee);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND[0].OR).toEqual([
+          { status: { isOnlineSale: false } },
+        ]);
+      });
+
+      it('borne les vêtements à décrocher aux boutiques dont on voit les produits', async () => {
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'products.manage': true, 'products.view': true } },
+          { shopId: 'b2', permissions: { 'products.manage': true } },
+        ]);
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(employee);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND[0].OR).toEqual([
+          {
+            OR: [{ shopId: null }, { shopId: { in: ['b1'] } }],
+            status: { isOnlineSale: true },
+          },
+        ]);
+      });
+
+      it('ne cherche même pas quand aucune corvée n’est visible', async () => {
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'products.view': true } },
+        ]);
+        await expect(service.listRemovals(employee)).resolves.toEqual({ products: [], total: 0 });
+        expect(prisma.product.findMany).not.toHaveBeenCalled();
+      });
+
+      it('cherche sur le nom et la référence, sans écraser les périmètres', async () => {
+        // Deux `OR` dans le même objet : le second remplace le premier, et la
+        // recherche ne filtrerait rien sans que rien ne le signale. D'où le
+        // `AND` qui porte les deux.
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager, 'bott');
+        const { AND } = prisma.product.findMany.mock.calls[0][0].where as {
+          AND: { OR: Record<string, unknown>[] }[];
+        };
+        expect(AND).toHaveLength(2);
+        expect(AND[0].OR).toHaveLength(2);
+        expect(AND[1].OR.map((c) => Object.keys(c)[0])).toEqual(['name', 'reference']);
+      });
+
+      it('ne pose pas de clause de recherche sans recherche', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND).toHaveLength(1);
+      });
+
+      it('borne la liste et compte le total à part', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(640);
+        const r = await service.listRemovals(manager);
+        expect(prisma.product.findMany.mock.calls[0][0].take).toBe(200);
+        expect(r.total).toBe(640);
+      });
+    });
+
     describe('markRemovalsDone', () => {
       it('solde plusieurs retraits d’un coup', async () => {
         prisma.product.findMany.mockResolvedValue([
@@ -1097,16 +1185,9 @@ describe('ProductsService', () => {
         expect(prisma.product.findMany.mock.calls[0][0].where.isOnline).toBe(false);
       });
 
-      it('isole les retraits en attente, pour l’écran dédié', async () => {
-        await service.list(manager, { pendingRemoval: 'true' });
-        expect(prisma.product.findMany.mock.calls[0][0].where.pendingRemoval).toBe(true);
-      });
-
       it('ne filtre rien quand rien n’est demandé', async () => {
         await service.list(manager, {});
-        const where = prisma.product.findMany.mock.calls[0][0].where;
-        expect(where).not.toHaveProperty('isOnline');
-        expect(where).not.toHaveProperty('pendingRemoval');
+        expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('isOnline');
       });
     });
   });

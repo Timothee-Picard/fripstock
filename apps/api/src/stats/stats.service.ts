@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { readPermissions, type Permission } from '../common/permissions';
+import { removalScopes } from '../products/removal-scope';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -51,8 +52,13 @@ interface Scopes {
   sales: Prisma.ProductWhereInput | null;
   stock: Prisma.ProductWhereInput | null;
   till: Prisma.ProductWhereInput | null;
-  /** Retirer une annonce du site : `online.manage`. */
+  /** Les annonces à retirer du site — voir `removalScopes`. */
   online: Prisma.ProductWhereInput | null;
+  /**
+   * La recette en ligne du jour. Pas croisé, lui : c'est un total, il ne dit
+   * rien de ce qu'il y a en boutique.
+   */
+  onlineTill: Prisma.ProductWhereInput | null;
   /** Décrocher un vêtement du portant : `products.manage`. */
   shelf: Prisma.ProductWhereInput | null;
 }
@@ -202,7 +208,14 @@ export class StatsService {
   private async scopes(currentUser: CurrentUser, shopId?: string): Promise<Scopes> {
     if (currentUser.isManager) {
       const where: Prisma.ProductWhereInput = shopId ? { shopId } : {};
-      return { sales: where, stock: where, till: where, online: where, shelf: where };
+      return {
+        sales: where,
+        stock: where,
+        till: where,
+        online: where,
+        onlineTill: where,
+        shelf: where,
+      };
     }
 
     const accesses = await this.prisma.shopAccess.findMany({
@@ -219,18 +232,21 @@ export class StatsService {
       return { OR: [{ shopId: null }, { shopId: { in: ids } }] };
     };
 
-    // La boutique en ligne est unique pour l'entreprise : `online.manage` est un
-    // droit d'entreprise, il ne se découpe donc pas par boutique. Le détenir
-    // quelque part donne tout le canal — restreindre aux boutiques où la case
-    // est cochée laisserait des annonces vendues sans personne pour les ôter.
-    const enLigne = accesses.some((a) => readPermissions(a.permissions)['online.manage'] === true);
+    // Les deux périmètres de retrait viennent de `removalScopes` : la règle est
+    // subtile — l'un porte sur toute l'entreprise, l'autre boutique par
+    // boutique — et l'écran des retraits doit appliquer exactement la même.
+    const retraits = await removalScopes(this.prisma, currentUser, shopId);
+    const enLigne = retraits.delist !== null;
 
     return {
       sales: scope('stats.view'),
       stock: scope('stock.view'),
       till: scope('products.changeStatus'),
-      online: enLigne ? (shopId ? { shopId } : {}) : null,
-      shelf: scope('products.manage'),
+      online: retraits.delist,
+      // La recette en ligne du jour n'est qu'un total : elle ne nomme aucun
+      // article, donc gérer le site suffit.
+      onlineTill: enLigne ? (shopId ? { shopId } : {}) : null,
+      shelf: retraits.pull,
     };
   }
 
@@ -315,7 +331,7 @@ export class StatsService {
     // marge, qui révélerait les prix d'achat.
     // Sur la boutique en ligne, gérer le site vaut tenir la caisse : c'est sa
     // propre recette du jour, au même titre que celle du comptoir.
-    const todayScope = droits.sales ?? droits.till ?? (enLigne ? droits.online : null);
+    const todayScope = droits.sales ?? droits.till ?? (enLigne ? droits.onlineTill : null);
 
     // Les retraits à faire, chacun pour la main dont c'est le travail. Le
     // droit ne décide pas seulement si on voit la liste, mais **laquelle** :

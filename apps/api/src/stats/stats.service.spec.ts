@@ -381,6 +381,54 @@ describe('StatsService', () => {
     });
   });
 
+  describe('périmètre de boutique sur les retraits', () => {
+    const aRetirer = () => ({
+      id: 'p9',
+      name: 'Robe rouge',
+      reference: 'A-0042',
+      soldAt: new Date('2026-08-27T12:00:00.000Z'),
+      shop: { id: SHOP_ID, name: 'Centre-ville' },
+      status: { id: 's4', name: 'Vendu', color: '#10b981', isOnlineSale: false },
+    });
+
+    it('donne les annonces de toutes les boutiques à qui gère le site', async () => {
+      // Retirer une annonce est un travail de site, pas de rayon : le restreindre
+      // laisserait des annonces vendues sans personne pour les ôter.
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b1', 'online.manage')]);
+      arrange([aRetirer()]);
+      await service.dashboard(employee, {});
+      const where = prisma.product.findMany.mock.calls[0][0].where;
+      expect(where).not.toHaveProperty('OR');
+      expect(where).not.toHaveProperty('shopId');
+    });
+
+    it('ne donne aucune annonce à qui ne gère pas le site', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b1', 'products.view')]);
+      const d = await service.dashboard(employee, {});
+      expect(d.removals?.toDelist).toBeUndefined();
+    });
+
+    it('exige de voir les produits pour aller les décrocher', async () => {
+      // Le droit de décrocher sur b1 et celui de voir sur b2 ne se combinent
+      // pas : ce sont deux boutiques différentes.
+      prisma.shopAccess.findMany.mockResolvedValue([
+        acces('b1', 'products.manage'),
+        acces('b2', 'products.view'),
+      ]);
+      const d = await service.dashboard(employee, {});
+      expect(d.removals?.toPull).toBeUndefined();
+    });
+
+    it('les accorde quand la même boutique porte les deux', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([
+        acces('b1', 'products.manage', 'products.view'),
+      ]);
+      arrange([aRetirer()]);
+      const d = await service.dashboard(employee, {});
+      expect(d.removals?.toPull?.items).toHaveLength(1);
+    });
+  });
+
   describe('boutique en ligne', () => {
     it('ne compte que les ventes passées par le site', async () => {
       arrange([], []);
@@ -420,6 +468,7 @@ describe('StatsService', () => {
     });
 
     it('donne sa recette du jour à qui ne gère que le site', async () => {
+      // Un total ne nomme aucun article : il ne demande pas le droit d'en voir.
       prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
       arrange([
         { purchasePrice: '5', soldPrice: '20', appliedCommission: null, saleType: 'RESALE' },
@@ -431,7 +480,7 @@ describe('StatsService', () => {
     });
 
     it('ne la lui donne pas sur une boutique physique', async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage', 'products.view')]);
       const d = await service.dashboard(employee, {});
       expect(d).not.toHaveProperty('today');
     });
@@ -484,7 +533,7 @@ describe('StatsService', () => {
     it('ne donne que les annonces à dépublier à qui ne gère que le web', async () => {
       // Décrocher un vêtement n'est pas son travail : lui montrer la liste
       // ferait apparaître une corvée que personne ne prendrait.
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage', 'products.view')]);
       arrange([aRetirer()]);
       const d = await service.dashboard(employee, {});
       expect(d.removals?.toDelist?.items).toHaveLength(1);
@@ -492,7 +541,9 @@ describe('StatsService', () => {
     });
 
     it('ne donne que les vêtements à décrocher à qui tient la boutique', async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([
+        acces('b2', 'products.manage', 'products.view'),
+      ]);
       arrange([
         aRetirer({
           status: { id: 's5', name: 'Vendu en ligne', color: '#0ea5e9', isOnlineSale: true },
@@ -512,14 +563,18 @@ describe('StatsService', () => {
     });
 
     it('suit la boutique choisie dans le sélecteur', async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([
+        acces('b2', 'products.manage', 'products.view'),
+      ]);
       arrange([]);
       await service.dashboard(employee, { shopId: 'b2' });
       expect(prisma.product.findMany.mock.calls[0][0].where.shopId).toBe('b2');
     });
 
     it('refuse une boutique où le droit n’est pas détenu', async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([
+        acces('b2', 'products.manage', 'products.view'),
+      ]);
       const d = await service.dashboard(employee, { shopId: 'b3' });
       expect(d).not.toHaveProperty('removals');
     });
@@ -528,7 +583,7 @@ describe('StatsService', () => {
       // `online.manage` est un droit d'entreprise : le site est unique. Le
       // restreindre aux boutiques où la case est cochée laisserait des annonces
       // vendues sans personne pour les ôter.
-      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage', 'products.view')]);
       arrange([]);
       await service.dashboard(employee, { channel: 'online' });
       expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('OR');

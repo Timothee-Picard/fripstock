@@ -3,18 +3,11 @@ import { RemovalRow, RemovalsBulk } from './list';
 import { grouperRetraits } from './sections';
 import { AccessDenied } from '@/components/access-denied';
 import { StatusBadge } from '@/components/status-badge';
-import { tolerantApiFetch } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { formatDate } from '@/lib/dates';
 import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
-import type { ProductPage } from '@/lib/types';
-
-/**
- * Bornée haut, mais sans pagination : la liste se lit comme une tournée, et
- * couper une boutique en deux pages ferait repasser au même endroit. La
- * recherche est là pour viser un article précis quand il y en a trop.
- */
-const MAX = 200;
+import type { RemovalPage } from '@/lib/types';
 
 /**
  * Liste complète des retraits à faire.
@@ -50,23 +43,12 @@ export default async function RemovalsPage({
 
   const search = typeof params.search === 'string' ? params.search : '';
 
-  const requete = new URLSearchParams({
-    pendingRemoval: 'true',
-    sort: 'soldAt',
-    direction: 'desc',
-    perPage: String(MAX),
-  });
-  if (search) requete.set('search', search);
-
-  // Toléré plutôt que fatal : les deux droits de retrait ouvrent l'écran, mais
-  // c'est `products.view` qui ouvre la liste. Le refus se nomme, il ne casse
-  // pas la page.
-  const inventaire = await tolerantApiFetch<ProductPage>(`/products?${requete.toString()}`);
-  if (inventaire.denied) {
-    return <AccessDenied what="Retraits à faire" permission="products.view" />;
-  }
-
-  const { products, total } = inventaire.data;
+  // Route dédiée et non un filtre de la liste des produits : les deux corvées
+  // n'ont pas le même périmètre — retirer une annonce vaut pour toute
+  // l'entreprise, décrocher un vêtement demande de voir les produits de la
+  // boutique — et le filtrage générique de la liste ne sait pas les distinguer.
+  const requete = search ? `?search=${encodeURIComponent(search)}` : '';
+  const { products, total } = await apiFetch<RemovalPage>(`/products/removals${requete}`);
   const sections = grouperRetraits(products);
 
   return (

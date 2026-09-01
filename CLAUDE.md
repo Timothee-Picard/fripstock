@@ -268,6 +268,27 @@ tout ce qui dépasse se traite sur l'écran des retraits, qui range **par endroi
 Le geste réel est groupé : on dépublie douze annonces d'affilée, puis on revient le dire,
 et douze clics pour une seule action font abandonner une liste de tâches.
 
+**Les deux corvées n'ont pas le même périmètre**, et la règle vit à un seul endroit :
+`products/removal-scope.ts`, dont le tableau de bord et l'écran des retraits se servent
+tous les deux.
+
+- **Retirer une annonce** est un travail de site. `online.manage` porte sur **tous** les
+  produits de l'entreprise, quelle que soit la boutique qui détient l'article : le borner
+  laisserait des annonces vendues sans personne pour les ôter.
+- **Décrocher un vêtement** demande d'aller dans le rayon. Il faut donc, sur cette
+  boutique-là, `products.manage` **et** `products.view`.
+
+La recette du jour échappe à ce croisement : un total ne nomme aucun article.
+
+La liste des produits suit la même correction : son périmètre est celui des boutiques où
+`products.view` est détenu, et non celles où une ligne `ShopAccess` existe — depuis que les
+droits d'entreprise y sont recopiés, une ligne existe partout.
+
+L'écran des retraits passe par une **route dédiée** (`GET /products/removals`) et non par
+un filtre de la liste : le filtrage générique ne sait pas distinguer les deux périmètres,
+et l'appliquer aurait caché à qui gère le site les annonces des boutiques qu'il ne consulte
+pas.
+
 **L'endroit regardé choisit laquelle des deux listes s'affiche** : la boutique en ligne
 montre les annonces à dépublier, une boutique physique les vêtements à y décrocher, et
 « Tout » les deux. Le droit dit ce qu'on a le droit de voir, le lieu ce qu'on peut y

@@ -23,6 +23,7 @@ import {
   type NormalizedValue,
 } from './attributes.validation';
 import { splitCost } from './lot-split';
+import { removalScopes } from './removal-scope';
 import { consignmentReference, depositorCode, freeCode, resaleReference } from './references';
 import type { AssignShopDto } from './dto/assign-shop.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
@@ -38,6 +39,15 @@ import type { ValueAttributeDto } from './dto/attribute-value.dto';
 import { dateFr, frNumber, yesNo, toCsv } from './csv-export';
 
 const PAR_PAGE_DEFAUT = 25;
+
+/**
+ * Plafond de l'écran des retraits.
+ *
+ * Généreux, parce que la liste se lit comme une tournée et que la couper en
+ * pages ferait repasser au même endroit. Le total est compté à part : une
+ * troncature muette se lirait comme « tout est là ».
+ */
+const MAX_REMOVALS = 200;
 
 const DETAIL_INCLUDE = {
   category: { select: { id: true, name: true } },
@@ -301,7 +311,6 @@ export class ProductsService {
       ...(filters.statusId ? { statusId: filters.statusId } : {}),
       ...(filters.saleType ? { saleType: filters.saleType } : {}),
       ...(filters.isOnline !== undefined ? { isOnline: filters.isOnline === 'true' } : {}),
-      ...(filters.pendingRemoval === 'true' ? { pendingRemoval: true } : {}),
       ...(filters.search
         ? {
             OR: [
@@ -863,11 +872,19 @@ export class ProductsService {
     }
     if (currentUser.isManager) return {};
 
+    // Les boutiques où l'employé a le droit de **voir les produits**, et non
+    // celles où il a une ligne d'accès : depuis que les droits d'entreprise
+    // sont recopiés sur toutes les boutiques, une ligne existe partout dès
+    // qu'on gère le catalogue ou le site. S'en contenter aurait montré le
+    // stock de boutiques qu'on n'a pas le droit de regarder.
     const accesses = await this.prisma.shopAccess.findMany({
       where: { userId: currentUser.userId, shop: { companyId: currentUser.companyId } },
-      select: { shopId: true },
+      select: { shopId: true, permissions: true },
     });
-    return { OR: [{ shopId: null }, { shopId: { in: accesses.map((a) => a.shopId) } }] };
+    const visibles = accesses
+      .filter((a) => readPermissions(a.permissions)['products.view'] === true)
+      .map((a) => a.shopId);
+    return { OR: [{ shopId: null }, { shopId: { in: visibles } }] };
   }
 
   private async requireShopAccess(currentUser: CurrentUser, shopId: string | null) {
@@ -934,6 +951,69 @@ export class ProductsService {
     });
 
     return this.detail(currentUser, id);
+  }
+
+  /**
+   * Tous les retraits à faire, pour l'écran dédié.
+   *
+   * Route à part et non un filtre de la liste des produits : les deux corvées
+   * n'ont pas le même périmètre — retirer une annonce vaut pour toute
+   * l'entreprise, décrocher un vêtement demande de voir les produits de la
+   * boutique. Le filtrage générique de la liste ne sait pas faire cette
+   * distinction, et l'appliquer y aurait caché à qui gère le site les annonces
+   * des boutiques qu'il ne peut pas consulter.
+   */
+  async listRemovals(currentUser: CurrentUser, search?: string) {
+    const scopes = await removalScopes(this.prisma, currentUser);
+    // Le sens se lit sur le flag du statut, jamais sur son libellé.
+    const cotes: Prisma.ProductWhereInput[] = [];
+    if (scopes.delist) {
+      cotes.push({ ...scopes.delist, status: { isOnlineSale: false } });
+    }
+    if (scopes.pull) {
+      cotes.push({ ...scopes.pull, status: { isOnlineSale: true } });
+    }
+    if (cotes.length === 0) return { products: [], total: 0 };
+
+    // Les deux `OR` — les périmètres et la recherche — passent par un `AND` et
+    // non par deux clés du même objet : la seconde écraserait la première, et
+    // la recherche ne filtrerait rien sans que rien ne le signale.
+    const where: Prisma.ProductWhereInput = {
+      companyId: currentUser.companyId,
+      pendingRemoval: true,
+      AND: [
+        { OR: cotes },
+        ...(search
+          ? [
+              {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' as const } },
+                  { reference: { contains: search, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
+
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          reference: true,
+          soldAt: true,
+          shop: { select: { id: true, name: true } },
+          status: { select: { id: true, name: true, color: true, isOnlineSale: true } },
+        },
+        orderBy: { soldAt: 'desc' },
+        take: MAX_REMOVALS,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return { products, total };
   }
 
   /**

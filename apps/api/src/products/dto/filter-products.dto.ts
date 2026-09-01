@@ -57,18 +57,6 @@ export class FilterProductsDto {
   @IsIn(['true', 'false'])
   isOnline?: string;
 
-  /**
-   * `true` : uniquement les retraits en attente.
-   *
-   * Sert l'écran « Retraits à faire », qui en donne la liste entière —
-   * cherchable et paginée. Le tableau de bord, lui, n'en montre que les
-   * derniers : on doit pouvoir aller décrocher un article précis même quand il
-   * n'est plus dans l'aperçu.
-   */
-  @IsOptional()
-  @IsIn(['true'])
-  pendingRemoval?: string;
-
   /** Recherche sur le nom, la référence et la description. */
   @IsOptional()
   @IsString()
