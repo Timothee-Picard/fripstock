@@ -35,14 +35,17 @@ interface StockRow {
  * utilisateur ». La requête n'est alors même pas lancée.
  */
 /**
- * Nombre de retraits listés d'un coup.
+ * Taille de l'**aperçu** des retraits sur le tableau de bord.
  *
- * Borné, et le total dit combien il en reste : un lendemain de week-end peut en
- * aligner cinquante, et une liste illimitée pousserait les chiffres hors de
- * l'écran tout en alourdissant chaque chargement. Une troncature muette serait
- * pire — elle se lirait comme « tout est là ».
+ * Cinq, et pas davantage : l'écran ne montre que les derniers arrivés, et
+ * ramener la liste entière alourdirait chaque chargement du tableau de bord
+ * pour des lignes que personne n'y lit. Au-delà, on va sur l'écran des
+ * retraits, qui est fait pour ça.
+ *
+ * Le total, lui, est compté à part : sans lui, cinq lignes se liraient comme
+ * « il n'en reste que cinq ».
  */
-const MAX_REMOVALS = 50;
+const APERCU_RETRAITS = 5;
 
 interface Scopes {
   sales: Prisma.ProductWhereInput | null;
@@ -232,11 +235,11 @@ export class StatsService {
   }
 
   /**
-   * Une liste de retraits : les plus récents d'abord, plus le compte réel.
+   * Aperçu des retraits : les plus récents d'abord, plus le compte réel.
    *
-   * Le total ne se déduit pas de la longueur de la liste, qui est tronquée. Le
-   * dire explicitement est ce qui distingue « il n'en reste que douze » de
-   * « on vous en montre douze ».
+   * Le total ne se déduit pas de la longueur de la liste, qui est tronquée à
+   * cinq. Le dire explicitement est ce qui distingue « il n'en reste que
+   * cinq » de « on vous en montre cinq ».
    */
   private async removalList(where: Prisma.ProductWhereInput) {
     const [items, total] = await Promise.all([
@@ -251,7 +254,7 @@ export class StatsService {
           status: { select: { id: true, name: true, color: true, isOnlineSale: true } },
         },
         orderBy: { soldAt: 'desc' },
-        take: MAX_REMOVALS,
+        take: APERCU_RETRAITS,
       }),
       this.prisma.product.count({ where }),
     ]);

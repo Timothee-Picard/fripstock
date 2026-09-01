@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { RemovalItem } from '@/lib/types';
 
-vi.mock('./products/actions', () => ({ markRemovalDone: vi.fn(), markRemovalsDone: vi.fn() }));
+vi.mock('./products/actions', () => ({ markRemovalDone: vi.fn() }));
 
 const { Removals } = await import('./removals-card');
 
@@ -79,55 +79,43 @@ describe('Removals', () => {
     const beaucoup = (n: number) =>
       Array.from({ length: n }, (_, i) => item({ id: `p${i}`, name: `Article ${i}` }));
 
-    it('n’affiche qu’un aperçu, pour ne pas noyer les chiffres', () => {
-      render(<Removals toDelist={liste(beaucoup(30))} />);
+    it('n’affiche que ce que l’API a renvoyé, sans rien déplier', () => {
+      // Le tableau de bord ne charge que les cinq derniers : proposer d'en
+      // afficher plus obligerait à ramener la liste entière à chaque ouverture.
+      render(<Removals toDelist={liste(beaucoup(5), 30)} />);
       expect(screen.getAllByRole('link', { name: /^Article / })).toHaveLength(5);
-      expect(screen.getByRole('button', { name: 'Afficher 25 de plus' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Afficher/ })).not.toBeInTheDocument();
     });
 
     it('compte le total, pas ce qui est affiché', () => {
-      render(<Removals toDelist={liste(beaucoup(30))} />);
+      render(<Removals toDelist={liste(beaucoup(5), 30)} />);
       expect(screen.getByText('30')).toBeInTheDocument();
     });
 
-    it('déplie le reste d’un clic', async () => {
-      render(<Removals toDelist={liste(beaucoup(30))} />);
-      await userEvent.click(screen.getByRole('button', { name: 'Afficher 25 de plus' }));
-      expect(screen.getAllByRole('link', { name: /^Article / })).toHaveLength(30);
+    it('dit combien sont montrés quand il en reste', () => {
+      // « 5 » tout court se lirait comme « il n'en reste que cinq ».
+      render(<Removals toDelist={liste(beaucoup(5), 30)} />);
+      expect(screen.getByText(/5 sur 30/)).toBeInTheDocument();
     });
 
-    it('avoue la troncature plutôt que de laisser croire la liste complète', async () => {
-      // 213 en attente, 50 renvoyés : dire « 50 » tout court se lirait comme
-      // « il n'en reste que 50 ».
-      render(<Removals toDelist={liste(beaucoup(50), 213)} />);
-      await userEvent.click(screen.getByRole('button', { name: 'Afficher 208 de plus' }));
-      expect(screen.getByText(/50 affichés sur 213/)).toBeInTheDocument();
+    it('ne le dit pas quand la liste est complète', () => {
+      render(<Removals toDelist={liste(beaucoup(3))} />);
+      expect(screen.queryByText(/sur 3/)).not.toBeInTheDocument();
     });
 
-    it('mène à la liste complète : un article ancien n’est pas dans l’aperçu', () => {
-      // Sans ce lien, un article sorti de l'aperçu — et des cinquante que
-      // l'API renvoie — serait inatteignable.
-      render(<Removals toDelist={liste(beaucoup(30))} />);
+    it('renvoie vers la liste complète, seule à tout porter', () => {
+      render(<Removals toDelist={liste(beaucoup(5), 30)} />);
       expect(screen.getByRole('link', { name: 'Voir la liste complète' })).toHaveAttribute(
         'href',
         '/dashboard/removals',
       );
     });
 
-    it('propose de tout solder d’un coup, sur ce qui est affiché', () => {
-      render(<Removals toDelist={liste(beaucoup(30))} />);
-      expect(screen.getByRole('button', { name: 'Tout dépublier — les 30' })).toBeInTheDocument();
-    });
-
-    it('nomme le geste selon le sens', () => {
-      render(<Removals toPull={liste(beaucoup(3))} />);
-      expect(screen.getByRole('button', { name: 'Tout décrocher — les 3' })).toBeInTheDocument();
-    });
-
-    it('ne propose pas le groupé pour un seul article', () => {
-      // Sa propre ligne porte déjà son bouton : deux boutons pour un geste.
-      render(<Removals toDelist={liste([item()])} />);
-      expect(screen.queryByRole('button', { name: /Tout dépublier/ })).not.toBeInTheDocument();
+    it('ne propose aucune action groupée : elle vit sur la liste complète', () => {
+      // Solder d'un coup se fait par endroit où aller, ce que seul l'écran des
+      // retraits sait présenter.
+      render(<Removals toDelist={liste(beaucoup(5), 30)} />);
+      expect(screen.queryByRole('button', { name: /Tout / })).not.toBeInTheDocument();
     });
   });
 });

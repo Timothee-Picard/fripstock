@@ -400,19 +400,26 @@ il y a trois semaines n'y figure plus, et il faut pourtant pouvoir aller le déc
 lien « Voir la liste complète » y mène depuis chaque carte, et l'entrée de menu s'ouvre à
 `online.manage` **ou** `products.manage`.
 
-**Le volume est prévu.** L'API n'en renvoie que 50 à la fois mais donne le compte réel, et
-l'écran n'affiche que les cinq premiers — assez pour voir qu'il y a du travail, assez peu
-pour que les chiffres restent visibles en dessous. Le reste se déplie d'un clic et défile
-dans son cadre. Quand la liste est tronquée, elle le dit (« 50 affichés sur 213 ») : un
-compte muet se lirait comme « il n'en reste que 50 ».
+**Le tableau de bord n'en charge que cinq.** L'API borne l'aperçu à cinq lignes et compte
+le total à part : ramener la liste entière alourdirait chaque ouverture du tableau de bord
+pour des lignes qu'on n'y lit pas. L'aperçu dit ce qu'il montre (« 5 sur 30 ») — un compte
+muet se lirait comme « il n'en reste que cinq » — et renvoie à l'écran des retraits pour
+le reste.
 
-Un bouton **« Tout dépublier »** / **« Tout décrocher »** solde d'un coup ce qui est
-affiché, parce que le geste réel est groupé : on va retirer les douze annonces sur le site,
-puis on revient dire que c'est fait. Douze clics pour une seule action, c'est ce qui fait
-abandonner une liste de tâches. Il ne porte que les articles listés — un lot arrivé entre
-l'affichage et le clic n'est pas soldé sans avoir été vu — et ceux qu'un collègue aurait
-traités entre-temps sont simplement ignorés, ce qui n'est pas une erreur mais le travail
-fait.
+**Cet écran range par endroit où aller**, et non par statut : la boutique en ligne d'abord,
+puis une section par boutique. C'est la forme d'une tournée — on retire les annonces du
+site en une fois, puis on passe au Centre-ville avec sa liste. Mélanger les deux obligerait
+à relire chaque ligne pour savoir laquelle est pour soi. Il n'est donc pas paginé : couper
+une boutique en deux pages ferait repasser au même endroit. La recherche vise un article
+précis quand il y en a trop, et au-delà de 200 la troncature est annoncée.
+
+Chaque section porte son propre bouton **« Tout marquer comme retiré »**, parce que le
+geste réel est groupé : on va retirer les douze annonces sur le site, puis on revient dire
+que c'est fait. Douze clics pour une seule action, c'est ce qui fait abandonner une liste
+de tâches. Une action par endroit et pas une pour tout : on solde la tournée qu'on a faite,
+pas les trois. Elle ne porte que les articles listés — un lot arrivé entre l'affichage et
+le clic n'est pas soldé sans avoir été vu — et ceux qu'un collègue aurait traités
+entre-temps sont simplement ignorés, ce qui n'est pas une erreur mais le travail fait.
 
 **La boutique en ligne est un choix du sélecteur du tableau de bord**, au même rang qu'une
 boutique physique. La sélectionner donne ses ventes, son stock annoncé, ses retraits et sa

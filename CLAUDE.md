@@ -258,15 +258,15 @@ la totalité, cherchable et paginée : un article vendu il y a trois semaines n'
 l'aperçu ni dans les cinquante que l'API renvoie, et il faut pourtant pouvoir aller le
 décrocher. L'entrée de menu s'ouvre à `online.manage` **ou** `products.manage`.
 
-**Les listes de retrait du tableau de bord sont bornées à 50, et renvoient le compte
-réel.** Un lendemain de
+**L'aperçu du tableau de bord est borné à 5, et renvoie le compte réel.** Un lendemain de
 week-end peut en aligner cinquante : une liste illimitée pousserait les chiffres hors de
 l'écran et alourdirait chaque chargement. `total` ne se déduit donc **jamais** de
-`items.length` — une troncature muette se lirait comme « tout est là ». L'écran n'en montre
-que cinq, déplie le reste à la demande, et propose de **tout solder d'un coup**
-(`PUT /products/removals-done`) : le geste réel est groupé — on dépublie douze annonces
-d'affilée, puis on revient le dire — et douze clics pour une seule action font abandonner
-une liste de tâches.
+`items.length` — une troncature muette se lirait comme « tout est là ». Rien ne s'y déplie :
+tout ce qui dépasse se traite sur l'écran des retraits, qui range **par endroit où aller**
+— la boutique en ligne, puis une section par boutique — et porte le
+**« tout marquer comme retiré »** (`PUT /products/removals-done`), une action par section.
+Le geste réel est groupé : on dépublie douze annonces d'affilée, puis on revient le dire,
+et douze clics pour une seule action font abandonner une liste de tâches.
 
 **L'endroit regardé choisit laquelle des deux listes s'affiche** : la boutique en ligne
 montre les annonces à dépublier, une boutique physique les vêtements à y décrocher, et

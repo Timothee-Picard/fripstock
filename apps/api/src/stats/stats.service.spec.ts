@@ -534,15 +534,17 @@ describe('StatsService', () => {
       expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('OR');
     });
 
-    it('borne la liste et dit le compte réel', async () => {
-      // Une troncature muette se lirait comme « tout est là ».
+    it('n’en ramène que cinq, et dit le compte réel', async () => {
+      // Le tableau de bord n'est qu'un aperçu : ramener la liste entière
+      // alourdirait chaque chargement pour des lignes qu'on n'y lit pas. Une
+      // troncature muette, elle, se lirait comme « tout est là ».
       prisma.product.count.mockResolvedValue(213);
       arrange([], [], [], [], [aRetirer()]);
       const d = await complet();
       expect(d.removals?.toDelist?.items).toHaveLength(1);
       expect(d.removals?.toDelist?.total).toBe(213);
       const appel = prisma.product.findMany.mock.calls.at(-2)!;
-      expect(appel[0].take).toBe(50);
+      expect(appel[0].take).toBe(5);
     });
 
     it('montre les plus récentes d’abord', async () => {

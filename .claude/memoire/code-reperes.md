@@ -49,7 +49,7 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
 - `app/dashboard/counter.tsx` — le comptoir de vente.
 - `app/dashboard/removals-card.tsx` — l'aperçu des retraits sur le tableau de bord,
   deux listes selon le droit **et** selon l'endroit regardé. `app/dashboard/removals/`
-  en est la liste complète, cherchable. Le sens du geste se lit sur
+  en est la liste complète, rangée par endroit où aller (`sections.ts`). Le sens du geste se lit sur
   `status.isOnlineSale`, jamais sur le libellé.
 - `components/shop-selector.tsx` — boutique du tableau de bord, écrite dans l'URL.
   Rendu par `app/dashboard/page.tsx`, **pas** par le layout : il ne pilote que cet

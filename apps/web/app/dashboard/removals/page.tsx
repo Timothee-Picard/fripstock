@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { RemovalRow, RemovalsBulk } from './list';
+import { grouperRetraits } from './sections';
 import { AccessDenied } from '@/components/access-denied';
 import { StatusBadge } from '@/components/status-badge';
 import { tolerantApiFetch } from '@/lib/api';
@@ -8,14 +9,12 @@ import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import type { ProductPage } from '@/lib/types';
 
-const PAR_PAGE = 50;
-
-/** Lien de pagination, en conservant la recherche en cours. */
-function lien(search: string, page: number): string {
-  const params = new URLSearchParams({ page: String(page) });
-  if (search) params.set('search', search);
-  return `/dashboard/removals?${params.toString()}`;
-}
+/**
+ * Bornée haut, mais sans pagination : la liste se lit comme une tournée, et
+ * couper une boutique en deux pages ferait repasser au même endroit. La
+ * recherche est là pour viser un article précis quand il y en a trop.
+ */
+const MAX = 200;
 
 /**
  * Liste complète des retraits à faire.
@@ -25,7 +24,9 @@ function lien(search: string, page: number): string {
  * article précis** qui n'y figure plus — d'où cet écran, cherchable et paginé.
  *
  * Il ne vit pas dans la liste des produits : on n'y vient pas consulter un
- * stock, on y vient solder une corvée.
+ * stock, on y vient solder une corvée. D'où le rangement par **endroit où
+ * aller** — le site d'un côté, chaque boutique de l'autre — et non par statut :
+ * c'est ainsi qu'on fait la tournée.
  */
 export default async function RemovalsPage({
   searchParams,
@@ -48,14 +49,12 @@ export default async function RemovalsPage({
   }
 
   const search = typeof params.search === 'string' ? params.search : '';
-  const page = Number(params.page ?? 1) || 1;
 
   const requete = new URLSearchParams({
     pendingRemoval: 'true',
     sort: 'soldAt',
     direction: 'desc',
-    page: String(page),
-    perPage: String(PAR_PAGE),
+    perPage: String(MAX),
   });
   if (search) requete.set('search', search);
 
@@ -67,7 +66,8 @@ export default async function RemovalsPage({
     return <AccessDenied what="Retraits à faire" permission="products.view" />;
   }
 
-  const { products, total, pages } = inventaire.data;
+  const { products, total } = inventaire.data;
+  const sections = grouperRetraits(products);
 
   return (
     <div className="space-y-4">
@@ -107,84 +107,72 @@ export default async function RemovalsPage({
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="w-full min-w-3xl text-left text-sm">
-              <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Article</th>
-                  <th className="px-3 py-2 font-medium">Boutique</th>
-                  <th className="px-3 py-2 font-medium">Vendu le</th>
-                  <th className="px-3 py-2 font-medium">Geste à faire</th>
-                  <th className="px-3 py-2 font-medium">
-                    <span className="sr-only">Action</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/dashboard/products/${p.id}`}
-                        className="font-medium text-slate-900 underline-offset-2 hover:underline"
-                      >
-                        {p.name}
-                      </Link>
-                      {p.reference ? (
-                        <span className="ml-2 font-mono text-xs text-slate-600">{p.reference}</span>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">{p.shop?.name ?? 'Stock central'}</td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {p.soldAt ? formatDate(p.soldAt) : '—'}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge status={p.status} />
-                        {/* Le geste se déduit du flag du statut de vente, jamais
-                            de son libellé — un statut peut être renommé. */}
-                        <span className="text-slate-700">
-                          {p.status.isOnlineSale ? 'décrocher le vêtement' : "dépublier l'annonce"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <RemovalRow id={p.id} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {total > products.length ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+              {products.length} affichés sur {total}. Traitez ceux-ci, les suivants apparaîtront —
+              ou cherchez un article précis.
+            </p>
+          ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <RemovalsBulk ids={products.map((p) => p.id)} />
-            {pages > 1 ? (
-              <nav className="ml-auto flex items-center gap-2 text-sm">
-                {page > 1 ? (
-                  <Link
-                    href={lien(search, page - 1)}
-                    scroll={false}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
-                  >
-                    Précédent
-                  </Link>
-                ) : null}
-                <span className="text-slate-600">
-                  Page {page} sur {pages}
+          {sections.map((section) => (
+            <section key={section.key} className="rounded-lg border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 px-4 py-3">
+                <h2 className="text-sm font-medium text-slate-900">{section.title}</h2>
+                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">
+                  {section.items.length}
                 </span>
-                {page < pages ? (
-                  <Link
-                    href={lien(search, page + 1)}
-                    scroll={false}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
-                  >
-                    Suivant
-                  </Link>
-                ) : null}
-              </nav>
-            ) : null}
-          </div>
+                <p className="text-xs text-slate-600">{section.hint}</p>
+                {/* Une action groupée par endroit, et pas une pour tout : on
+                    solde une tournée quand on l'a faite, pas les trois. */}
+                <div className="ml-auto">
+                  <RemovalsBulk ids={section.items.map((p) => p.id)} />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-2xl text-left text-sm">
+                  <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">Article</th>
+                      <th className="px-4 py-2 font-medium">Statut</th>
+                      <th className="px-4 py-2 font-medium">Vendu le</th>
+                      <th className="px-4 py-2 font-medium">
+                        <span className="sr-only">Action</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {section.items.map((p) => (
+                      <tr key={p.id}>
+                        <td className="px-4 py-2">
+                          <Link
+                            href={`/dashboard/products/${p.id}`}
+                            className="font-medium text-slate-900 underline-offset-2 hover:underline"
+                          >
+                            {p.name}
+                          </Link>
+                          {p.reference ? (
+                            <span className="ml-2 font-mono text-xs text-slate-600">
+                              {p.reference}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusBadge status={p.status} />
+                        </td>
+                        <td className="px-4 py-2 text-slate-700">
+                          {p.soldAt ? formatDate(p.soldAt) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <RemovalRow id={p.id} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
         </>
       )}
     </div>
