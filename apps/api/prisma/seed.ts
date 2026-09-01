@@ -46,6 +46,16 @@ const DEMO_TILL_PERMISSIONS: PermissionMap = {
   'products.changeStatus': true,
 };
 
+/**
+ * The web-only role, on a third shop: it may list a garment and record an
+ * online sale, and nothing else. Handing it `products.manage` would defeat the
+ * point — the split between the two is what the permission exists for.
+ */
+const DEMO_ONLINE_PERMISSIONS: PermissionMap = {
+  'products.view': true,
+  'online.manage': true,
+};
+
 /** Global library, shared by every company, read-only. */
 const TEMPLATES: { name: string; type: AttributeType; options: string[] }[] = [
   { name: 'Taille', type: 'SELECT', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
@@ -96,6 +106,23 @@ const BOUTIQUES = [
   { name: 'Boutique Gare', address: '3 place de la Gare, Lyon' },
   { name: 'Boutique Marché', address: '48 avenue du Marché, Villeurbanne' },
 ];
+
+/**
+ * Parcours menant à chaque statut, pour l'historique de démonstration.
+ *
+ * Chaque saut doit exister dans `BASE_TRANSITIONS` : un historique qui montre
+ * un passage que l'application refuserait serait un mensonge, et le premier
+ * lecteur à le reproduire à la main se heurterait à un refus.
+ */
+const CHEMINS: Record<string, string[]> = {
+  'En stock': ['En stock'],
+  'En rayon': ['En stock', 'En rayon'],
+  Réservé: ['En stock', 'En rayon', 'Réservé'],
+  Vendu: ['En stock', 'En rayon', 'Vendu'],
+  'Vendu en ligne': ['En stock', 'En rayon', 'Vendu en ligne'],
+  'Rendu au client': ['En stock', 'En rayon', 'Rendu au client'],
+  Retiré: ['En stock', 'En rayon', 'Retiré'],
+};
 
 const DEPOSANTS = [
   {
@@ -234,6 +261,7 @@ async function main() {
   const ACCES_EMPLOYE: { shop: string; permissions: PermissionMap }[] = [
     { shop: BOUTIQUES[0].name, permissions: DEMO_STOCK_PERMISSIONS },
     { shop: BOUTIQUES[1].name, permissions: DEMO_TILL_PERMISSIONS },
+    { shop: BOUTIQUES[2].name, permissions: DEMO_ONLINE_PERMISSIONS },
   ];
   for (const acces of ACCES_EMPLOYE) {
     const shopId = shops.get(acces.shop)!;
@@ -401,6 +429,18 @@ async function main() {
     soldPrice?: number;
     soldDaysAgo?: number;
     depositorPaid?: boolean;
+    /** Public description, shown on the sheet and exported. */
+    description?: string;
+    /** Internal note: what the shop tells itself, never the customer. */
+    note?: string;
+    /** Several identical items on one line. Rare in second-hand, but allowed. */
+    quantity?: number;
+    /** Listed on the online shop. */
+    isOnline?: boolean;
+    /** Online price, when it differs from the shop label. */
+    onlinePrice?: number;
+    /** Sold on one channel, still present on the other: a chore to clear. */
+    pendingRemoval?: boolean;
     options: Record<string, string>;
     brand: string;
   }
@@ -411,6 +451,8 @@ async function main() {
     // --- Achat-revente, en stock ------------------------------------------
     {
       name: 'Robe fleurie été',
+      description: 'Robe légère à fleurs, manches courtes, doublée. Coupe évasée.',
+      note: 'Petite tache sur l’ourlet arrière, invisible portée.',
       category: 'Robe',
       shop: CV,
       status: 'En rayon',
@@ -421,6 +463,7 @@ async function main() {
     },
     {
       name: 'Chemise en lin',
+      description: 'Chemise en lin épais, col italien, poche poitrine.',
       category: 'Chemise',
       shop: CV,
       status: 'En rayon',
@@ -431,6 +474,8 @@ async function main() {
     },
     {
       name: 'Jean brut droit',
+      description: 'Jean brut coupe droite, taille haute, jamais retouché.',
+      note: 'Ourlet à refaire avant mise en rayon.',
       category: 'Pantalon',
       shop: CV,
       status: 'En rayon',
@@ -451,6 +496,7 @@ async function main() {
     },
     {
       name: 'Manteau laine long',
+      description: 'Manteau long en laine mélangée, doublure satin, deux poches passepoilées.',
       category: 'Manteau',
       shop: GA,
       status: 'En rayon',
@@ -491,6 +537,9 @@ async function main() {
     },
     {
       name: 'Écharpe laine',
+      description: 'Écharpe en laine douce, franges nouées main.',
+      quantity: 3,
+      note: 'Trois écharpes identiques rentrées ensemble. Une ligne, trois pièces.',
       category: 'Accessoire',
       shop: GA,
       status: 'En stock',
@@ -521,6 +570,8 @@ async function main() {
     },
     {
       name: 'Sac bandoulière',
+      description: 'Sac bandoulière cuir grainé, bandoulière réglable, fermeture aimantée.',
+      note: 'Angles légèrement frottés — prix ajusté en conséquence.',
       category: 'Sac',
       shop: null,
       status: 'En stock',
@@ -826,6 +877,214 @@ async function main() {
       options: { Couleur: 'Rouge', Matière: 'Synthétique' },
       brand: 'Vanessa Bruno',
     },
+
+    // --- Vente en ligne ----------------------------------------------------
+    // En fin de liste, et pas ailleurs : les références se calculent dans
+    // l'ordre du tableau, un ajout au milieu renumérote tout ce qui suit.
+    //
+    // Ce bloc couvre les six situations que la fonctionnalité doit rendre
+    // lisibles, pour qu'aucune ne se découvre en production :
+    //   1. les deux canaux à la fois, prix web plus élevé ;
+    //   2. les deux canaux, même prix (onlinePrice vide) ;
+    //   3. en ligne depuis le stock central ;
+    //   4. vendu au comptoir, annonce encore publiée → à dépublier ;
+    //   5. vendu par le site depuis une boutique → à décrocher ;
+    //   6. vendu par le site depuis le stock central → aucune corvée.
+    {
+      name: 'Trench camel ceinturé',
+      description: 'Trench mi-long, ceinture d’origine, épaulettes amovibles.',
+      note: 'Vendu plus cher en ligne : les frais de port sont inclus dans le prix affiché.',
+      category: 'Manteau',
+      shop: CV,
+      status: 'En rayon',
+      purchasePrice: 15,
+      salePrice: 45,
+      isOnline: true,
+      onlinePrice: 52,
+      options: { Taille: 'M', Couleur: 'Beige', Matière: 'Coton' },
+      brand: 'Burberry',
+    },
+    {
+      name: 'Pull torsadé écru',
+      description: 'Pull grosses torsades, laine mérinos, col rond.',
+      category: 'Haut',
+      shop: CV,
+      status: 'En rayon',
+      purchasePrice: 7,
+      salePrice: 24,
+      isOnline: true,
+      options: { Taille: 'L', Couleur: 'Beige', Matière: 'Laine' },
+      brand: 'Sézane',
+    },
+    {
+      name: 'Robe cache-cœur verte',
+      category: 'Robe',
+      shop: GA,
+      status: 'En rayon',
+      purchasePrice: 9,
+      salePrice: 34,
+      isOnline: true,
+      onlinePrice: 39,
+      options: { Taille: 'S', Couleur: 'Vert', Matière: 'Synthétique' },
+      brand: 'Maje',
+    },
+    {
+      name: 'Sac seau daim',
+      description: 'Sac seau en daim souple, cordon de serrage, intérieur non doublé.',
+      note: 'Stock central : à assigner à une boutique si les ventes en ligne ralentissent.',
+      category: 'Sac',
+      shop: null,
+      status: 'En stock',
+      purchasePrice: 11,
+      salePrice: 38,
+      isOnline: true,
+      options: { Couleur: 'Beige', Matière: 'Cuir' },
+      brand: 'Vanessa Bruno',
+    },
+    {
+      name: 'Chemise en jean délavée',
+      category: 'Chemise',
+      shop: MA,
+      status: 'En rayon',
+      purchasePrice: 5,
+      salePrice: 19,
+      isOnline: true,
+      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      brand: "Levi's",
+    },
+    {
+      // Déposé ET en ligne : la commission s'applique quel que soit le canal.
+      name: 'Manteau laine bouclée',
+      description: 'Manteau court en laine bouclée, coupe droite, sans col.',
+      note: 'Dépôt Sophie Martin — contrat hiver, commission 35 %.',
+      category: 'Manteau',
+      shop: CV,
+      status: 'En rayon',
+      contract: 'martin-hiver',
+      salePrice: 68,
+      isOnline: true,
+      onlinePrice: 75,
+      options: { Taille: 'M', Couleur: 'Gris', Matière: 'Laine' },
+      brand: 'Sandro',
+    },
+
+    // Corvée 1 : vendus au comptoir, annonce encore publiée → à dépublier.
+    {
+      name: 'Perfecto matelassé',
+      category: 'Manteau',
+      shop: GA,
+      status: 'Vendu',
+      purchasePrice: 20,
+      salePrice: 75,
+      soldPrice: 70,
+      soldDaysAgo: 1,
+      isOnline: true,
+      onlinePrice: 80,
+      pendingRemoval: true,
+      options: { Taille: 'L', Couleur: 'Noir', Matière: 'Cuir' },
+      brand: 'Schott',
+    },
+    {
+      name: 'Bottines chelsea noires',
+      category: 'Chaussures',
+      shop: CV,
+      status: 'Vendu',
+      purchasePrice: 12,
+      salePrice: 42,
+      soldPrice: 42,
+      soldDaysAgo: 3,
+      isOnline: true,
+      pendingRemoval: true,
+      options: { Taille: 'S', Couleur: 'Noir' },
+      brand: 'Jonak',
+    },
+    {
+      // Déposé, vendu au comptoir, annonce encore en ligne : le relevé du
+      // déposant et la corvée cohabitent.
+      name: 'Robe longue imprimée',
+      category: 'Robe',
+      shop: CV,
+      status: 'Vendu',
+      contract: 'martin-ete',
+      salePrice: 48,
+      soldPrice: 45,
+      soldDaysAgo: 2,
+      isOnline: true,
+      pendingRemoval: true,
+      options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      brand: 'Ba&sh',
+    },
+
+    // Corvée 2 : vendus par le site depuis une boutique → à décrocher.
+    // `isOnline` est faux : la vente par le site dépublie l'annonce d'elle-même.
+    {
+      name: 'Blazer oversize marine',
+      category: 'Manteau',
+      shop: CV,
+      status: 'Vendu en ligne',
+      purchasePrice: 14,
+      salePrice: 55,
+      soldPrice: 55,
+      soldDaysAgo: 1,
+      pendingRemoval: true,
+      options: { Taille: 'L', Couleur: 'Bleu', Matière: 'Laine' },
+      brand: 'Zara',
+    },
+    {
+      name: 'Jupe midi plissée',
+      category: 'Pantalon',
+      shop: GA,
+      status: 'Vendu en ligne',
+      purchasePrice: 6,
+      salePrice: 26,
+      soldPrice: 22,
+      soldDaysAgo: 4,
+      pendingRemoval: true,
+      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      brand: 'Other Stories',
+    },
+
+    // Vendus par le site depuis le stock central : aucune corvée, l'article
+    // n'était sur aucun portant.
+    {
+      name: 'Écharpe cachemire grise',
+      category: 'Accessoire',
+      shop: null,
+      status: 'Vendu en ligne',
+      purchasePrice: 8,
+      salePrice: 30,
+      soldPrice: 30,
+      soldDaysAgo: 5,
+      options: { Couleur: 'Gris', Matière: 'Laine' },
+      brand: 'Eric Bompard',
+    },
+    {
+      // Dépôt-vente vendu en ligne : la commission se fige comme au comptoir.
+      name: 'Sac cabas cuir grainé',
+      category: 'Sac',
+      shop: null,
+      status: 'Vendu en ligne',
+      contract: 'nguyen',
+      salePrice: 62,
+      soldPrice: 58,
+      soldDaysAgo: 6,
+      depositorPaid: false,
+      options: { Couleur: 'Noir', Matière: 'Cuir' },
+      brand: 'Polène',
+    },
+    {
+      name: 'Baskets rétro blanches',
+      category: 'Chaussures',
+      shop: MA,
+      status: 'Vendu en ligne',
+      purchasePrice: 10,
+      salePrice: 36,
+      soldPrice: 33,
+      soldDaysAgo: 8,
+      pendingRemoval: true,
+      options: { Taille: 'M', Couleur: 'Blanc' },
+      brand: 'Veja',
+    },
   ];
 
   // Les références suivent la règle de l'application : compteur d'entreprise
@@ -834,6 +1093,18 @@ async function main() {
   // par l'API buterait sur la contrainte d'unicité.
   let compteurAchat = 0;
   const compteurDepot = new Map<string, number>();
+
+  // Les produits sont **remis à zéro** à chaque passage, contrairement au reste
+  // du seed qui fait de l'upsert.
+  //
+  // Sauter les produits déjà présents avait l'air plus prudent, mais les
+  // références se calculent dans l'ordre du tableau : insérer une entrée au
+  // milieu décalait toutes les suivantes sur des références déjà prises, qui
+  // étaient alors ignorées en silence — la base gardait un mélange de deux
+  // versions du jeu de démonstration, et `make seed` ne pouvait plus la
+  // réparer. Tout ce qui pend à un produit (attributs, historique) part avec
+  // lui : les relations sont en cascade.
+  await prisma.product.deleteMany({ where: { companyId: company.id } });
 
   for (const entry of products) {
     const contrat = entry.contract ? contracts.get(entry.contract)! : null;
@@ -848,11 +1119,6 @@ async function main() {
       compteurAchat += 1;
       reference = `A-${String(compteurAchat).padStart(4, '0')}`;
     }
-
-    const existing = await prisma.product.findFirst({
-      where: { companyId: company.id, reference },
-    });
-    if (existing) continue;
 
     const vendu = entry.soldPrice !== undefined;
     const product = await prisma.product.create({
@@ -872,6 +1138,12 @@ async function main() {
         appliedCommission: vendu && contrat ? contrat.commission : null,
         depositorPaid: contrat ? (entry.depositorPaid ?? false) : null,
         soldAt: vendu ? ilYA(entry.soldDaysAgo ?? 0, 11 + (compteurAchat % 8)) : null,
+        description: entry.description ?? null,
+        internalNote: entry.note ?? null,
+        quantity: entry.quantity ?? 1,
+        isOnline: entry.isOnline ?? false,
+        onlinePrice: entry.onlinePrice ?? null,
+        pendingRemoval: entry.pendingRemoval ?? false,
       },
     });
 
@@ -899,14 +1171,27 @@ async function main() {
       });
     }
 
-    await prisma.statusHistory.create({
-      data: {
-        productId: product.id,
-        statusId: statuses.get(entry.status)!,
-        changedByUserId: manager.id,
-        note: 'Création via le seed',
-      },
-    });
+    // Un historique crédible plutôt qu'une ligne unique : la fiche produit
+    // affiche ce parcours, et une seule entrée ne montrait jamais à quoi
+    // ressemble un article qui a vécu. Le chemin suit le flux réel — sans quoi
+    // l'historique raconterait des passages que l'application refuserait.
+    const chemin = CHEMINS[entry.status] ?? [entry.status];
+    const fin = vendu ? (entry.soldDaysAgo ?? 0) : 0;
+    for (const [rang, etape] of chemin.entries()) {
+      // Le dernier pas porte la date de vente ; les précédents remontent le
+      // temps, un par jour, pour que l'ordre se lise.
+      const joursAvant = fin + (chemin.length - 1 - rang) * 3;
+      await prisma.statusHistory.create({
+        data: {
+          productId: product.id,
+          statusId: statuses.get(etape)!,
+          // L'employé fait tourner la boutique, le gérant ouvre le stock.
+          changedByUserId: rang === 0 ? manager.id : employee.id,
+          note: rang === 0 ? 'Entrée en stock' : null,
+          changedAt: ilYA(joursAvant, 9 + ((compteurAchat + rang) % 9)),
+        },
+      });
+    }
   }
 
   await prisma.company.update({
@@ -929,7 +1214,7 @@ async function main() {
   for (const acces of ACCES_EMPLOYE) {
     console.log(`           « ${acces.shop} » : ${Object.keys(acces.permissions).join(', ')}`);
   }
-  console.log(`           aucun accès à « ${BOUTIQUES[2].name} »`);
+  console.log('           jamais stats.view : le tableau de bord doit lui cacher les marges');
 }
 
 main()
