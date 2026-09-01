@@ -16,6 +16,9 @@ describe('ProductsController', () => {
     updateSale: jest.fn(),
     toggleDepositorPayment: jest.fn(),
     changeStatus: jest.fn(),
+    setOnline: jest.fn(),
+    markRemovalDone: jest.fn(),
+    markRemovalsDone: jest.fn(),
     delete: jest.fn(),
   } as unknown as ProductsService;
   const controller = new ProductsController(service);
@@ -35,6 +38,9 @@ describe('ProductsController', () => {
     ['assignShop', 'PUT', ':id/assign-shop'],
     ['updateSale', 'PUT', ':id/sale'],
     ['depositorPayment', 'PUT', ':id/depositor-payment'],
+    ['removalsDone', 'PUT', 'removals-done'],
+    ['setOnline', 'PUT', ':id/online'],
+    ['removalDone', 'PUT', ':id/removal-done'],
     ['changeStatus', 'PUT', ':id/status'],
     ['delete', 'DELETE', ':id'],
   ])('%s → %s %s', (name, method, path) => {
@@ -47,15 +53,29 @@ describe('ProductsController', () => {
     ['detail', 'products.view'],
     ['create', 'products.manage'],
     ['createLot', 'products.manage'],
-    ['sellMany', 'products.changeStatus'],
     ['update', 'products.manage'],
     ['assignShop', 'products.manage'],
     ['updateSale', 'products.manage'],
     ['depositorPayment', 'deposits.manage'],
-    ['changeStatus', 'products.changeStatus'],
+    ['setOnline', 'online.manage'],
     ['delete', 'products.delete'],
   ])('%s exige la permission %s', (name, permission) => {
     expect(route(ProductsController, name).permissions).toEqual([permission].flat());
+  });
+
+  // Deux routes acceptent l'un OU l'autre droit. `changeStatus` est la plus
+  // délicate : le garde ne peut pas distinguer une vente en ligne d'un autre
+  // changement — le statut visé est dans le corps — donc il ouvre largement et
+  // le service resserre. Voir `requireStatusRight`.
+  it.each([
+    ['sellMany', ['products.changeStatus', 'online.manage']],
+    ['removalDone', ['online.manage', 'products.manage']],
+    ['removalsDone', ['online.manage', 'products.manage']],
+    ['changeStatus', ['products.changeStatus', 'online.manage']],
+  ])('%s accepte l’un ou l’autre de %s', (name, permissions) => {
+    const info = route(ProductsController, name);
+    expect(info.permissionMode).toBe('any');
+    expect(info.permissions).toEqual(permissions);
   });
 
   it.each([
@@ -64,6 +84,8 @@ describe('ProductsController', () => {
     'assignShop',
     'updateSale',
     'depositorPayment',
+    'setOnline',
+    'removalDone',
     'changeStatus',
     'delete',
   ])('%s retrouve la boutique via le produit ciblé', (name) => {
@@ -109,6 +131,26 @@ describe('ProductsController', () => {
     it('updateSale appelle updateSale', () => {
       void controller.updateSale(manager, 'p1', { soldPrice: 10 });
       expect(service.updateSale).toHaveBeenCalledWith(manager, 'p1', { soldPrice: 10 });
+    });
+
+    it('setOnline appelle setOnline', () => {
+      void controller.setOnline(manager, 'p1', { isOnline: true, onlinePrice: 25 });
+      expect(service.setOnline).toHaveBeenCalledWith(manager, 'p1', {
+        isOnline: true,
+        onlinePrice: 25,
+      });
+    });
+
+    it('removalsDone appelle markRemovalsDone', () => {
+      void controller.removalsDone(manager, { productIds: ['p1', 'p2'] });
+      expect(service.markRemovalsDone).toHaveBeenCalledWith(manager, {
+        productIds: ['p1', 'p2'],
+      });
+    });
+
+    it('removalDone appelle markRemovalDone', () => {
+      void controller.removalDone(manager, 'p1');
+      expect(service.markRemovalDone).toHaveBeenCalledWith(manager, 'p1');
     });
 
     it('changeStatus appelle changeStatus', () => {

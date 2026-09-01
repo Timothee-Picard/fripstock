@@ -16,6 +16,7 @@ export type NavIcon =
   | 'attributes'
   | 'depositors'
   | 'contracts'
+  | 'removals'
   | 'shops'
   | 'users';
 
@@ -24,6 +25,8 @@ export interface NavEntry {
   label: string;
   icon: NavIcon;
   permission?: Permission;
+  /** L'un **ou** l'autre suffit, quand deux métiers ouvrent le même écran. */
+  anyPermission?: Permission[];
   manager?: boolean;
 }
 
@@ -57,6 +60,14 @@ export const NAVIGATION: NavEntry[] = [
     label: 'Contrats de dépôt',
     icon: 'contracts',
     permission: 'deposits.manage',
+  },
+  {
+    // Deux métiers y viennent : celui qui dépublie les annonces et celui qui
+    // décroche les vêtements. Chacun n'y verra que sa moitié.
+    href: '/dashboard/removals',
+    label: 'Retraits à faire',
+    icon: 'removals',
+    anyPermission: ['online.manage', 'products.manage'],
   },
   { href: '/dashboard/shops', label: 'Boutiques', icon: 'shops' },
   { href: '/dashboard/users', label: 'Utilisateurs', icon: 'users', manager: true },

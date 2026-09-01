@@ -381,6 +381,178 @@ describe('StatsService', () => {
     });
   });
 
+  describe('boutique en ligne', () => {
+    it('ne compte que les ventes passées par le site', async () => {
+      arrange([], []);
+      await service.dashboard(manager, { channel: 'online' });
+      expect(prisma.product.findMany.mock.calls[0][0].where.status).toEqual({
+        isSale: true,
+        isOnlineSale: true,
+      });
+    });
+
+    it('reconnaît une vente à son statut, pas à l’annonce du moment', async () => {
+      // L'annonce tombe quand le retrait est confirmé : filtrer le passé sur
+      // `isOnline` ferait disparaître les ventes d'hier au fil du ménage.
+      arrange([], []);
+      await service.dashboard(manager, { channel: 'online' });
+      expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('isOnline');
+    });
+
+    it('prend pour stock ce qui est annoncé, et là c’est bien l’état courant', async () => {
+      arrange([], []);
+      await service.dashboard(manager, { channel: 'online' });
+      expect(prisma.product.findMany.mock.calls[1][0].where.isOnline).toBe(true);
+    });
+
+    it('omet le taux de retour, qui ne dépend pas du canal', async () => {
+      // Un article rendu n'a été vendu nulle part : le filtrer par canal
+      // donnerait toujours zéro, et un chiffre faux vaut moins que rien.
+      arrange([], []);
+      const d = await service.dashboard(manager, { channel: 'online' });
+      expect(d).not.toHaveProperty('returns');
+    });
+
+    it('garde le taux de retour sans canal choisi', async () => {
+      arrange([], [], []);
+      const d = await service.dashboard(manager, {});
+      expect(d).toHaveProperty('returns');
+    });
+
+    it('donne sa recette du jour à qui ne gère que le site', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      arrange([
+        { purchasePrice: '5', soldPrice: '20', appliedCommission: null, saleType: 'RESALE' },
+      ]);
+      const d = await service.dashboard(employee, { channel: 'online' });
+      expect(d.today?.revenue).toBe(20);
+      // La marge dirait les prix d'achat : elle reste à `stats.view`.
+      expect(d.today?.margin).toBeUndefined();
+    });
+
+    it('ne la lui donne pas sur une boutique physique', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      const d = await service.dashboard(employee, {});
+      expect(d).not.toHaveProperty('today');
+    });
+  });
+
+  describe('retraits à faire', () => {
+    /** Le retrait est la 5e requête (dépublier) puis la 6e (décrocher). */
+    const aRetirer = (over: Partial<Record<string, unknown>> = {}) => ({
+      id: 'p9',
+      name: 'Robe rouge',
+      reference: 'A-0042',
+      soldAt: new Date('2026-08-27T12:00:00.000Z'),
+      shop: { id: SHOP_ID, name: 'Centre-ville' },
+      status: { id: 's4', name: 'Vendu', color: '#10b981', isOnlineSale: false },
+      ...over,
+    });
+
+    it('donne les deux listes au gérant, sans endroit choisi', async () => {
+      arrange([], [], [], [], [aRetirer()], [aRetirer()]);
+      const d = await complet();
+      expect(d.removals?.toDelist?.items).toHaveLength(1);
+      expect(d.removals?.toPull?.items).toHaveLength(1);
+    });
+
+    it('sur une boutique physique, ne montre que les vêtements à décrocher', async () => {
+      // L'annonce à dépublier ne se traite pas depuis le rayon : l'afficher là
+      // ferait apparaître une corvée que personne n'y ferait.
+      arrange([], [], [], [], [aRetirer()]);
+      const d = await service.dashboard(manager, { shopId: SHOP_ID });
+      expect(d.removals?.toPull?.items).toHaveLength(1);
+      expect(d.removals?.toDelist).toBeUndefined();
+    });
+
+    it('sur la boutique en ligne, ne montre que les annonces à retirer', async () => {
+      arrange([], [], [], [aRetirer()]);
+      const d = await service.dashboard(manager, { channel: 'online' });
+      expect(d.removals?.toDelist?.items).toHaveLength(1);
+      expect(d.removals?.toPull).toBeUndefined();
+    });
+
+    it('sépare les deux sens par le flag du statut, jamais par son libellé', async () => {
+      arrange([], [], [], [], [], []);
+      await complet();
+      const appels = prisma.product.findMany.mock.calls.slice(-2);
+      expect(appels[0][0].where.status).toEqual({ isOnlineSale: false });
+      expect(appels[1][0].where.status).toEqual({ isOnlineSale: true });
+      for (const appel of appels) expect(appel[0].where.pendingRemoval).toBe(true);
+    });
+
+    it('ne donne que les annonces à dépublier à qui ne gère que le web', async () => {
+      // Décrocher un vêtement n'est pas son travail : lui montrer la liste
+      // ferait apparaître une corvée que personne ne prendrait.
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      arrange([aRetirer()]);
+      const d = await service.dashboard(employee, {});
+      expect(d.removals?.toDelist?.items).toHaveLength(1);
+      expect(d.removals?.toPull).toBeUndefined();
+    });
+
+    it('ne donne que les vêtements à décrocher à qui tient la boutique', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      arrange([
+        aRetirer({
+          status: { id: 's5', name: 'Vendu en ligne', color: '#0ea5e9', isOnlineSale: true },
+        }),
+      ]);
+      const d = await service.dashboard(employee, {});
+      expect(d.removals?.toPull?.items).toHaveLength(1);
+      expect(d.removals?.toDelist).toBeUndefined();
+    });
+
+    it('omet le bloc entier quand aucun des deux droits n’est détenu', async () => {
+      // Un bloc absent est un droit qui manque, pas une absence de corvée.
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'stats.view')]);
+      arrange([], [], []);
+      const d = await service.dashboard(employee, {});
+      expect(d).not.toHaveProperty('removals');
+    });
+
+    it('suit la boutique choisie dans le sélecteur', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      arrange([]);
+      await service.dashboard(employee, { shopId: 'b2' });
+      expect(prisma.product.findMany.mock.calls[0][0].where.shopId).toBe('b2');
+    });
+
+    it('refuse une boutique où le droit n’est pas détenu', async () => {
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'products.manage')]);
+      const d = await service.dashboard(employee, { shopId: 'b3' });
+      expect(d).not.toHaveProperty('removals');
+    });
+
+    it('ne découpe pas la boutique en ligne par boutique physique', async () => {
+      // `online.manage` est un droit d'entreprise : le site est unique. Le
+      // restreindre aux boutiques où la case est cochée laisserait des annonces
+      // vendues sans personne pour les ôter.
+      prisma.shopAccess.findMany.mockResolvedValue([acces('b2', 'online.manage')]);
+      arrange([]);
+      await service.dashboard(employee, { channel: 'online' });
+      expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('OR');
+    });
+
+    it('borne la liste et dit le compte réel', async () => {
+      // Une troncature muette se lirait comme « tout est là ».
+      prisma.product.count.mockResolvedValue(213);
+      arrange([], [], [], [], [aRetirer()]);
+      const d = await complet();
+      expect(d.removals?.toDelist?.items).toHaveLength(1);
+      expect(d.removals?.toDelist?.total).toBe(213);
+      const appel = prisma.product.findMany.mock.calls.at(-2)!;
+      expect(appel[0].take).toBe(50);
+    });
+
+    it('montre les plus récentes d’abord', async () => {
+      arrange([], [], [], [], [], []);
+      await complet();
+      const appels = prisma.product.findMany.mock.calls.slice(-2);
+      for (const appel of appels) expect(appel[0].orderBy).toEqual({ soldAt: 'desc' });
+    });
+  });
+
   describe('retours', () => {
     it('calcule le taux de retour sur les dépôts de la période', async () => {
       arrange(

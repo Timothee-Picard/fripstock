@@ -8,8 +8,10 @@ import { PhotoField } from '../new/photo-field';
 import { ShopAssignment, DeleteProductButton } from './detail-actions';
 import { SaleCorrection } from './sale-correction';
 import { DepositorPayment } from './depositor-payment';
+import { OnlineSale, PendingRemoval } from './online-sale';
 import { StatusChange } from '../status-change';
 import { StatusBadge } from '@/components/status-badge';
+import { formatDate, formatDateTime } from '@/lib/dates';
 import { Alert, Button } from '@/components/field';
 import {
   flattenTree,
@@ -96,12 +98,15 @@ export function ProductSheet({
   tree,
   shops,
   statuses,
+  canManageOnline,
 }: {
   product: Product;
   mode: 'voir' | 'modifier';
   tree: CategoryTree[];
   shops: Shop[];
   statuses: Status[];
+  /** Droit « Gérer la vente en ligne » — il ne suit pas `products.manage`. */
+  canManageOnline: boolean;
 }) {
   const modifier = mode === 'modifier';
   const [state, action, pending] = useActionState(updateProduct, INITIAL_STATE);
@@ -169,6 +174,10 @@ export function ProductSheet({
       </div>
 
       {state.error ? <Alert>{state.error}</Alert> : null}
+
+      {/* Une corvée passe avant les données : tant qu'elle n'est pas faite, un
+          article vendu reste visible ou vendable de l'autre côté. */}
+      <PendingRemoval product={product} />
 
       {product.status.blocksSale ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -312,11 +321,7 @@ export function ProductSheet({
               <>
                 <Data modifier={false} label="Prix encaissé" value={euros(product.soldPrice)} />
                 {product.soldAt ? (
-                  <Data
-                    modifier={false}
-                    label="Date de vente"
-                    value={new Date(product.soldAt).toLocaleDateString('fr-FR')}
-                  />
+                  <Data modifier={false} label="Date de vente" value={formatDate(product.soldAt)} />
                 ) : null}
                 {product.appliedCommission ? (
                   <Data
@@ -408,6 +413,7 @@ export function ProductSheet({
               shopId={product.shop?.id ?? null}
               shops={shops}
             />
+            <OnlineSale product={product} editable={canManageOnline} />
           </div>
         </Card>
       ) : null}
@@ -417,10 +423,7 @@ export function ProductSheet({
           {product.statusHistory.map((h) => (
             <li key={h.id} className="flex flex-wrap items-center gap-2 text-sm">
               <span className="w-32 shrink-0 text-xs text-slate-600">
-                {new Date(h.changedAt).toLocaleString('fr-FR', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                })}
+                {formatDateTime(h.changedAt)}
               </span>
               <StatusBadge status={h.status} />
               <span className="text-slate-700">

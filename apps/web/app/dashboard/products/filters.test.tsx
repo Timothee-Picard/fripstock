@@ -111,4 +111,18 @@ describe('Filters', () => {
     await userEvent.selectOptions(screen.getByLabelText('Catégorie'), 'c1');
     expect(derniereUrl().get('search')).toBe('bott');
   });
+
+  describe('vente en ligne', () => {
+    it('isole les articles proposés sur le site', async () => {
+      rendre();
+      await userEvent.selectOptions(screen.getByLabelText('En ligne'), 'true');
+      expect(derniereUrl().get('isOnline')).toBe('true');
+    });
+
+    it('isole aussi ceux qui n’y sont pas', async () => {
+      rendre();
+      await userEvent.selectOptions(screen.getByLabelText('En ligne'), 'false');
+      expect(derniereUrl().get('isOnline')).toBe('false');
+    });
+  });
 });

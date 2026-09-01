@@ -40,7 +40,9 @@ describe('PeriodSelector', () => {
   it('écrit la borne dans l’URL, pour que la vue soit partageable', async () => {
     render(<PeriodSelector />);
     await userEvent.click(screen.getByRole('button', { name: '7 jours' }));
-    expect(push).toHaveBeenCalledWith(`/dashboard?from=${ilYA(7)}`);
+    // `scroll: false` : le sélecteur est au milieu de la page, changer de
+    // période ne doit pas renvoyer en haut.
+    expect(push).toHaveBeenCalledWith(`/dashboard?from=${ilYA(7)}`, { scroll: false });
   });
 
   it('met en avant le raccourci actif lu depuis l’URL', () => {

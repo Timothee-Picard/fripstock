@@ -27,6 +27,7 @@ const KNOWN_FILTERS = [
   'depositorId',
   'statusId',
   'saleType',
+  'isOnline',
   'sort',
   'direction',
   'page',
@@ -183,7 +184,29 @@ export default async function ProductsPage({
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <StatusBadge status={p.status} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StatusBadge status={p.status} />
+                      {/* Deux marqueurs distincts : l'un dit où l'article est
+                          proposé, l'autre ce qu'il reste à faire. Les confondre
+                          ferait passer une corvée pour un état. */}
+                      {p.isOnline ? (
+                        <span className="whitespace-nowrap rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-900">
+                          en ligne
+                        </span>
+                      ) : null}
+                      {p.pendingRemoval ? (
+                        <span
+                          title={
+                            p.status.isOnlineSale
+                              ? 'Vendu sur le site : le vêtement est encore en boutique.'
+                              : "Vendu en boutique : l'annonce est encore en ligne."
+                          }
+                          className="whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900"
+                        >
+                          à retirer
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     {/* Icônes seules, mais chacune porte son libellé pour les
@@ -221,6 +244,9 @@ export default async function ProductsPage({
             <Link
               key={n}
               href={lienPage(n)}
+              // La pagination est en bas : y remonter en haut à chaque page
+              // oblige à redescendre pour lire la suivante.
+              scroll={false}
               aria-current={n === page.page ? 'page' : undefined}
               className={
                 n === page.page

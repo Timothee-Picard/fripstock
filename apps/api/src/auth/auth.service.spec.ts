@@ -87,8 +87,8 @@ describe('AuthService', () => {
       await service.register(dto);
       expect(prisma.status.createMany).toHaveBeenCalled();
       const statuts = prisma.status.createMany.mock.calls[0][0].data;
-      expect(statuts).toHaveLength(6);
-      expect(statuts.map((s: { position: number }) => s.position)).toEqual([0, 1, 2, 3, 4, 5]);
+      expect(statuts).toHaveLength(7);
+      expect(statuts.map((s: { position: number }) => s.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
       expect(prisma.statusTransition.createMany.mock.calls[0][0].data.length).toBeGreaterThan(0);
     });
 

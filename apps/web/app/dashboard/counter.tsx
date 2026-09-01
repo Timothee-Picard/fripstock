@@ -35,7 +35,19 @@ function nombre(valeur: string | null): number {
 const CHAMP =
   'w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900';
 
-export function Counter({ shopId, shopName }: { shopId?: string; shopName?: string }) {
+export function Counter({
+  shopId,
+  shopName,
+  online,
+  onlineStatusId,
+}: {
+  shopId?: string;
+  shopName?: string;
+  /** Vente en ligne : même geste, autre statut et autre vivier d'articles. */
+  online?: boolean;
+  /** Statut de vente en ligne de l'entreprise, reconnu par son flag. */
+  onlineStatusId?: string;
+}) {
   const [state, action, pending] = useActionState(sellBasket, {});
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [saisie, setSaisie] = useState('');
@@ -106,6 +118,9 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
   async function rechercher(terme: string, signal?: AbortSignal): Promise<ProductSummary[]> {
     const params = new URLSearchParams({ q: terme });
     if (shopId) params.set('shopId', shopId);
+    // En ligne, le vivier n'est pas une boutique mais ce qui est annoncé sur
+    // le site : un article jamais publié n'a pas pu s'y vendre.
+    if (online) params.set('isOnline', 'true');
     const reponse = await fetch(`/api/products/search?${params.toString()}`, { signal });
     return reponse.ok ? ((await reponse.json()) as ProductSummary[]) : [];
   }
@@ -128,9 +143,9 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
       clearTimeout(minuteur);
       controller.abort();
     };
-    // `rechercher` est stable pour un `shopId` donné.
+    // `rechercher` est stable pour un `shopId` et un canal donnés.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saisie, shopId]);
+  }, [saisie, shopId, online]);
 
   // Les propositions ne s'affichent qu'à partir de deux caractères. C'est
   // dérivé du champ plutôt que remis à zéro dans l'effet : effacer sa saisie
@@ -217,10 +232,12 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-base font-semibold text-slate-900">Vendre des articles</h2>
+        <h2 className="text-base font-semibold text-slate-900">
+          {online ? 'Enregistrer des ventes en ligne' : 'Vendre des articles'}
+        </h2>
         <p className="text-xs text-slate-600">
           Référence de l&apos;étiquette, ou nom d&apos;article —{' '}
-          {shopName ?? 'toutes les boutiques'}.
+          {online ? 'articles annoncés sur le site' : (shopName ?? 'toutes les boutiques')}.
         </p>
       </div>
 
@@ -310,6 +327,11 @@ export function Counter({ shopId, shopName }: { shopId?: string; shopName?: stri
 
       {lignes.length > 0 ? (
         <form action={action} className="mt-4 space-y-3">
+          {/* Le statut visé, quand la vente passe par le site. Absent, l'API
+              choisit le statut de vente au comptoir. */}
+          {online && onlineStatusId ? (
+            <input type="hidden" name="statusId" value={onlineStatusId} />
+          ) : null}
           {lignes.map((ligne, index) => (
             <input
               key={ligne.product.id}

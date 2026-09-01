@@ -25,7 +25,9 @@ export function PeriodSelector() {
     const next = new URLSearchParams(params.toString());
     if (fromValue) next.set('from', fromValue);
     else next.delete('from');
-    router.push(`/dashboard?${next.toString()}`);
+    // `scroll: false` : ces contrôles vivent au milieu de la page, et remonter
+    // en haut à chaque clic oblige à redescendre pour voir le résultat.
+    router.push(`/dashboard?${next.toString()}`, { scroll: false });
   }
 
   return (

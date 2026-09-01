@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   'products.manage',
   'products.delete',
   'products.changeStatus',
+  'online.manage',
   'categories.manage',
   'attributes.manage',
   'depositors.manage',
@@ -35,6 +36,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'products.manage': 'Créer et modifier des produits',
   'products.delete': 'Supprimer des produits',
   'products.changeStatus': 'Vendre et changer le statut',
+  'online.manage': 'Gérer la vente en ligne',
   'categories.manage': 'Gérer les catégories',
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
@@ -43,6 +45,32 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'stock.view': "Voir l'état du stock",
   'export.csv': 'Exporter en CSV',
 };
+
+/**
+ * Droits qui portent sur l'**entreprise**, pas sur une boutique.
+ *
+ * Le catalogue, les déposants, les contrats et la boutique en ligne sont
+ * uniques pour toute l'entreprise : il n'y a pas une arborescence de catégories
+ * par boutique, ni un site par boutique. Les détenir quelque part, c'est donc
+ * les détenir partout — le garde n'essaie même pas de résoudre une boutique
+ * pour eux.
+ *
+ * La distinction n'était jusqu'ici qu'un effet de bord : ces droits gouvernaient
+ * des routes sans `shopId`, qui tombaient dans le cas « stock central » du
+ * garde. `online.manage` a rendu la règle explicite nécessaire — ses routes
+ * ciblent un produit, donc une boutique, alors que le site, lui, n'en a pas.
+ */
+export const COMPANY_PERMISSIONS = new Set<Permission>([
+  'categories.manage',
+  'attributes.manage',
+  'depositors.manage',
+  'deposits.manage',
+  'online.manage',
+]);
+
+export function isCompanyPermission(permission: Permission): boolean {
+  return COMPANY_PERMISSIONS.has(permission);
+}
 
 /** Permissions d'un employé sur une boutique donnée. Absent = refusé. */
 export type PermissionMap = Partial<Record<Permission, boolean>>;

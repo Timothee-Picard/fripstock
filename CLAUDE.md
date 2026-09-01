@@ -83,6 +83,25 @@ Company (le compte parent, un gérant)
   étiquette ne doit pas désigner un jour un autre article.
 - **Un produit n'appartient qu'à un contrat de dépôt à la fois.** Le rattacher à un second
   est refusé — le déplacer en silence le retirerait du relevé du premier déposant.
+- **La vente en ligne est un second axe, pas un statut.** `isOnline` est un booléen sur le
+  produit : un vêtement sur un portant peut être annoncé sur le site **en même temps**,
+  alors qu'un produit ne porte qu'un statut à la fois. `onlinePrice` est nullable — vide
+  veut dire « même prix qu'en boutique », pas « gratuit », et évite de saisir deux fois le
+  même montant. La **vente**, elle, est bien un statut (« Vendu en ligne ») : elle n'a
+  qu'un canal.
+- **`pendingRemoval` : la corvée de l'autre canal**, et elle n'est pas la même dans les
+  deux sens. Le sens se **déduit de `isOnlineSale` du statut de vente**, il n'est pas
+  stocké une seconde fois.
+  - **Vendu par le site** : celui qui enregistre la vente est celui qui tient le site,
+    l'annonce part donc avec la commande — `isOnline` retombe tout seul. Reste le vêtement
+    à décrocher, et **seulement s'il est dans une boutique** (`shopId != null`) : au stock
+    central il n'est sur aucun portant.
+  - **Sorti du stock autrement** — vendu au comptoir, rendu, retiré — alors que l'annonce
+    est publiée : personne côté site n'est au courant. Le drapeau se lève, et **l'annonce
+    n'est surtout pas coupée** : la couper effacerait la trace de ce qu'il reste à faire.
+    Elle tombe avec le drapeau, quand quelqu'un confirme le retrait.
+- **La vente rapide en ligne ne puise que dans les articles annoncés** (`isOnline`) : un
+  article jamais publié n'a pas pu se vendre sur le site.
 - Une seule photo par produit pour l'instant (`photoUrl`), stockée sur MinIO.
 - Champs `nom`, `description`, `internalNote` : texte libre.
 
@@ -113,20 +132,34 @@ Company (le compte parent, un gérant)
     "Retiré").
   - `leavesStock: boolean` — si vrai, le produit ne compte plus dans l'inventaire actif /
     les stats de stock disponible (utilisé pour "Rendu au client", "Retiré", "Vendu").
+  - `isOnlineSale: boolean` — si vrai, la vente est passée par le site et non par le
+    comptoir. C'est ce flag, et lui seul, qui dit à qui ne détient que `online.manage`
+    quels statuts il peut atteindre, et dans quel sens va un retrait à faire.
+    **Ne jamais lire le libellé** pour ça.
 - Valeurs des flags pour les statuts de base :
 
-  | Statut          | `isSale` | `blocksSale` | `leavesStock` |
-  | --------------- | -------- | ------------ | ------------- |
-  | En stock        | ✗        | ✗            | ✗             |
-  | En rayon        | ✗        | ✗            | ✗             |
-  | Réservé         | ✗        | ✗            | ✗             |
-  | Vendu           | ✓        | ✗            | ✓             |
-  | Rendu au client | ✗        | ✓            | ✓             |
-  | Retiré          | ✗        | ✓            | ✓             |
+  | Statut          | `isSale` | `blocksSale` | `leavesStock` | `isOnlineSale` |
+  | --------------- | -------- | ------------ | ------------- | -------------- |
+  | En stock        | ✗        | ✗            | ✗             | ✗              |
+  | En rayon        | ✗        | ✗            | ✗             | ✗              |
+  | Réservé         | ✗        | ✗            | ✗             | ✗              |
+  | Vendu           | ✓        | ✗            | ✓             | ✗              |
+  | Vendu en ligne  | ✓        | ✗            | ✓             | ✓              |
+  | Rendu au client | ✗        | ✓            | ✓             | ✗              |
+  | Retiré          | ✗        | ✓            | ✓             | ✗              |
 
 - Le flux de base autorise « En stock » → « Vendu » : un client peut acheter un article
   sorti de la réserve, lui imposer un passage par le rayon bloquerait la vente au
   comptoir pour rien.
+- « Vendu en ligne » part des trois mêmes points que « Vendu » — En stock, En rayon,
+  Réservé — et revient en rayon comme lui. Passer par « Réservé » reste **possible et non
+  imposé** : c'est ce qu'on fait pour un article encore en rayon, afin que personne ne le
+  vende au comptoir pendant la préparation du colis, mais un article en réserve part
+  directement.
+- **Le comptoir n'utilise que le statut de vente non-en-ligne.** Depuis qu'il existe deux
+  statuts de vente, `saleStatus()` filtre sur `isSale && !isOnlineSale` : sans ce filtre,
+  chaque encaissement se heurterait à « plusieurs statuts de vente existent, précisez
+  lequel ».
 - Un **flux** (`StatusTransition`) dit quels passages sont autorisés d'un statut à l'autre.
   Il est posé à la création de l'entreprise et n'est pas modifiable, ni par une route ni
   par un écran. Les règles de flags s'appliquent **par-dessus** le flux,
@@ -174,6 +207,7 @@ products.view
 products.manage
 products.delete
 products.changeStatus
+online.manage
 categories.manage
 attributes.manage
 depositors.manage
@@ -182,6 +216,22 @@ stats.view
 stock.view
 export.csv
 ```
+
+**Droits d'entreprise.** Le catalogue, les déposants, les contrats et la boutique en ligne
+sont **uniques pour l'entreprise** : il n'y a pas une arborescence de catégories par
+boutique, ni un site par boutique. `categories.manage`, `attributes.manage`,
+`depositors.manage`, `deposits.manage` et `online.manage` sont donc des droits
+d'entreprise — les détenir sur **une** boutique, c'est les détenir partout, y compris sur
+une route qui cible un produit rattaché à une autre boutique. La liste fait foi dans
+`COMPANY_PERMISSIONS` (`common/permissions.ts`), et le garde évalue **chaque droit selon
+sa propre règle** : une route qui accepte « `products.manage` ou `online.manage` » mêle un
+droit de boutique et un droit d'entreprise, et trancher pour les deux à la fois refuserait
+le second hors de la boutique où il est coché.
+
+Côté écran, ces droits se cochent **une fois** et non par boutique. À l'enregistrement ils
+sont recopiés sur **toutes** les lignes `ShopAccess` de l'employé : la table n'a pas
+d'autre endroit où les poser, et c'est ce qui les rend vrais partout. Le miroir web
+(`COMPANY_PERMISSIONS` dans `lib/types.ts`) doit bouger avec celui de l'API.
 
 Le gérant (`isManager = true`) bypass entièrement cette table : toujours tous les droits,
 sur toutes les boutiques de son entreprise.
@@ -200,20 +250,76 @@ des blocs distincts, et le service n'envoie que ceux auxquels l'utilisateur a dr
 | `sales`, `byDay`, `topCategories`, `topProducts`, `returns` | `stats.view`                                | Chiffre d'affaires, marge, panier moyen, courbe, classements, taux de retour |
 | `stock`                                                     | `stock.view`                                | Stock actif et sa valeur, répartition par statut                             |
 | `today`                                                     | `stats.view` **ou** `products.changeStatus` | Recette du jour. `today.margin` n'est joint qu'avec `stats.view`             |
+| `removals.toDelist`                                         | `online.manage`                             | Vendus au comptoir, annonce encore publiée : à dépublier                     |
+| `removals.toPull`                                           | `products.manage`                           | Vendus par le site, vêtement encore en boutique : à décrocher                |
 
-Les deux droits sont indépendants : quelqu'un peut gérer le stock sans connaître les
+**L'aperçu du tableau de bord n'est pas la liste.** L'écran `/dashboard/removals` en donne
+la totalité, cherchable et paginée : un article vendu il y a trois semaines n'est ni dans
+l'aperçu ni dans les cinquante que l'API renvoie, et il faut pourtant pouvoir aller le
+décrocher. L'entrée de menu s'ouvre à `online.manage` **ou** `products.manage`.
+
+**Les listes de retrait du tableau de bord sont bornées à 50, et renvoient le compte
+réel.** Un lendemain de
+week-end peut en aligner cinquante : une liste illimitée pousserait les chiffres hors de
+l'écran et alourdirait chaque chargement. `total` ne se déduit donc **jamais** de
+`items.length` — une troncature muette se lirait comme « tout est là ». L'écran n'en montre
+que cinq, déplie le reste à la demande, et propose de **tout solder d'un coup**
+(`PUT /products/removals-done`) : le geste réel est groupé — on dépublie douze annonces
+d'affilée, puis on revient le dire — et douze clics pour une seule action font abandonner
+une liste de tâches.
+
+**L'endroit regardé choisit laquelle des deux listes s'affiche** : la boutique en ligne
+montre les annonces à dépublier, une boutique physique les vêtements à y décrocher, et
+« Tout » les deux. Le droit dit ce qu'on a le droit de voir, le lieu ce qu'on peut y
+faire — montrer l'autre liste ferait apparaître une corvée qu'on ne peut pas traiter là.
+
+Les deux listes de retrait sont **séparées et non fusionnées** : ce ne sont ni les mêmes
+gestes ni les mêmes personnes. Le droit ne décide pas seulement si on voit la liste, mais
+**laquelle** — montrer à qui gère le site des vêtements à décrocher ferait apparaître une
+corvée que personne ne prendrait. Une liste présente mais vide veut dire « rien à faire » ;
+une liste absente veut dire « ce n'est pas votre travail ».
+
+Les droits sont indépendants : quelqu'un peut gérer le stock sans connaître les
 marges, et tenir la caisse sans voir ni l'un ni l'autre. Le **taux de retour** relève de
 `stats.view` et non de `stock.view` : il ne dit pas ce qu'il y a en boutique, mais si les
 dépôts qu'on accepte se vendent — un jugement sur la sélection, du même ordre que la marge. Un bloc absent de la réponse
 n'est pas une panne, c'est un droit qui manque — ne jamais le renvoyer « pour que
 l'interface le masque », la réponse HTTP est lisible par son destinataire.
 
+**La boutique en ligne est un choix du sélecteur, au même rang qu'une boutique physique**
+(`?channel=online`, exclusif de `?shopId=`) : elle a ses ventes, son stock annoncé, sa
+vente rapide et ses retraits. Deux filtres différents, et il ne faut pas les confondre :
+
+- une **vente passée** se reconnaît au flag de son statut, `isOnlineSale`, qui ne bouge
+  plus ;
+- le **stock annoncé** est un état courant, `isOnline`.
+
+Filtrer l'historique sur `isOnline` ferait disparaître les ventes d'hier au fur et à
+mesure que les retraits sont confirmés — l'annonce tombe à ce moment-là. Le **taux de
+retour** est volontairement absent quand un canal est choisi : un article rendu n'a été
+vendu nulle part, le filtrer par canal donnerait toujours zéro.
+
 Sans boutique précisée, un employé ne voit que les boutiques où il détient le droit
 concerné, plus le stock central : une permission accordée sur une boutique ne doit pas
 livrer les chiffres des autres. Avec `?shopId=`, le droit doit être détenu **sur cette
-boutique-là** — le garde de route ne peut plus s'en charger. Le sélecteur de boutique de
-l'en-tête écrit son choix dans l'URL, lue côté serveur ; l'API applique la restriction de
+boutique-là** — le garde de route ne peut plus s'en charger. Le sélecteur de boutique
+appartient au **tableau de bord seul** et y est posé, pas dans l'en-tête : il ne gouverne
+que cet écran, et la liste des produits a son propre filtre boutique dans sa barre de
+filtres. Il écrit son choix dans l'URL, lue côté serveur ; l'API applique la restriction de
 son côté, elle ne fait pas confiance à l'écran.
+
+**`online.manage` est un métier à part, pas un sous-ensemble.** Une personne peut n'avoir
+que lui : elle publie un article sur le site, fixe son prix en ligne, et enregistre une
+vente en ligne — sans pouvoir modifier le vêtement ni vendre au comptoir. D'où deux
+conséquences :
+
+- **Publier passe par une route dédiée** (`PUT /products/:id/online`), pas par
+  `PUT /products/:id` qui exige `products.manage` et ouvrirait le nom, la description et
+  le prix boutique.
+- **Le changement de statut accepte `products.changeStatus` OU `online.manage`**, puis le
+  **service** vérifie qu'un utilisateur qui n'a que le second ne vise qu'un statut portant
+  `isOnlineSale`. Le garde ne peut pas trancher : le statut visé est dans le corps de la
+  requête, pas dans l'URL. Même partage que le `?shopId=` du tableau de bord.
 
 **Créer et modifier ne se séparent pas** : `products.manage` couvre les deux. Les
 distinguer produisait un état cassé — un employé créait un article et ne pouvait plus en
@@ -244,7 +350,7 @@ offerte pour rien.
   boutique, statut, typeVente, recherche texte, plage de dates).
 - Colonnes fixes : référence, catégorie, boutique, nom, description, commentaire, statut,
   typeVente, prixAchat, prixVente, prixVendu, dateVente, déposant (nom du client si
-  DEPOT_VENTE), commissionAppliquee, deposantPaye.
+  DEPOT_VENTE), commissionAppliquee, deposantPaye, enLigne, prixEnLigne, retraitAFaire.
 - Colonnes dynamiques : une colonne par attribut présent parmi les produits exportés
   (ex: Couleur, Taille, Marque), pour retrouver la souplesse du fichier Excel actuel
   du client.
@@ -348,7 +454,12 @@ doc croirait encore à tort**.
 
 ## Ce qui n'est PAS dans le scope pour l'instant
 
-- Pas d'encaissement en ligne (paiement en espèces, l'app ne gère que le stock/statut).
+- Pas d'encaissement en ligne : l'application sait qu'un article est **proposé** sur le
+  site et enregistre qu'il y a été **vendu**, mais ne prend aucune commande et n'encaisse
+  rien. Quelqu'un coche « Vendu en ligne » et saisit le prix réellement encaissé, remise
+  comprise, exactement comme au comptoir.
+- Pas de place de marché (Vinted, Vestiaire…) : aucun identifiant externe, aucune
+  synchronisation. Le jour venu, ce sera une table d'annonces, pas un champ de plus.
 - Pas de scan de code-barres/QR (le champ `sku` existe mais n'est pas exploité).
 - Pas d'OAuth Google (prévu plus tard, ne pas préparer de champs spécifiques maintenant).
 - Pas de gestion de plusieurs photos par produit (une seule pour l'instant).

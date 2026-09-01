@@ -24,7 +24,9 @@ export function SortableHeader({ field, children }: { field: ProductSort; childr
     // repart du croissant, qui est ce qu'on attend d'un premier clic.
     next.set('direction', sens === 'asc' ? 'desc' : 'asc');
     next.delete('page');
-    router.push(`/dashboard/products?${next.toString()}`);
+    // `scroll: false` : ces contrôles vivent au milieu de la page, et remonter
+    // en haut à chaque clic oblige à redescendre pour voir le résultat.
+    router.push(`/dashboard/products?${next.toString()}`, { scroll: false });
   }
 
   return (

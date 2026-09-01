@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sectionTitle } from './navigation';
+import { NAVIGATION, sectionTitle } from './navigation';
 
 describe('sectionTitle', () => {
   it('nomme le tableau de bord sur sa racine exacte', () => {
@@ -29,5 +29,20 @@ describe('sectionTitle', () => {
 
   it('ne rend rien hors du tableau de bord', () => {
     expect(sectionTitle('/login')).toBeNull();
+  });
+});
+
+describe('NAVIGATION', () => {
+  const retraits = NAVIGATION.find((e) => e.href === '/dashboard/removals')!;
+
+  it('ouvre les retraits à l’un OU l’autre métier', () => {
+    // Exiger les deux droits masquerait l'entrée à chacun d'eux : celui qui
+    // dépublie les annonces et celui qui décroche les vêtements.
+    expect(retraits.permission).toBeUndefined();
+    expect(retraits.anyPermission).toEqual(['online.manage', 'products.manage']);
+  });
+
+  it('nomme la section des retraits', () => {
+    expect(sectionTitle('/dashboard/removals')).toBe('Retraits à faire');
   });
 });

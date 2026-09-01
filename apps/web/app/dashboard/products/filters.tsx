@@ -29,12 +29,15 @@ export function Filters({
   const router = useRouter();
   const params = useSearchParams();
 
+  // `scroll: false` sur chaque navigation : la barre de filtres est en haut,
+  // mais la liste qu'elle commande est en dessous — remonter à chaque clic
+  // ferait perdre sa place à qui parcourt une longue liste.
   function apply(field: string, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(field, value);
     else next.delete(field);
     next.delete('page');
-    router.push(`/dashboard/products?${next.toString()}`);
+    router.push(`/dashboard/products?${next.toString()}`, { scroll: false });
   }
 
   const css = 'rounded-md border border-slate-400 bg-white px-2 py-1.5 text-sm text-slate-900';
@@ -68,7 +71,7 @@ export function Filters({
             next.delete('page');
             if (e.target.value === '__central') next.set('unassigned', 'true');
             else if (e.target.value) next.set('shopId', e.target.value);
-            router.push(`/dashboard/products?${next.toString()}`);
+            router.push(`/dashboard/products?${next.toString()}`, { scroll: false });
           }}
           className={css}
         >
@@ -133,6 +136,19 @@ export function Filters({
       ) : null}
 
       <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-slate-700">En ligne</span>
+        <select
+          value={params.get('isOnline') ?? ''}
+          onChange={(e) => apply('isOnline', e.target.value)}
+          className={css}
+        >
+          <option value="">Tous</option>
+          <option value="true">Sur le site</option>
+          <option value="false">Pas sur le site</option>
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-slate-700">Type de vente</span>
         <select
           value={params.get('saleType') ?? ''}
@@ -151,7 +167,7 @@ export function Filters({
       {params.toString() ? (
         <button
           type="button"
-          onClick={() => router.push('/dashboard/products')}
+          onClick={() => router.push('/dashboard/products', { scroll: false })}
           className="pb-1.5 text-sm text-slate-600 underline underline-offset-2 hover:text-slate-900"
         >
           Réinitialiser

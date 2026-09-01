@@ -127,19 +127,37 @@ boutique. » Une clé n'apprend pas à l'employé quoi demander à son gérant.
 
 ### Les droits
 
-| Clé                     | Ce qu'elle ouvre                                                  |
-| ----------------------- | ----------------------------------------------------------------- |
-| `products.view`         | Consulter la liste et les fiches produit                          |
-| `products.manage`       | Créer un article, un lot, et corriger une fiche existante         |
-| `products.delete`       | Effacer un article définitivement                                 |
-| `products.changeStatus` | Encaisser au comptoir, déplacer un article d'un statut à l'autre  |
-| `categories.manage`     | Arborescence des catégories                                       |
-| `attributes.manage`     | Attributs et leurs options                                        |
-| `depositors.manage`     | Créer et modifier les fiches déposants                            |
-| `deposits.manage`       | Contrats de dépôt, rattachements, règlements                      |
-| `stats.view`            | Chiffre d'affaires, marge, panier moyen, taux de retour           |
-| `stock.view`            | Nombre et valeur des articles en boutique, répartition par statut |
-| `export.csv`            | Télécharger le stock au format tableur                            |
+| Clé                     | Ce qu'elle ouvre                                                    |
+| ----------------------- | ------------------------------------------------------------------- |
+| `products.view`         | Consulter la liste et les fiches produit                            |
+| `products.manage`       | Créer un article, un lot, et corriger une fiche existante           |
+| `products.delete`       | Effacer un article définitivement                                   |
+| `products.changeStatus` | Encaisser au comptoir, déplacer un article d'un statut à l'autre    |
+| `categories.manage`     | Arborescence des catégories                                         |
+| `attributes.manage`     | Attributs et leurs options                                          |
+| `depositors.manage`     | Créer et modifier les fiches déposants                              |
+| `deposits.manage`       | Contrats de dépôt, rattachements, règlements                        |
+| `stats.view`            | Chiffre d'affaires, marge, panier moyen, taux de retour             |
+| `stock.view`            | Nombre et valeur des articles en boutique, répartition par statut   |
+| `online.manage`         | Publier un article sur le site, fixer son prix web, vendre en ligne |
+
+**Cinq droits portent sur l'entreprise, pas sur une boutique** : `categories.manage`,
+`attributes.manage`, `depositors.manage`, `deposits.manage` et `online.manage`. Le
+catalogue, les déposants et le site sont uniques — il n'y a pas une arborescence de
+catégories par boutique, ni un site par boutique. Les cocher sur **une** boutique les
+accorde partout, y compris sur un produit rattaché à une autre. La liste fait foi dans
+`COMPANY_PERMISSIONS`, et chaque droit exigé par une route est évalué selon **sa propre**
+règle : mêler un droit de boutique et un droit d'entreprise sur la même route ne doit pas
+rabattre le second sur la boutique visée.
+
+**L'écran des accès le montre tel quel** : les droits d'entreprise se cochent **une fois**,
+dans un bloc à part, et les droits de boutique restent dans le cadre de chaque boutique.
+Les répéter boutique par boutique laissait croire qu'on pouvait les y limiter, ce qui est
+faux. À l'enregistrement, un droit d'entreprise est recopié sur **toutes** les boutiques :
+`ShopAccess` n'a pas d'autre endroit où le poser, et c'est ce qui le rend vrai partout —
+le garde le cherche « sur au moins une boutique », et le service laisse alors son porteur
+travailler sur un article de n'importe laquelle.
+| `export.csv` | Télécharger le stock au format tableur |
 
 **Créer et modifier ne se séparent pas.** Les distinguer produisait un état cassé : un
 employé créait un article et ne pouvait plus en corriger la faute de frappe. Supprimer
@@ -285,8 +303,8 @@ celle du contrat — sinon modifier un contrat réécrirait des relevés déjà 
 
 ### Statuts
 
-**Les statuts sont des rouages internes, et aucun écran ne les expose.** Les six statuts
-et leurs 16 transitions sont posés à la création de l'entreprise et ne bougent plus : ni
+**Les statuts sont des rouages internes, et aucun écran ne les expose.** Les sept statuts
+et leurs 20 transitions sont posés à la création de l'entreprise et ne bougent plus : ni
 créés, ni supprimés, ni renommés. L'API n'en garde que la lecture (`GET /statuses`), dont
 la liste des produits, leur fiche et leur changement de statut ont besoin.
 
@@ -309,6 +327,17 @@ les deux contrôles — l'affichage n'est qu'un confort. Les trois flags comport
 `leavesStock`) se fixent à la création et **ne sont plus modifiables** : des produits
 s'appuient dessus, les basculer sous eux réécrirait leur histoire métier.
 
+**« Vendu en ligne » est un statut à part entière, à côté de « Vendu ».** Une vente n'a
+qu'un canal, elle tient donc dans un statut — au contraire de la disponibilité, qui vaut
+des deux côtés à la fois et reste un drapeau sur le produit. Le statut porte un quatrième
+flag, `isOnlineSale`, et **rien d'autre n'a eu à changer** : chiffre d'affaires, marge,
+relevé du déposant et commission figée lisent tous `isSale`, jamais le libellé. Une vente
+en ligne est donc comptée partout, du seul fait que le statut existe.
+
+Une conséquence à connaître : toute entreprise a désormais **deux** statuts de vente. Le
+comptoir filtre donc sur `isSale && !isOnlineSale`, sans quoi chaque encaissement se
+heurterait à « plusieurs statuts de vente existent, précisez lequel ».
+
 L'unicité de `isDefault` est tenue par une route dédiée (`PUT /statuses/:id/default`)
 qui remet les autres à `false` dans une transaction — un index unique Prisma sur
 `[companyId, isDefault]` interdirait aussi deux `false`.
@@ -329,6 +358,82 @@ base et sur des teintes extrêmes (jaune pur, cyan, blanc, noir).
 
 Le camembert du tableau de bord garde, lui, les couleurs pleines : ses parts sont de
 grandes surfaces sans texte dessus, et des teintes pâles s'y distingueraient mal.
+
+### Vente en ligne
+
+Un vêtement en boutique peut être proposé **en même temps** sur le site. C'est pour ça que
+la disponibilité en ligne n'est pas un statut : un produit n'en porte qu'un, alors que les
+deux vitrines coexistent. `isOnline` est donc un drapeau sur le produit, et `onlinePrice`
+un prix distinct — laissé vide, le site reprend le prix boutique, ce qui évite de saisir
+deux fois le même montant.
+
+La **vente**, elle, n'a qu'un canal : c'est bien un statut, « Vendu en ligne ».
+
+**Le retrait de l'autre canal est une corvée que l'application suit**, et elle n'est pas
+la même dans les deux sens. Le sens ne se stocke pas deux fois : il se déduit de
+`isOnlineSale` du statut de vente.
+
+**Vendu au comptoir** (ou rendu, ou retiré) **alors que l'annonce est publiée** : personne
+côté site n'est au courant, l'article reste en vente là-bas. `pendingRemoval` se lève et
+**l'annonce n'est surtout pas coupée** — la couper effacerait la seule trace de ce qu'il
+reste à faire, et plus personne ne saurait quoi retirer. Elle tombe avec le drapeau, quand
+quelqu'un clique « Retrait effectué ».
+
+**Vendu par le site** : celui qui enregistre la vente est celui qui tient le site, donc
+l'annonce part avec la commande et `isOnline` retombe tout seul — sans quoi un article
+vendu resterait affiché parmi les articles en ligne. Il reste le vêtement à aller
+décrocher, et seulement s'il est **dans une boutique** : au stock central il n'est sur
+aucun portant, inventer une corvée y ferait une ligne que personne ne saurait traiter.
+
+Ces corvées apparaissent sur le **tableau de bord**, en deux listes séparées, chacune pour
+la main dont c'est le travail — les annonces à dépublier sous `online.manage`, les
+vêtements à décrocher sous `products.manage`. Deux choses les filtrent : le **droit**, qui
+dit ce qu'on a le droit de voir, et le **lieu choisi**, qui dit ce qu'on peut y faire. Sur
+la boutique en ligne on voit les annonces à retirer, sur une boutique physique les
+vêtements à y décrocher, sur « Tout » les deux. Elles ne vivent que là : la liste des produits n'en porte pas
+de filtre, seulement un marqueur « à retirer » sur les lignes concernées.
+
+**L'aperçu du tableau de bord n'est pas la liste.** L'écran **Retraits à faire**
+(`/dashboard/removals`) en donne la totalité, cherchable et paginée, avec le geste attendu
+sur chaque ligne. Le tableau de bord ne montre que les derniers arrivés ; un article vendu
+il y a trois semaines n'y figure plus, et il faut pourtant pouvoir aller le décrocher. Le
+lien « Voir la liste complète » y mène depuis chaque carte, et l'entrée de menu s'ouvre à
+`online.manage` **ou** `products.manage`.
+
+**Le volume est prévu.** L'API n'en renvoie que 50 à la fois mais donne le compte réel, et
+l'écran n'affiche que les cinq premiers — assez pour voir qu'il y a du travail, assez peu
+pour que les chiffres restent visibles en dessous. Le reste se déplie d'un clic et défile
+dans son cadre. Quand la liste est tronquée, elle le dit (« 50 affichés sur 213 ») : un
+compte muet se lirait comme « il n'en reste que 50 ».
+
+Un bouton **« Tout dépublier »** / **« Tout décrocher »** solde d'un coup ce qui est
+affiché, parce que le geste réel est groupé : on va retirer les douze annonces sur le site,
+puis on revient dire que c'est fait. Douze clics pour une seule action, c'est ce qui fait
+abandonner une liste de tâches. Il ne porte que les articles listés — un lot arrivé entre
+l'affichage et le clic n'est pas soldé sans avoir été vu — et ceux qu'un collègue aurait
+traités entre-temps sont simplement ignorés, ce qui n'est pas une erreur mais le travail
+fait.
+
+**La boutique en ligne est un choix du sélecteur du tableau de bord**, au même rang qu'une
+boutique physique. La sélectionner donne ses ventes, son stock annoncé, ses retraits et sa
+vente rapide — le même comptoir, qui **ne puise que dans les articles annoncés** (un
+article jamais publié n'a pas pu s'y vendre) et enregistre au statut « Vendu en ligne ». Elle n'apparaît qu'à qui y a affaire : la gérer,
+ou avoir le droit d'en lire les chiffres.
+
+Deux filtres différents s'y appliquent, et les confondre coûterait cher. Une **vente
+passée** se reconnaît au flag de son statut, `isOnlineSale`, qui ne bouge plus. Le **stock
+annoncé** est un état courant, `isOnline`. Filtrer l'historique sur `isOnline` ferait
+disparaître les ventes d'hier au fil des retraits confirmés, puisque l'annonce tombe à ce
+moment-là. Le taux de retour, lui, disparaît dès qu'un canal est choisi : un article rendu
+n'a été vendu nulle part.
+
+**`online.manage` est un métier à part, pas un sous-ensemble.** Une personne peut n'avoir
+que ce droit. Publier passe donc par une route dédiée (`PUT /products/:id/online`) et non
+par la modification du produit, qui exige `products.manage` et ouvrirait le nom, la
+description et le prix boutique. Le changement de statut, lui, accepte
+`products.changeStatus` **ou** `online.manage`, puis le service vérifie qu'un utilisateur
+qui n'a que le second ne vise qu'un statut de vente en ligne — le garde ne peut pas
+trancher, le statut visé est dans le corps de la requête.
 
 ### Photos
 
@@ -397,10 +502,11 @@ Marquer une alerte comme lue la masque pour tout le monde.
 
 ## Statistiques et export
 
-`/dashboard` affiche le tableau de bord : la recette du jour, le comptoir de vente, puis
-les chiffres de la période — chiffre d'affaires, marge boutique, panier moyen, stock actif
-et taux de retour, avec la courbe des ventes, la répartition du stock par statut et les
-meilleures ventes. Période et boutique vivent dans l'URL, donc la vue est partageable.
+`/dashboard` affiche le tableau de bord : le choix de la boutique, la recette du jour, le
+comptoir de vente, puis les chiffres de la période — chiffre d'affaires, marge boutique,
+panier moyen, stock actif et taux de retour, avec la courbe des ventes, la répartition du
+stock par statut et les meilleures ventes. Période et boutique vivent dans l'URL, donc la
+vue est partageable.
 
 **Aucune permission unique ne gouverne cet écran** : la route `/stats/dashboard` ne porte
 pas de `@RequirePermission`. Trois droits y ouvrent des blocs distincts, et le service
@@ -420,6 +526,23 @@ laisserait la marge dans une réponse HTTP lisible par son destinataire.
 Sans boutique précisée, un employé ne voit que les boutiques où il détient le droit
 concerné, plus le stock central. Avec `?shopId=`, le droit doit être détenu **sur cette
 boutique-là** — le garde de route ne peut plus s'en charger.
+
+**Le comptoir suit la même règle.** Vendre est un droit par boutique : le détenir à la Gare
+n'autorise pas à encaisser au Centre-ville. La vente rapide ne s'affiche donc que sur une
+boutique où elle aboutira (`hasPermissionOnShop`), et pas dès que le droit existe quelque
+part — offrir un formulaire que l'API refusera n'aide personne. Sans boutique choisie la
+question redevient « quelque part » : le comptoir cherche alors dans toutes ses boutiques,
+et l'API tranche article par article.
+
+**Le sélecteur de boutique appartient à cet écran, et à lui seul.** Il siégeait dans
+l'en-tête, où il se donnait pour un filtre global : il n'en était pas un. La liste des
+produits a son propre filtre boutique, dans sa barre de filtres, et sur tous les autres
+écrans le changer ne produisait rien. Descendu sous le titre, il annonce ce qu'il commande
+— recette du jour, comptoir et statistiques — et prend la forme d'un **sélecteur
+segmenté** plutôt que d'une liste déroulante : les boutiques d'une entreprise se comptent
+sur les doigts d'une main, donc les montrer toutes coûte moins qu'un menu à ouvrir, et la
+boutique retenue se lit d'un regard. Il disparaît quand l'utilisateur n'a accès qu'à une
+boutique : il n'y a alors rien à choisir.
 
 Le sélecteur de période ne s'affiche pas au-dessus du seul stock : celui-ci est une photo
 de l'instant, sa requête ne porte aucune borne de date, et proposer « 7 jours / 3 mois »
@@ -477,7 +600,8 @@ Séparateur `;` et UTF-8 **avec BOM**, sans quoi Excel en français ouvre « Mat
 « MatiÃ¨re » et tasse tout dans une colonne. Les décimales passent en virgule.
 
 Colonnes fixes, puis **une colonne par attribut réellement présent dans le résultat** :
-exporter des sacs ne traîne pas de colonne « Taille » vide.
+exporter des sacs ne traîne pas de colonne « Taille » vide. Les trois dernières colonnes
+fixes couvrent la vente en ligne — « En ligne », « Prix en ligne », « Retrait à faire ».
 
 Les cellules commençant par `=`, `+`, `-` ou `@` sont préfixées d'une apostrophe :
 sans ça, une référence saisie `=1+1` s'exécuterait à l'ouverture, et `=HYPERLINK(...)` est
@@ -496,8 +620,15 @@ jamais déplié une fraction de seconde avant de se replier.
 
 L'identité et la déconnexion sont en bas du menu : le nom mène au profil, ce qui rendait
 l'entrée « Mon profil » redondante. Les alertes restent dans l'en-tête, à droite — elles
-concernent la page, pas la navigation. L'en-tête nomme la section courante ; les pages
-d'index ne le répètent donc plus, et une sous-page garde son propre titre, plus précis.
+concernent toute l'application, pas la navigation. Le sélecteur de boutique les y
+accompagnait à tort : il ne pilote que le tableau de bord, il y a donc rejoint son écran.
+L'en-tête nomme la section courante ; les pages d'index ne le répètent donc plus, et une
+sous-page garde son propre titre, plus précis.
+
+**Les contrôles ne renvoient jamais en haut de page.** Filtres, tri, sélecteur de période,
+sélecteur de boutique et pagination naviguent en `scroll: false` : ils commandent un
+contenu situé **en dessous** d'eux, et remonter à chaque clic obligeait à redescendre pour
+lire le résultat.
 
 Sous 640 px la colonne de gauche est masquée faute de place : un panneau en superposition
 s'ouvre depuis l'en-tête et se referme dès qu'on a choisi, sans quoi il masquerait l'écran

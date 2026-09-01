@@ -3,7 +3,12 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { SHOP_SOURCE_KEY, type ShopSource } from '../decorators/shop-source.decorator';
 import { PERMISSION_KEY, type PermissionRule } from '../decorators/require-permission.decorator';
-import { PERMISSION_LABELS, readPermissions, type Permission } from '../permissions';
+import {
+  isCompanyPermission,
+  PERMISSION_LABELS,
+  readPermissions,
+  type Permission,
+} from '../permissions';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentUser } from '../types/current-user';
 
@@ -24,6 +29,11 @@ import type { CurrentUser } from '../types/current-user';
  *      une boutique de son entreprise : un employé doit pouvoir créer un
  *      produit avant de savoir où il ira. Voir CLAUDE.md, "Produits non
  *      assignés".
+ *
+ * Les **droits d'entreprise** (`COMPANY_PERMISSIONS`) court-circuitent tout
+ * ça : catalogue, déposants, contrats et boutique en ligne sont uniques pour
+ * l'entreprise, donc les détenir quelque part c'est les détenir partout, même
+ * quand la route cible une ressource rattachée à une boutique.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -49,50 +59,64 @@ export class PermissionsGuard implements CanActivate {
 
     const shopId = await this.findShop(context, request, user);
 
-    if (shopId === null) {
-      // Cas 3 : stock central. Chaque permission s'évalue séparément — la
-      // détenir quelque part suffit, comme partout ailleurs.
-      const detenues: Permission[] = [];
-      for (const permission of permissions) {
-        const compte = await this.prisma.shopAccess.count({
-          where: {
-            userId: user.userId,
-            // Scoping par la relation, comme partout : `ShopAccess` n'a pas de
-            // colonne companyId.
-            shop: { companyId: user.companyId },
-            permissions: { path: [permission], equals: true },
-          },
-        });
-        if (compte > 0) detenues.push(permission);
-        else if (mode === 'all') this.deny(permission, false);
-      }
-      if (detenues.length === 0) this.deny(permissions[0], false);
-      return true;
+    // Chaque droit s'évalue selon **sa propre** règle, jamais selon celle du
+    // lot : une route qui accepte « products.manage ou online.manage » mêle un
+    // droit de boutique et un droit d'entreprise, et trancher pour les deux à
+    // la fois refuserait le second hors de la boutique où il est coché.
+    const detenues: Permission[] = [];
+    for (const permission of permissions) {
+      if (await this.detient(user, permission, shopId)) detenues.push(permission);
+      else if (mode === 'all')
+        this.deny(permission, shopId !== null && !isCompanyPermission(permission));
     }
 
-    const accesses = await this.prisma.shopAccess.findFirst({
+    if (detenues.length === 0) {
+      // Le refus nomme la première : c'est celle qui gouverne la route, les
+      // autres n'en sont que des équivalents acceptés.
+      this.deny(permissions[0], shopId !== null && !isCompanyPermission(permissions[0]));
+    }
+    return true;
+  }
+
+  /**
+   * L'utilisateur détient-il ce droit, là où il compte ?
+   *
+   * Un **droit d'entreprise** se cherche partout : catalogue, déposants,
+   * contrats et boutique en ligne sont uniques, il n'y a pas de « par
+   * boutique » qui tienne. Même chose pour le stock central, qui n'appartient à
+   * aucune boutique — un employé doit pouvoir créer un produit avant de savoir
+   * où il ira. Sinon, c'est la boutique visée qui décide.
+   */
+  private async detient(
+    user: CurrentUser,
+    permission: Permission,
+    shopId: string | null,
+  ): Promise<boolean> {
+    if (shopId === null || isCompanyPermission(permission)) {
+      const compte = await this.prisma.shopAccess.count({
+        where: {
+          userId: user.userId,
+          // Scoping par la relation, comme partout : `ShopAccess` n'a pas de
+          // colonne companyId.
+          shop: { companyId: user.companyId },
+          permissions: { path: [permission], equals: true },
+        },
+      });
+      return compte > 0;
+    }
+
+    const acces = await this.prisma.shopAccess.findFirst({
       where: {
         userId: user.userId,
         shopId,
-        // Le scoping passe par la relation : `shopId` vient du déposant, il
+        // Le scoping passe par la relation : `shopId` vient de la ressource, il
         // ne prouve rien tant qu'on n'a pas vérifié qu'il appartient bien à
         // l'entreprise de l'user.
         shop: { companyId: user.companyId },
       },
       select: { permissions: true },
     });
-
-    const detenues = readPermissions(accesses?.permissions);
-    if (mode === 'any') {
-      // Le refus nomme la première : c'est celle qui gouverne la route, les
-      // autres n'en sont que des équivalents acceptés.
-      if (!permissions.some((p) => detenues[p] === true)) this.deny(permissions[0], true);
-      return true;
-    }
-    for (const permission of permissions) {
-      if (detenues[permission] !== true) this.deny(permission, true);
-    }
-    return true;
+    return readPermissions(acces?.permissions)[permission] === true;
   }
 
   /** Renvoie l'identifiant de boutique visé, ou `null` pour le stock central. */

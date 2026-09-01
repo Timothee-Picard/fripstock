@@ -48,6 +48,27 @@ export class FilterProductsDto {
   @IsEnum(SaleType)
   saleType?: SaleType;
 
+  /**
+   * `true` : seulement les articles annoncés sur le site. `false` : seulement
+   * ceux qui ne le sont pas. Chaîne et non booléen, comme `unassigned` : une
+   * query string ne transporte que du texte.
+   */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  isOnline?: string;
+
+  /**
+   * `true` : uniquement les retraits en attente.
+   *
+   * Sert l'écran « Retraits à faire », qui en donne la liste entière —
+   * cherchable et paginée. Le tableau de bord, lui, n'en montre que les
+   * derniers : on doit pouvoir aller décrocher un article précis même quand il
+   * n'est plus dans l'aperçu.
+   */
+  @IsOptional()
+  @IsIn(['true'])
+  pendingRemoval?: string;
+
   /** Recherche sur le nom, la référence et la description. */
   @IsOptional()
   @IsString()

@@ -2,7 +2,10 @@ import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res } from '@ne
 import type { Response } from 'express';
 import { ShopFromResource } from '../common/decorators/shop-source.decorator';
 import { AuthUser } from '../common/decorators/current-user.decorator';
-import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import {
+  RequireAnyPermission,
+  RequirePermission,
+} from '../common/decorators/require-permission.decorator';
 import type { CurrentUser } from '../common/types/current-user';
 import { AssignShopDto } from './dto/assign-shop.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
@@ -12,6 +15,8 @@ import { SellManyDto } from './dto/sell-many.dto';
 import { FilterProductsDto } from './dto/filter-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
+import { UpdateOnlineDto } from './dto/update-online.dto';
+import { RemovalsDoneDto } from './dto/removals-done.dto';
 import { DepositorPaymentDto } from './dto/depositor-payment.dto';
 import { shopOfProduct, ProductsService } from './products.service';
 
@@ -82,16 +87,33 @@ export class ProductsController {
   }
 
   /**
-   * Vente au comptoir : plusieurs articles d'un coup.
+   * Vente rapide : plusieurs articles d'un coup, au comptoir ou en ligne.
    *
-   * Même permission qu'un changement de statut à l'unité, puisque c'est
-   * exactement ce qu'elle fait — en série. Aucune boutique n'est visée par
-   * l'URL : le service vérifie l'accès article par article.
+   * Mêmes droits qu'un changement de statut à l'unité, puisque c'est
+   * exactement ce qu'elle fait — en série. `online.manage` y donne accès pour
+   * la même raison qu'à l'unité, et le service le borne aux statuts de vente
+   * en ligne, article par article. Aucune boutique n'est visée par l'URL : le
+   * service vérifie aussi l'accès article par article.
    */
   @Post('sale')
-  @RequirePermission('products.changeStatus')
+  @RequireAnyPermission('products.changeStatus', 'online.manage')
   sellMany(@AuthUser() currentUser: CurrentUser, @Body() dto: SellManyDto) {
     return this.products.sellMany(currentUser, dto);
+  }
+
+  /**
+   * « Retrait effectué » sur plusieurs articles d'un coup.
+   *
+   * Déclarée AVANT `@Put(':id')`, comme l'export l'est avant `@Get(':id')` :
+   * NestJS matche dans l'ordre de déclaration, et le paramètre avalerait
+   * « removals-done » s'il venait en premier. Aucune boutique n'est visée par
+   * l'URL — le service vérifie l'accès article par article, comme pour la
+   * vente en lot.
+   */
+  @Put('removals-done')
+  @RequireAnyPermission('online.manage', 'products.manage')
+  removalsDone(@AuthUser() currentUser: CurrentUser, @Body() dto: RemovalsDoneDto) {
+    return this.products.markRemovalsDone(currentUser, dto);
   }
 
   @Put(':id')
@@ -140,8 +162,49 @@ export class ProductsController {
     return this.products.toggleDepositorPayment(currentUser, id, dto.paid);
   }
 
+  /**
+   * Publie l'article sur le site, ou l'en retire.
+   *
+   * Route à part et droit à part : une personne qui ne gère que la vente en
+   * ligne doit pouvoir publier sans pouvoir modifier le vêtement. Passer par
+   * `PUT /products/:id` lui aurait demandé `products.manage`, qui ouvre aussi
+   * le nom, la description et le prix boutique.
+   */
+  @Put(':id/online')
+  @RequirePermission('online.manage')
+  @ShopFromResource('id', shopOfProduct)
+  setOnline(
+    @AuthUser() currentUser: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateOnlineDto,
+  ) {
+    return this.products.setOnline(currentUser, id, dto);
+  }
+
+  /**
+   * « Retrait effectué » sur l'autre canal, après une vente.
+   *
+   * Les deux droits l'ouvrent parce que la corvée change de main selon le
+   * sens : dépublier une annonce est un travail web, décrocher un vêtement du
+   * portant est un travail de boutique.
+   */
+  @Put(':id/removal-done')
+  @RequireAnyPermission('online.manage', 'products.manage')
+  @ShopFromResource('id', shopOfProduct)
+  removalDone(@AuthUser() currentUser: CurrentUser, @Param('id') id: string) {
+    return this.products.markRemovalDone(currentUser, id);
+  }
+
+  /**
+   * Changement de statut, vente comprise.
+   *
+   * Deux droits l'ouvrent, mais pas au même périmètre : `products.changeStatus`
+   * permet tout, `online.manage` seulement les statuts de vente en ligne. Le
+   * garde ne peut pas faire cette distinction — le statut visé est dans le
+   * corps de la requête, pas dans l'URL — donc le service la refait.
+   */
   @Put(':id/status')
-  @RequirePermission('products.changeStatus')
+  @RequireAnyPermission('products.changeStatus', 'online.manage')
   @ShopFromResource('id', shopOfProduct)
   changeStatus(
     @AuthUser() currentUser: CurrentUser,

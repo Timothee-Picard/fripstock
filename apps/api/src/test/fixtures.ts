@@ -28,6 +28,7 @@ export const inStock = {
   isSale: false,
   blocksSale: false,
   leavesStock: false,
+  isOnlineSale: false,
   positionX: null,
   positionY: null,
 };
@@ -39,6 +40,16 @@ export const sold = {
   isDefault: false,
   isSale: true,
   leavesStock: true,
+};
+/** « Vendu en ligne » : une vente comme une autre, par le site. */
+export const soldOnline = {
+  ...inStock,
+  id: 'status-sold-online',
+  name: 'Vendu en ligne',
+  isDefault: false,
+  isSale: true,
+  leavesStock: true,
+  isOnlineSale: true,
 };
 export const returned = {
   ...inStock,
