@@ -313,6 +313,23 @@ L'unicité de `isDefault` est tenue par une route dédiée (`PUT /statuses/:id/d
 qui remet les autres à `false` dans une transaction — un index unique Prisma sur
 `[companyId, isDefault]` interdirait aussi deux `false`.
 
+**La pastille de statut ne peint pas la couleur en aplat.** La teinte vient de la base, et
+un aplat saturé obligeait à choisir entre texte blanc et texte noir selon sa luminance :
+la colonne « Statut » de la liste des produits alternait donc les deux d'une ligne à
+l'autre, et le contraste des six couleurs de base tombait entre 4,2 et 4,8 pour 1 — « Rendu
+au client » sous le minimum AA, les autres le frôlant. La teinte devient maintenant un fond
+très clair, un texte foncé de la même teinte et un liseré intermédiaire : la couleur reste
+reconnaissable, le texte est toujours foncé, et l'ensemble atteint 7:1 (AAA).
+
+La lightness du texte n'est pas une constante mais le **résultat d'une recherche** : à
+valeur HSL égale un jaune est bien plus lumineux qu'un bleu, donc aucune valeur fixe ne
+tient pour toutes les teintes. Le composant assombrit jusqu'à atteindre la cible, ce qui la
+garantit pour n'importe quelle couleur — les tests le vérifient sur les six couleurs de
+base et sur des teintes extrêmes (jaune pur, cyan, blanc, noir).
+
+Le camembert du tableau de bord garde, lui, les couleurs pleines : ses parts sont de
+grandes surfaces sans texte dessus, et des teintes pâles s'y distingueraient mal.
+
 ### Photos
 
 Le bucket MinIO **n'est pas public**. Une balise `<img>` ne peut pas porter d'en-tête
