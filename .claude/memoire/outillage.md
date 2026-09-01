@@ -11,6 +11,23 @@ images Alpine (musl) et sont illisibles par la glibc de l'hôte.
 `./scripts/node-run.sh` est relatif à la **racine du dépôt** : il faut y être.
 Après un `cd apps/api` dans une commande précédente, le chemin ne résout plus.
 
+**Ajouter une dépendance npm.** Les `node_modules` vivent dans l'image, pas
+dans le volume monté : un `npm install` lancé par `node-run.sh` les écrit dans un
+volume anonyme jetable, et le conteneur qui tourne ne les voit jamais. On met
+donc à jour le `package.json` et le lock **sans installer**, sous l'UID de
+l'hôte pour que les fichiers restent éditables :
+
+```sh
+docker run --rm -i -e HOME=/tmp -u "$(id -u):$(id -g)" \
+  -v "$PWD":/repo -w /repo/apps/api node:24-alpine \
+  npm install --package-lock-only --save <paquet>
+make build   # reconstruit l'image et renouvelle le volume node_modules
+```
+
+Sans le `make build`, l'API démarre sur l'ancienne image et le `import` du
+nouveau paquet échoue — y compris dans les tests, qui passent par le même
+conteneur.
+
 **Vérifications** : toujours une cible `make`, jamais les commandes recopiées.
 `make check` est le jeu complet, celui de la CI ; `make check-fast` est le même
 sans tests ni build (~1 min 30 contre ~3 min), et c'est ce que lance le hook

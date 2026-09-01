@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DetachButton, DeleteContractButton, ContractForm, AttachForm } from './management';
+import { PdfIcon } from '@/components/icons';
 import { StatusBadge } from '@/components/status-badge';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
@@ -57,9 +58,20 @@ export default async function DepositContractPage({ params }: { params: Promise<
             {contract.commission} % pour la boutique · {CONTRACT_STATUS_LABELS[contract.status]}
           </p>
         </div>
-        <ContractForm contract={contract}>
-          <DeleteContractButton contract={contract} />
-        </ContractForm>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Le contrat se signe sur papier : ce lien sort la liste des articles
+              telle qu'elle a été déposée, avec les deux zones de signature. */}
+          <a
+            href={`/api/deposit-contracts/${contract.id}/pdf`}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            <PdfIcon />
+            Contrat en PDF
+          </a>
+          <ContractForm contract={contract}>
+            <DeleteContractButton contract={contract} />
+          </ContractForm>
+        </div>
       </div>
 
       {contract.status === 'ACTIVE' && days >= 0 && days <= contract.notifyBeforeDays ? (

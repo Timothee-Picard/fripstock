@@ -46,6 +46,18 @@ export function DeleteIcon() {
   );
 }
 
+/** Document à télécharger : le contrat de dépôt en PDF. */
+export function PdfIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M12 11v6" />
+      <path d="M9.5 14.5 12 17l2.5-2.5" />
+    </svg>
+  );
+}
+
 /* --- Icônes du menu latéral ------------------------------------------------
  *
  * Une par section : c'est ce qui reste visible quand le menu est replié, et

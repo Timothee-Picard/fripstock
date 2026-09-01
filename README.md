@@ -508,6 +508,31 @@ d'après le contrat d'alors, le déplacer falsifierait un relevé.
 Le règlement du déposant est un simple drapeau coché depuis la fiche produit — paiement en
 espèces, l'application ne gère aucun encaissement.
 
+### Le contrat en PDF
+
+`GET /deposit-contracts/:id/pdf` rend le contrat mis en page pour être **imprimé et
+signé** : en-tête de l'entreprise, coordonnées complètes du déposant (IBAN compris),
+période, commission, la liste des articles avec leur référence et leur prix affiché, les
+conditions numérotées, et deux zones de signature. Le bouton est sur la liste des contrats
+(une icône par ligne) et sur la fiche.
+
+Un dépôt se conclut sur papier : c'est ce document qui fait foi sur ce qui a été confié, et
+il porte les mêmes références que les étiquettes collées aux vêtements. Les articles y sont
+donc rangés **par référence** — l'ordre dans lequel le déposant les étale sur le comptoir,
+pas celui de leur saisie.
+
+Le rendu est fait côté API (`pdfkit`, `deposit-contracts/contract-pdf.ts`) et non par
+l'impression du navigateur : l'IBAN et les coordonnées du déposant ne sont pas chargés par
+la fiche d'écran, et une page imprimée ne donne ni nom de fichier ni mise en page
+reproductible. Le fichier passe par `/api/deposit-contracts/[id]/pdf` côté Next, pour la
+même raison que l'export CSV — un lien de téléchargement ne peut pas porter d'en-tête
+`Authorization`, et le jeton vit dans un cookie httpOnly.
+
+Même droit que la fiche, `deposits.manage` : qui peut lire le contrat peut l'imprimer, il
+n'y a rien de plus dedans. Le numéro imprimé en tête est la fin de l'identifiant du
+contrat — un `cuid` entier ne se recopie pas sur un papier, six caractères suffisent à
+retrouver la fiche.
+
 ### Alertes d'échéance
 
 Un job quotidien (`DeadlinesJob`, 7 h) fait deux choses en une passe sur les contrats

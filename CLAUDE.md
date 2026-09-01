@@ -195,6 +195,14 @@ Company (le compte parent, un gérant)
 - Champ `depositorPaid: boolean` sur `Product` (pertinent seulement si `CONSIGNMENT` et
   vendu) : indique si le déposant a reçu sa part. Paiement en espèces, donc pas
   d'intégration de paiement, juste un flag à cocher manuellement.
+- **Le contrat s'imprime et se signe** : `GET /deposit-contracts/:id/pdf` rend le
+  document (entreprise, coordonnées complètes du déposant IBAN compris, période,
+  commission, articles avec leur référence, conditions, deux zones de signature).
+  Rendu côté API avec `pdfkit`, jamais par l'impression du navigateur : la fiche
+  d'écran ne charge pas ces coordonnées, et une page imprimée ne donne ni nom de
+  fichier ni mise en page reproductible. Les articles sont rangés **par référence**,
+  celle des étiquettes, et non par ordre de saisie. Même droit que la fiche
+  (`deposits.manage`) : qui peut lire le contrat peut l'imprimer.
 - Notification automatique (job planifié) quand `endDate` d'un contrat approche
   (`notifyBeforeDays` avant l'échéance).
 - Quand un produit en dépôt est "rendu" : il sort de l'inventaire actif (`leavesStock` du

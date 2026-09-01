@@ -1,3 +1,5 @@
+import { StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { DepositContractsController } from './deposit-contracts.controller';
 import type { DepositContractsService } from './deposit-contracts.service';
 import type { DeadlinesJob } from './deadlines.job';
@@ -8,6 +10,7 @@ describe('DepositContractsController', () => {
   const service = {
     list: jest.fn(),
     detail: jest.fn(),
+    pdf: jest.fn(),
     create: jest.fn(),
     attachProducts: jest.fn(),
     detachProduct: jest.fn(),
@@ -24,6 +27,7 @@ describe('DepositContractsController', () => {
   it.each([
     ['list', 'GET', '/'],
     ['detail', 'GET', ':id'],
+    ['pdf', 'GET', ':id/pdf'],
     ['create', 'POST', '/'],
     ['deadlines', 'POST', 'deadlines'],
     ['attach', 'POST', ':id/products'],
@@ -41,6 +45,7 @@ describe('DepositContractsController', () => {
   it.each([
     ['list', 'deposits.manage'],
     ['detail', 'deposits.manage'],
+    ['pdf', 'deposits.manage'],
     ['create', ['deposits.manage', 'products.manage']],
     ['attach', 'deposits.manage'],
     ['detach', 'deposits.manage'],
@@ -101,6 +106,21 @@ describe('DepositContractsController', () => {
     it('detach renumérote quand la query le demande', () => {
       void controller.detach(manager, 'c1', 'p1', 'true');
       expect(service.detachProduct).toHaveBeenCalledWith(manager, 'c1', 'p1', true);
+    });
+
+    it('pdf renvoie le fichier en pièce jointe, sous le nom donné par le service', async () => {
+      const set = jest.fn();
+      jest.mocked(service.pdf).mockResolvedValue({
+        fileName: 'contrat-MAR-2026-01-01.pdf',
+        body: Buffer.from('%PDF-1.3'),
+      });
+      const fichier = await controller.pdf(manager, 'c1', { set } as unknown as Response);
+      expect(service.pdf).toHaveBeenCalledWith(manager, 'c1');
+      expect(set).toHaveBeenCalledWith({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="contrat-MAR-2026-01-01.pdf"',
+      });
+      expect(fichier).toBeInstanceOf(StreamableFile);
     });
 
     it('delete appelle delete', () => {
