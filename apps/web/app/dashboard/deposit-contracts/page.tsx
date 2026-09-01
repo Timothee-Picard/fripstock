@@ -3,6 +3,7 @@ import { DeadlinesButton } from './forms';
 import { ViewIcon } from '@/components/icons';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
+import { formatDate } from '@/lib/dates';
 import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import {
@@ -120,8 +121,7 @@ export default async function DepositContractsPage() {
                       </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-slate-700">
-                      {new Date(c.startDate).toLocaleDateString('fr-FR')} →{' '}
-                      {new Date(c.endDate).toLocaleDateString('fr-FR')}
+                      {formatDate(c.startDate)} → {formatDate(c.endDate)}
                     </td>
                     <td className="px-4 py-2 text-slate-700">{c.commission} %</td>
                     <td className="px-4 py-2 text-slate-700">{c._count.products}</td>

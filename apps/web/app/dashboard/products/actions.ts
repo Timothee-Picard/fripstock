@@ -152,11 +152,15 @@ export async function sellBasket(
 
   if (lines.length === 0) return { error: 'Ajoutez au moins un article.' };
 
+  // Statut visé, pour une vente en ligne. Absent, l'API prend le statut de
+  // vente au comptoir — celui qui porte `isSale` sans `isOnlineSale`.
+  const statusId = String(data.get('statusId') ?? '');
+
   let vendu: { count: number; total: number };
   try {
     vendu = await apiFetch<{ count: number; total: number }>('/products/sale', {
       method: 'POST',
-      body: JSON.stringify({ lines }),
+      body: JSON.stringify({ lines, ...(statusId ? { statusId } : {}) }),
     });
   } catch (error) {
     return message(error, 'Vente impossible.');
@@ -288,6 +292,85 @@ export async function updateSale(_state: ProductState, data: FormData): Promise<
   revalidatePath('/dashboard/products');
   revalidatePath(`/dashboard/products/${id}`);
   return { success: 'Vente corrigée.', token: randomUUID() };
+}
+
+/**
+ * Publie l'article sur le site, ou l'en retire, et fixe son prix en ligne.
+ *
+ * Route à part de la modification du produit : le droit « Gérer la vente en
+ * ligne » suffit ici, alors que corriger le vêtement demande « Créer et
+ * modifier des produits ».
+ */
+export async function setOnline(_state: ProductState, data: FormData): Promise<ProductState> {
+  const id = String(data.get('id'));
+  const isOnline = data.get('isOnline') === 'true';
+  const brut = String(data.get('onlinePrice') ?? '').trim();
+
+  try {
+    await apiFetch(`/products/${id}/online`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        isOnline,
+        // Vide efface le prix : le site retombe alors sur le prix boutique,
+        // plutôt que d'obliger à saisir deux fois le même montant.
+        onlinePrice: brut === '' ? null : Number(brut.replace(',', '.')),
+      }),
+    });
+  } catch (error) {
+    return message(error, 'Mise en ligne impossible.');
+  }
+
+  revalidatePath('/dashboard/products');
+  revalidatePath(`/dashboard/products/${id}`);
+  return {
+    success: isOnline ? 'Article en ligne.' : 'Article retiré du site.',
+    token: randomUUID(),
+  };
+}
+
+/** « Retrait effectué » : l'article vendu a été ôté de l'autre canal. */
+export async function markRemovalDone(_state: ProductState, data: FormData): Promise<ProductState> {
+  const id = String(data.get('id'));
+  try {
+    await apiFetch(`/products/${id}/removal-done`, { method: 'PUT' });
+  } catch (error) {
+    return message(error, 'Enregistrement impossible.');
+  }
+  revalidatePath('/dashboard/products');
+  revalidatePath(`/dashboard/products/${id}`);
+  return { success: 'Retrait enregistré.', token: randomUUID() };
+}
+
+/**
+ * « Tout retirer » : plusieurs retraits confirmés d'un coup.
+ *
+ * Le geste réel est groupé — on dépublie douze annonces d'affilée, puis on
+ * revient dire que c'est fait. Douze clics pour une seule action est ce qui
+ * fait abandonner une liste de tâches.
+ */
+export async function markRemovalsDone(
+  _state: ProductState,
+  data: FormData,
+): Promise<ProductState> {
+  const productIds = data.getAll('productId').map(String).filter(Boolean);
+  if (productIds.length === 0) return { error: 'Aucun article à retirer.' };
+
+  let resultat: { count: number };
+  try {
+    resultat = await apiFetch<{ count: number }>('/products/removals-done', {
+      method: 'PUT',
+      body: JSON.stringify({ productIds }),
+    });
+  } catch (error) {
+    return message(error, 'Enregistrement impossible.');
+  }
+
+  revalidatePath('/dashboard', 'layout');
+  revalidatePath('/dashboard/products', 'layout');
+  return {
+    success: `${resultat.count} retrait${resultat.count > 1 ? 's' : ''} enregistré${resultat.count > 1 ? 's' : ''}.`,
+    token: randomUUID(),
+  };
 }
 
 /** Marque la part du déposant comme réglée, ou revient dessus. */

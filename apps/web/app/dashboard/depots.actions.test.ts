@@ -374,6 +374,53 @@ describe('utilisateurs', () => {
     });
   });
 
+  it('recopie un droit d’entreprise sur toutes les boutiques', async () => {
+    // `ShopAccess` n'a pas d'autre endroit où le poser, et c'est ce qui le rend
+    // vrai partout : le garde le cherche « sur au moins une boutique ».
+    await utilisateurs.saveAccess(
+      {},
+      form({
+        userId: 'u2',
+        shopId: ['b1', 'b2'],
+        'perm:b1:products.view': 'on',
+        'company:online.manage': 'on',
+      }),
+    );
+    expect(dernierAppel().body).toEqual({
+      accesses: [
+        { shopId: 'b1', permissions: ['products.view', 'online.manage'] },
+        { shopId: 'b2', permissions: ['online.manage'] },
+      ],
+    });
+  });
+
+  it('ne coche un droit d’entreprise que depuis sa propre case', async () => {
+    // Les cases par boutique ne portent plus les droits d'entreprise : une
+    // clé `perm:b1:online.manage` venue d'ailleurs ne doit rien accorder.
+    await utilisateurs.saveAccess(
+      {},
+      form({
+        userId: 'u2',
+        shopId: ['b1'],
+        'perm:b1:products.view': 'on',
+        'perm:b1:online.manage': 'on',
+      }),
+    );
+    expect(dernierAppel().body).toEqual({
+      accesses: [{ shopId: 'b1', permissions: ['products.view'] }],
+    });
+  });
+
+  it('retire un droit d’entreprise de partout quand il est décoché', async () => {
+    await utilisateurs.saveAccess(
+      {},
+      form({ userId: 'u2', shopId: ['b1', 'b2'], 'perm:b1:products.view': 'on' }),
+    );
+    expect(dernierAppel().body).toEqual({
+      accesses: [{ shopId: 'b1', permissions: ['products.view'] }],
+    });
+  });
+
   it('supprime un employé', async () => {
     await utilisateurs.deleteEmployee({}, form({ userId: 'u2' }));
     expect(dernierAppel()).toMatchObject({ route: '/users/u2', method: 'DELETE' });

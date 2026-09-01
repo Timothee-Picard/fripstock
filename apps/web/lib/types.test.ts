@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTRACT_STATUS_LABELS,
   PERMISSION_LABELS,
+  COMPANY_PERMISSIONS,
   PERMISSIONS,
+  SHOP_PERMISSIONS,
   SALE_TYPE_LABELS,
   TYPE_LABELS,
   daysUntil,
@@ -167,6 +169,30 @@ describe('daysUntil', () => {
   it('devient négatif une fois l’échéance passée', () => {
     const ilYa3 = new Date(Date.now() - 3 * 86400000).toISOString();
     expect(daysUntil(ilYa3)).toBeLessThan(0);
+  });
+});
+
+describe('périmètre des permissions', () => {
+  it('partage toutes les permissions entre entreprise et boutique, sans reste', () => {
+    // Une permission oubliée des deux listes disparaîtrait de l'écran des
+    // accès : le gérant ne pourrait plus l'accorder, sans aucun message.
+    expect([...COMPANY_PERMISSIONS, ...SHOP_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
+  });
+
+  it('n’en met aucune dans les deux', () => {
+    expect(SHOP_PERMISSIONS.filter((p) => COMPANY_PERMISSIONS.includes(p))).toEqual([]);
+  });
+
+  it('tient la liste des droits d’entreprise alignée avec l’API', () => {
+    // Miroir de `COMPANY_PERMISSIONS` côté API. Les deux doivent bouger
+    // ensemble : le garde suit la sienne, l'écran des accès la nôtre.
+    expect([...COMPANY_PERMISSIONS]).toEqual([
+      'categories.manage',
+      'attributes.manage',
+      'depositors.manage',
+      'deposits.manage',
+      'online.manage',
+    ]);
   });
 });
 

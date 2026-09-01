@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { apiFetch, ApiError } from '@/lib/api';
-import { PERMISSIONS, type Permission } from '@/lib/types';
+import { COMPANY_PERMISSIONS, SHOP_PERMISSIONS, type Permission } from '@/lib/types';
 
 export interface UserState {
   error?: string;
@@ -35,18 +35,32 @@ export async function inviteEmployee(_state: UserState, data: FormData): Promise
 }
 
 /**
- * Les cases cochées arrivent sous la forme `perm:<boutiqueId>:<permission>`.
- * On reconstruit la liste complète des accès, parce que l'API remplace
- * intégralement ceux de l'employé.
+ * Reconstruit la liste complète des accès : l'API remplace intégralement ceux
+ * de l'employé.
+ *
+ * Deux origines de cases. Les droits de boutique arrivent en
+ * `perm:<boutiqueId>:<permission>`, les **droits d'entreprise** en
+ * `company:<permission>` — cochés une seule fois, puisque le catalogue, les
+ * déposants et le site sont communs.
+ *
+ * Un droit d'entreprise est **recopié sur toutes les boutiques**. La table
+ * `ShopAccess` n'a pas d'autre endroit où le poser, et c'est ce qui le rend
+ * vrai partout : le garde le cherche « sur au moins une boutique », et le
+ * service laisse alors son porteur travailler sur un article de n'importe
+ * laquelle.
  */
 export async function saveAccess(_state: UserState, data: FormData): Promise<UserState> {
   const userId = String(data.get('userId') ?? '');
   const shopIds = data.getAll('shopId').map(String);
+  const entreprise = COMPANY_PERMISSIONS.filter((p) => data.has(`company:${p}`));
 
   const accesses = shopIds
     .map((shopId) => ({
       shopId,
-      permissions: PERMISSIONS.filter((p) => data.has(`perm:${shopId}:${p}`)) as Permission[],
+      permissions: [
+        ...SHOP_PERMISSIONS.filter((p) => data.has(`perm:${shopId}:${p}`)),
+        ...entreprise,
+      ] as Permission[],
     }))
     // Une boutique sans aucune permission n'est pas un accès : on la retire.
     .filter((a) => a.permissions.length > 0);

@@ -12,11 +12,22 @@ export const PRODUCT_SORTS = [
 
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
+/**
+ * Canal « boutique en ligne » du tableau de bord (`?channel=online`).
+ *
+ * Ici et non dans `shop-selector.tsx` : un composant serveur ne peut pas
+ * importer une valeur d'un module `'use client'`. Next en fait une référence
+ * client, la comparaison échoue **sans erreur**, et le tableau de bord retombe
+ * silencieusement sur les boutiques physiques. C'est arrivé.
+ */
+export const ONLINE_CHANNEL = 'online';
+
 export const PERMISSIONS = [
   'products.view',
   'products.manage',
   'products.delete',
   'products.changeStatus',
+  'online.manage',
   'categories.manage',
   'attributes.manage',
   'depositors.manage',
@@ -28,12 +39,34 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/**
+ * Droits qui portent sur l'**entreprise**, pas sur une boutique.
+ *
+ * Miroir de `COMPANY_PERMISSIONS` côté API — à tenir aligné. Le catalogue, les
+ * déposants, les contrats et le site sont uniques : les cocher une fois les
+ * accorde partout, et l'écran des accès doit le montrer plutôt que de les
+ * répéter boutique par boutique.
+ */
+export const COMPANY_PERMISSIONS: readonly Permission[] = [
+  'categories.manage',
+  'attributes.manage',
+  'depositors.manage',
+  'deposits.manage',
+  'online.manage',
+];
+
+/** Les autres : ils se règlent boutique par boutique. */
+export const SHOP_PERMISSIONS: readonly Permission[] = PERMISSIONS.filter(
+  (p) => !COMPANY_PERMISSIONS.includes(p),
+);
+
 /** Libellés lisibles, pour ne pas afficher les clés techniques au gérant. */
 export const PERMISSION_LABELS: Record<Permission, string> = {
   'products.view': 'Voir les produits',
   'products.manage': 'Créer et modifier des produits',
   'products.delete': 'Supprimer des produits',
   'products.changeStatus': 'Vendre et changer le statut',
+  'online.manage': 'Gérer la vente en ligne',
   'categories.manage': 'Gérer les catégories',
   'attributes.manage': 'Gérer les attributs',
   'depositors.manage': 'Gérer les déposants',
@@ -55,6 +88,8 @@ export const PERMISSION_HINTS: Record<Permission, string> = {
   'products.delete': 'Effacer un article définitivement.',
   'products.changeStatus':
     "Encaisser une vente au comptoir, et déplacer un article d'un statut à l'autre.",
+  'online.manage':
+    'Mettre un article en vente sur le site, fixer son prix en ligne, et enregistrer une vente en ligne. Ce droit seul ne permet ni de modifier le vêtement, ni de vendre au comptoir.',
   'categories.manage': "Ajouter et réorganiser l'arborescence des catégories.",
   'attributes.manage': 'Définir les attributs (taille, couleur…) et leurs options.',
   'depositors.manage': 'Créer et modifier les fiches des clients déposants.',
@@ -181,6 +216,8 @@ export interface Status {
   isSale: boolean;
   blocksSale: boolean;
   leavesStock: boolean;
+  /** Vente passée par le site plutôt qu'au comptoir. */
+  isOnlineSale: boolean;
   positionX: number | null;
   positionY: number | null;
   /** `false` tant qu'aucune flèche n'est tracée : tout est alors permis. */
@@ -199,6 +236,12 @@ export interface ProductSummary {
   quantity: number;
   saleType: SaleType;
   soldAt: string | null;
+  /** Annoncé sur le site. Indépendant du statut : les deux coexistent. */
+  isOnline: boolean;
+  /** Prix affiché en ligne. `null` : le site reprend `salePrice`. */
+  onlinePrice: string | null;
+  /** Vendu ici, encore présent là — il reste un retrait à faire sur l'autre canal. */
+  pendingRemoval: boolean;
   createdAt: string;
   /** Contrat de dépôt qui le porte, s'il y en a un. Un produit n'en a qu'un. */
   depositContractId: string | null;
@@ -391,6 +434,33 @@ export function daysUntil(date: string): number {
  * l'inventaire — plutôt que de tout envoyer et laisser l'interface masquer.
  * Un bloc absent n'est donc pas une erreur, c'est un droit qui manque.
  */
+export interface RemovalItem {
+  id: string;
+  name: string;
+  reference: string | null;
+  soldAt: string | null;
+  shop: { id: string; name: string } | null;
+  status: { id: string; name: string; color: string; isOnlineSale: boolean };
+}
+
+/**
+ * Une liste de retraits, **tronquée**, avec son compte réel.
+ *
+ * `total` ne se déduit pas de `items.length` : l'API n'en renvoie que les
+ * premiers. Afficher la longueur du tableau se lirait comme « il n'en reste que
+ * ça », ce qui est faux un lendemain de week-end.
+ */
+export interface RemovalList {
+  items: RemovalItem[];
+  total: number;
+}
+
+/** Réponse de `GET /products/removals` : la liste entière, bornée, plus le total. */
+export interface RemovalPage {
+  products: RemovalItem[];
+  total: number;
+}
+
 export interface Dashboard {
   period: { from: string; to: string };
   /**
@@ -402,6 +472,21 @@ export interface Dashboard {
     count: number;
     revenue: number;
     margin?: number;
+  };
+  /**
+   * Retraits à faire après une vente, un article présent sur les deux canaux
+   * n'étant retiré de l'autre que par quelqu'un.
+   *
+   * Deux listes et non une : ce ne sont ni les mêmes gestes ni les mêmes
+   * personnes. `toDelist` demande « Gérer la vente en ligne », `toPull`
+   * « Créer et modifier des produits ». Une liste absente est un droit qui
+   * manque, pas une absence de corvée.
+   */
+  removals?: {
+    /** Vendus au comptoir, annonce encore publiée : à dépublier. */
+    toDelist?: RemovalList;
+    /** Vendus par le site, vêtement encore en boutique : à décrocher. */
+    toPull?: RemovalList;
   };
   sales?: { count: number; revenue: number; margin: number; averageBasket: number };
   byDay?: { day: string; revenue: number; count: number }[];

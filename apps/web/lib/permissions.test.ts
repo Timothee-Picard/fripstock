@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasPermission } from './permissions';
+import { hasPermission, hasPermissionOnShop } from './permissions';
 import type { Session, ShopAccess } from './types';
 
 const acces = (over: Partial<ShopAccess> = {}): ShopAccess => ({
@@ -63,5 +63,43 @@ describe('hasPermission', () => {
     expect(hasPermission(session({ shops: [acces({ allRights: true })] }), 'export.csv')).toBe(
       true,
     );
+  });
+});
+
+describe('hasPermissionOnShop', () => {
+  const caissierGare = session({
+    shops: [
+      acces({ shopId: 'b1', name: 'Centre-ville', permissions: ['products.view'] }),
+      acces({ shopId: 'b2', name: 'Gare', permissions: ['products.changeStatus'] }),
+    ],
+  });
+
+  it('accorde sur la boutique qui porte le droit', () => {
+    expect(hasPermissionOnShop(caissierGare, 'products.changeStatus', 'b2')).toBe(true);
+  });
+
+  it('refuse sur une autre boutique, même si le droit existe ailleurs', () => {
+    // C'est toute la différence avec `hasPermission` : tenir la caisse à la
+    // Gare n'autorise pas à encaisser au Centre-ville, et l'API le refuserait.
+    expect(hasPermissionOnShop(caissierGare, 'products.changeStatus', 'b1')).toBe(false);
+  });
+
+  it('refuse sur une boutique où l’employé n’a aucun accès', () => {
+    expect(hasPermissionOnShop(caissierGare, 'products.changeStatus', 'b9')).toBe(false);
+  });
+
+  it('redevient « quelque part » sans boutique visée', () => {
+    // Le comptoir cherche alors dans toutes ses boutiques, et l'API tranche
+    // article par article.
+    expect(hasPermissionOnShop(caissierGare, 'products.changeStatus')).toBe(true);
+  });
+
+  it('accorde tout au gérant, sur n’importe quelle boutique', () => {
+    expect(hasPermissionOnShop(session({ isManager: true }), 'products.delete', 'b9')).toBe(true);
+  });
+
+  it('suit `allRights` sur la boutique visée', () => {
+    const patron = session({ shops: [acces({ shopId: 'b1', allRights: true })] });
+    expect(hasPermissionOnShop(patron, 'products.changeStatus', 'b1')).toBe(true);
   });
 });

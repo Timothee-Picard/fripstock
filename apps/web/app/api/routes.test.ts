@@ -207,6 +207,20 @@ describe('GET /api/products/search', () => {
     expect(String(apiFetch.mock.calls[0][0])).toContain('shopId=b1');
   });
 
+  it('restreint aux articles annoncés pour la vente en ligne', async () => {
+    // Le filtre doit être **relayé** : oublier de le transmettre proposait
+    // tout le stock au comptoir en ligne, sans erreur visible.
+    apiFetch.mockResolvedValue({ products: [] });
+    await recherche.GET(new Request('http://x/api/products/search?q=veste&isOnline=true'));
+    expect(String(apiFetch.mock.calls[0][0])).toContain('isOnline=true');
+  });
+
+  it('ne restreint pas quand le canal n’est pas en ligne', async () => {
+    apiFetch.mockResolvedValue({ products: [] });
+    await recherche.GET(new Request('http://x/api/products/search?q=veste'));
+    expect(String(apiFetch.mock.calls[0][0])).not.toContain('isOnline');
+  });
+
   it('relaie le code de refus de l’API', async () => {
     apiFetch.mockRejectedValue(new ApiError(403, 'Interdit'));
     const r = await recherche.GET(new Request('http://x/api/products/search?q=veste'));

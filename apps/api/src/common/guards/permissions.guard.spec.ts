@@ -100,8 +100,8 @@ describe('PermissionsGuard', () => {
   describe('plusieurs permissions exigées', () => {
     it('laisse passer qui les détient toutes', async () => {
       const { guard } = mount({
-        permission: ['deposits.manage', 'products.manage'],
-        accesTrouve: { permissions: { 'deposits.manage': true, 'products.manage': true } },
+        permission: ['products.delete', 'products.manage'],
+        accesTrouve: { permissions: { 'products.delete': true, 'products.manage': true } },
       });
       const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -109,8 +109,8 @@ describe('PermissionsGuard', () => {
 
     it("refuse s'il en manque une, et nomme celle qui manque", async () => {
       const { guard } = mount({
-        permission: ['deposits.manage', 'products.manage'],
-        accesTrouve: { permissions: { 'deposits.manage': true } },
+        permission: ['products.delete', 'products.manage'],
+        accesTrouve: { permissions: { 'products.delete': true } },
       });
       const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).rejects.toThrow(
@@ -120,7 +120,7 @@ describe('PermissionsGuard', () => {
 
     it('les exige aussi une à une sur le stock central', async () => {
       const { guard, count } = mount({
-        permission: ['deposits.manage', 'products.manage'],
+        permission: ['products.delete', 'products.manage'],
         compteStockCentral: 0,
       });
       const ctx = contexte({ user: EMPLOYEE, params: {}, body: {}, query: {} });
@@ -133,8 +133,8 @@ describe('PermissionsGuard', () => {
     it('accepte qui n’en détient qu’une', async () => {
       const { guard } = mount({
         mode: 'any',
-        permission: ['depositors.manage', 'deposits.manage'],
-        accesTrouve: { permissions: { 'deposits.manage': true } },
+        permission: ['products.view', 'products.delete'],
+        accesTrouve: { permissions: { 'products.delete': true } },
       });
       const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
@@ -143,12 +143,12 @@ describe('PermissionsGuard', () => {
     it('refuse qui n’en détient aucune, en nommant la première', async () => {
       const { guard } = mount({
         mode: 'any',
-        permission: ['depositors.manage', 'deposits.manage'],
-        accesTrouve: { permissions: { 'products.view': true } },
+        permission: ['products.view', 'products.delete'],
+        accesTrouve: { permissions: { 'products.manage': true } },
       });
       const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
       await expect(guard.canActivate(ctx)).rejects.toThrow(
-        "Vous n'avez pas le droit « Gérer les déposants » sur cette boutique.",
+        "Vous n'avez pas le droit « Voir les produits » sur cette boutique.",
       );
     });
 
@@ -287,6 +287,55 @@ describe('PermissionsGuard', () => {
       await expect(
         guard.canActivate(contexte({ user: EMPLOYEE, params: { id: 'p1' } })),
       ).resolves.toBe(true);
+    });
+  });
+
+  describe('droits d’entreprise', () => {
+    it('les cherche partout, même quand la route cible une boutique', async () => {
+      // Le catalogue, les déposants et le site sont uniques pour l'entreprise :
+      // les détenir quelque part, c'est les détenir partout.
+      const { guard, findFirst, count } = mount({
+        permission: 'online.manage',
+        compteStockCentral: 1,
+        accesTrouve: null,
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+      expect(count).toHaveBeenCalled();
+      expect(findFirst).not.toHaveBeenCalled();
+    });
+
+    it('refuse sans parler de boutique : ce n’est pas une question de boutique', async () => {
+      const { guard } = mount({ permission: 'online.manage', compteStockCentral: 0 });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(
+        "Vous n'avez pas le droit « Gérer la vente en ligne ».",
+      );
+    });
+
+    it('mélangé à un droit de boutique, chacun garde sa règle', async () => {
+      // Une route qui accepte « products.manage ou online.manage » : le second
+      // ne doit pas se retrouver évalué sur la boutique visée.
+      const { guard } = mount({
+        mode: 'any',
+        permission: ['products.manage', 'online.manage'],
+        accesTrouve: { permissions: {} },
+        compteStockCentral: 1,
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('cumulé à un droit de boutique, les deux sont exigés chacun à sa façon', async () => {
+      const { guard } = mount({
+        permission: ['products.manage', 'online.manage'],
+        accesTrouve: { permissions: {} },
+        compteStockCentral: 1,
+      });
+      const ctx = contexte({ user: EMPLOYEE, params: { shopId: 'b1' }, body: {}, query: {} });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(
+        "Vous n'avez pas le droit « Créer et modifier des produits » sur cette boutique.",
+      );
     });
   });
 });

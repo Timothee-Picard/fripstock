@@ -1,4 +1,12 @@
 #!/usr/bin/env sh
-# Même vérification que la CI, mais avant de pousser plutôt que trois minutes
-# après. Contournable avec --no-verify : la CI, elle, ne l'est pas.
-exec make check
+# Jeu rapide avant de pousser : format, lint, typage, dérive Prisma (~1 min 30).
+#
+# Ce n'est PAS toute la vérification. Les tests et le build en sont retirés :
+# ils pèsent la moitié du temps, et la CI les rejoue de toute façon sur chaque
+# PR. Ce qui reste ici est ce dont l'échec passe inaperçu le plus longtemps —
+# une migration absente du dépôt ne se voit qu'au prochain clone.
+#
+# `make check` reste la vérification complète, celle que lance la CI : à passer
+# avant d'ouvrir une PR. Contournable avec --no-verify ; la CI, elle, ne l'est
+# pas.
+exec make check-fast

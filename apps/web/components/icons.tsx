@@ -123,6 +123,17 @@ export function ShopIcon() {
   );
 }
 
+/** Retraits à faire : une étiquette qu'on décroche. */
+export function RemovalIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M20.6 8.4 12 17l-4.6-4.6a4 4 0 0 1 0-5.7l.7-.7a4 4 0 0 1 5.7 0l.7.7.7-.7a4 4 0 0 1 5.7 0" />
+      <path d="m3 3 5 5" />
+      <path d="m8 3-5 5" />
+    </svg>
+  );
+}
+
 export function UsersIcon() {
   return (
     <svg {...commun}>
@@ -179,6 +190,7 @@ export const NAV_ICONS: Record<NavIcon, () => React.ReactElement> = {
   attributes: AttributesIcon,
   depositors: DepositorIcon,
   contracts: ContractIcon,
+  removals: RemovalIcon,
   shops: ShopIcon,
   users: UsersIcon,
 };

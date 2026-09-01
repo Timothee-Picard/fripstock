@@ -48,6 +48,15 @@ export class FilterProductsDto {
   @IsEnum(SaleType)
   saleType?: SaleType;
 
+  /**
+   * `true` : seulement les articles annoncés sur le site. `false` : seulement
+   * ceux qui ne le sont pas. Chaîne et non booléen, comme `unassigned` : une
+   * query string ne transporte que du texte.
+   */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  isOnline?: string;
+
   /** Recherche sur le nom, la référence et la description. */
   @IsOptional()
   @IsString()

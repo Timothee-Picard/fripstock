@@ -8,6 +8,7 @@ import { DepositorPaymentDto } from './depositor-payment.dto';
 import { FilterProductsDto } from './filter-products.dto';
 import { UpdateProductDto } from './update-product.dto';
 import { UpdateSaleDto } from './update-sale.dto';
+import { UpdateOnlineDto } from './update-online.dto';
 import { isValid, validateDto } from '../../test/validate';
 
 const minimal = { name: 'Sac', categoryId: 'c1', saleType: 'RESALE' };
@@ -232,6 +233,34 @@ describe('DTO produits', () => {
     it('borne le panier à cent articles', () => {
       const trop = Array.from({ length: 101 }, (_, i) => ({ productId: `p${i}`, soldPrice: 1 }));
       expect(validateDto(SellManyDto, { lines: trop }).errors).toContain('lines');
+    });
+  });
+
+  describe('UpdateOnlineDto', () => {
+    it('publie et fixe un prix', () => {
+      expect(isValid(UpdateOnlineDto, { isOnline: true, onlinePrice: 25.5 })).toBe(true);
+    });
+
+    it('accepte un corps vide : les deux champs sont indépendants', () => {
+      expect(isValid(UpdateOnlineDto, {})).toBe(true);
+    });
+
+    it('accepte null pour effacer le prix du site', () => {
+      // `null` n'est pas un nombre : sans le `ValidateIf`, effacer le prix
+      // serait refusé et il faudrait resaisir le prix boutique à la main.
+      expect(isValid(UpdateOnlineDto, { onlinePrice: null })).toBe(true);
+    });
+
+    it.each([
+      ['un prix négatif', { onlinePrice: -1 }, 'onlinePrice'],
+      ['un prix à trois décimales', { onlinePrice: 1.234 }, 'onlinePrice'],
+      ['un prix qui n’est pas un nombre', { onlinePrice: 'gratuit' }, 'onlinePrice'],
+    ])('refuse %s', (_titre, raw, champ) => {
+      expect(validateDto(UpdateOnlineDto, raw).errors).toContain(champ);
+    });
+
+    it('refuse un champ inconnu, plutôt que de l’ignorer en silence', () => {
+      expect(isValid(UpdateOnlineDto, { isOnline: true, name: 'pirate' })).toBe(false);
     });
   });
 });

@@ -2,7 +2,6 @@ import { MobileNav } from '@/components/mobile-nav';
 import { NotificationBell } from '@/components/notification-bell';
 import { PageTitle } from '@/components/page-title';
 import { Sidebar } from '@/components/sidebar';
-import { ShopSelector } from '@/components/shop-selector';
 import { apiFetch } from '@/lib/api';
 import { hasPermission } from '@/lib/permissions';
 import { NAVIGATION, SIDEBAR_COOKIE } from '@/lib/navigation';
@@ -22,7 +21,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // ce à quoi l'utilisateur a droit, plutôt que tout, masqué à l'affichage.
   const entries = NAVIGATION.filter(
     (e) =>
-      (!e.manager || session.isManager) && (!e.permission || hasPermission(session, e.permission)),
+      (!e.manager || session.isManager) &&
+      (!e.permission || hasPermission(session, e.permission)) &&
+      // `anyPermission` : deux métiers ouvrent le même écran, l'un des deux
+      // droits suffit. Exiger les deux masquerait l'entrée à chacun d'eux.
+      (!e.anyPermission || e.anyPermission.some((p) => hasPermission(session, p))),
   );
 
   return (
@@ -35,8 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               naviguer sous 640 px, où la colonne de gauche est masquée. */}
           <MobileNav session={session} entries={entries} />
           <PageTitle />
-          <div className="ml-auto flex items-center gap-3">
-            <ShopSelector shops={session.shops} />
+          <div className="ml-auto">
             <NotificationBell data={notifications} />
           </div>
         </header>

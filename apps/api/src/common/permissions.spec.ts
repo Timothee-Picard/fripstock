@@ -1,4 +1,10 @@
-import { PERMISSIONS, isValidPermission, readPermissions } from './permissions';
+import {
+  COMPANY_PERMISSIONS,
+  PERMISSIONS,
+  isCompanyPermission,
+  isValidPermission,
+  readPermissions,
+} from './permissions';
 
 describe('permissions', () => {
   describe('isValidPermission', () => {
@@ -36,6 +42,25 @@ describe('permissions', () => {
 
     it('accepte un tableau, qui reste un objet sans clé connue', () => {
       expect(readPermissions(['products.view'])).toEqual({});
+    });
+  });
+
+  describe('droits d’entreprise', () => {
+    it.each([...COMPANY_PERMISSIONS])('%s vaut pour toute l’entreprise', (key) => {
+      expect(isCompanyPermission(key)).toBe(true);
+    });
+
+    it.each(PERMISSIONS.filter((p) => !COMPANY_PERMISSIONS.has(p)))(
+      '%s se règle boutique par boutique',
+      (key) => {
+        expect(isCompanyPermission(key)).toBe(false);
+      },
+    );
+
+    it('ne contient que des clés déclarées', () => {
+      // Une clé mal orthographiée n'y serait jamais reconnue, et le droit
+      // redeviendrait silencieusement un droit de boutique.
+      for (const key of COMPANY_PERMISSIONS) expect(isValidPermission(key)).toBe(true);
     });
   });
 });

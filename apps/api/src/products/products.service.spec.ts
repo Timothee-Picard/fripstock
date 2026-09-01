@@ -3,7 +3,16 @@ import { ProductsService, shopOfProduct } from './products.service';
 import type { StatusesService } from '../statuses/statuses.service';
 import type { UploadsService } from '../uploads/uploads.service';
 import { asPrisma, createPrismaMock, type PrismaMock } from '../test/prisma-mock';
-import { COMPANY_ID, SHOP_ID, employee, inStock, manager, returned, sold } from '../test/fixtures';
+import {
+  COMPANY_ID,
+  SHOP_ID,
+  employee,
+  inStock,
+  manager,
+  returned,
+  sold,
+  soldOnline,
+} from '../test/fixtures';
 
 const product = (over: Partial<Record<string, unknown>> = {}) => ({
   id: 'p1',
@@ -64,8 +73,14 @@ describe('ProductsService', () => {
       expect(where).not.toHaveProperty('OR');
     });
 
-    it("restreint l'employé à ses boutiques, plus le stock central", async () => {
-      prisma.shopAccess.findMany.mockResolvedValue([{ shopId: SHOP_ID }]);
+    it("restreint l'employé aux boutiques dont il voit les produits", async () => {
+      // Pas « où il a une ligne d'accès » : les droits d'entreprise sont
+      // recopiés sur toutes les boutiques, donc une ligne existe partout dès
+      // qu'on gère le catalogue ou le site.
+      prisma.shopAccess.findMany.mockResolvedValue([
+        { shopId: SHOP_ID, permissions: { 'products.view': true } },
+        { shopId: 'shop-sans-vue', permissions: { 'online.manage': true } },
+      ]);
       await service.list(employee, {});
       expect(prisma.product.findMany.mock.calls[0][0].where.OR).toEqual([
         { shopId: null },
@@ -688,9 +703,18 @@ describe('ProductsService', () => {
     it('trouve le statut de vente par son flag, jamais par son libellé', async () => {
       await service.sellMany(manager, { lines: lignes });
       expect(prisma.status.findMany).toHaveBeenCalledWith({
-        where: { companyId: COMPANY_ID, isSale: true },
+        where: { companyId: COMPANY_ID, isSale: true, isOnlineSale: false },
         select: { id: true, name: true },
       });
+    });
+
+    it('écarte la vente en ligne : le comptoir encaisse en boutique', async () => {
+      // Depuis qu'il existe « Vendu en ligne », toute entreprise a deux statuts
+      // de vente. Si le comptoir les comptait tous les deux, il demanderait
+      // « précisez lequel » à chaque encaissement.
+      await service.sellMany(manager, { lines: lignes });
+      const where = prisma.status.findMany.mock.calls[0][0].where as { isOnlineSale: boolean };
+      expect(where.isOnlineSale).toBe(false);
     });
 
     it('horodate toutes les lignes du même passage', async () => {
@@ -748,13 +772,13 @@ describe('ProductsService', () => {
       );
     });
 
-    it('demande lequel quand l’entreprise en a plusieurs', async () => {
+    it('demande lequel quand l’entreprise en a plusieurs au comptoir', async () => {
       prisma.status.findMany.mockResolvedValue([
         { id: 's1', name: 'Vendu' },
-        { id: 's2', name: 'Vendu en ligne' },
+        { id: 's2', name: 'Soldé' },
       ]);
       await expect(service.sellMany(manager, { lines: lignes })).rejects.toThrow(
-        'Plusieurs statuts de vente existent (Vendu, Vendu en ligne)',
+        'Plusieurs statuts de vente au comptoir existent (Vendu, Soldé)',
       );
     });
 
@@ -797,6 +821,374 @@ describe('ProductsService', () => {
       prisma.status.findUniqueOrThrow.mockResolvedValue(sold);
       await service.updateSale(manager, 'p1', { appliedCommission: 40 });
       expect(prisma.product.update.mock.calls[0][0].data.appliedCommission).toBe(40);
+    });
+  });
+
+  describe('vente en ligne', () => {
+    describe('setOnline', () => {
+      it('publie une annonce et fixe le prix du site', async () => {
+        prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+        await service.setOnline(manager, 'p1', { isOnline: true, onlinePrice: 25 });
+        expect(prisma.product.update).toHaveBeenCalledWith({
+          where: { id: 'p1' },
+          data: { isOnline: true, onlinePrice: 25 },
+        });
+      });
+
+      it('efface le prix du site : le site retombe alors sur le prix boutique', async () => {
+        prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+        await service.setOnline(manager, 'p1', { onlinePrice: null });
+        expect(prisma.product.update.mock.calls[0][0].data).toEqual({ onlinePrice: null });
+      });
+
+      it("refuse d'annoncer un article sorti du stock", async () => {
+        // C'est le flag qui décide, pas le libellé : vendu, rendu ou retiré,
+        // l'annoncer ferait vendre ce qu'on n'a plus.
+        prisma.status.findUniqueOrThrow.mockResolvedValue(sold);
+        await expect(service.setOnline(manager, 'p1', { isOnline: true })).rejects.toThrow(
+          'ne fait plus partie du stock',
+        );
+      });
+
+      it('laisse dépublier un article déjà parti : la corvée reste à faire', async () => {
+        prisma.status.findUniqueOrThrow.mockResolvedValue(sold);
+        await expect(service.setOnline(manager, 'p1', { isOnline: false })).resolves.toBeDefined();
+      });
+
+      it('dépublier à la main solde le retrait en attente', async () => {
+        prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+        await service.setOnline(manager, 'p1', { isOnline: false });
+        expect(prisma.product.update.mock.calls[0][0].data).toEqual({
+          isOnline: false,
+          pendingRemoval: false,
+        });
+      });
+    });
+
+    describe('markRemovalDone', () => {
+      it("baisse le drapeau et l'annonce d'un coup", async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ pendingRemoval: true }));
+        await service.markRemovalDone(manager, 'p1');
+        expect(prisma.product.update).toHaveBeenCalledWith({
+          where: { id: 'p1' },
+          data: { pendingRemoval: false, isOnline: false },
+        });
+      });
+
+      it("refuse quand il n'y a rien à retirer", async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ pendingRemoval: false }));
+        await expect(service.markRemovalDone(manager, 'p1')).rejects.toThrow(
+          "Aucun retrait n'est en attente",
+        );
+      });
+    });
+
+    describe('retrait à faire, posé par la vente', () => {
+      beforeEach(() => {
+        prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma));
+        prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+      });
+
+      it('lève le drapeau quand un article annoncé quitte le stock', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true }));
+        prisma.status.findFirst.mockResolvedValue(sold);
+        await service.changeStatus(manager, 'p1', { statusId: sold.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBe(true);
+      });
+
+      it('vendu par le site, envoie décrocher le vêtement de sa boutique', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true, shopId: SHOP_ID }));
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await service.changeStatus(manager, 'p1', { statusId: soldOnline.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBe(true);
+      });
+
+      it('vendu par le site depuis le stock central, rien à décrocher', async () => {
+        // Il n'est sur aucun portant : inventer une corvée ferait une ligne
+        // que personne ne saurait traiter.
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true, shopId: null }));
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await service.changeStatus(manager, 'p1', { statusId: soldOnline.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBeUndefined();
+      });
+
+      it('vendu par le site, dépublie tout seul', async () => {
+        // Celui qui enregistre la vente est celui qui tient le site : garder
+        // le drapeau afficherait un article vendu parmi les articles en ligne.
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true, shopId: SHOP_ID }));
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await service.changeStatus(manager, 'p1', { statusId: soldOnline.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.isOnline).toBe(false);
+      });
+
+      it('ne le lève pas pour un article qui n’était pas en ligne', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: false }));
+        prisma.status.findFirst.mockResolvedValue(sold);
+        await service.changeStatus(manager, 'p1', { statusId: sold.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBeUndefined();
+      });
+
+      it('ne coupe pas l’annonce : ce serait effacer la corvée', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true }));
+        prisma.status.findFirst.mockResolvedValue(sold);
+        await service.changeStatus(manager, 'p1', { statusId: sold.id, soldPrice: 10 });
+        expect(prisma.product.update.mock.calls[0][0].data.isOnline).toBeUndefined();
+      });
+
+      it('le lève aussi sur un retrait, pas seulement sur une vente', async () => {
+        // `leavesStock` et non `isSale` : une annonce reste en ligne pour un
+        // article rendu au déposant comme pour un article vendu.
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true }));
+        prisma.status.findFirst.mockResolvedValue(returned);
+        await service.changeStatus(manager, 'p1', { statusId: returned.id });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBe(true);
+      });
+
+      it('ne le lève pas sur un simple passage en rayon', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ isOnline: true }));
+        prisma.status.findFirst.mockResolvedValue({ ...inStock, id: 'status-shelf' });
+        await service.changeStatus(manager, 'p1', { statusId: 'status-shelf' });
+        expect(prisma.product.update.mock.calls[0][0].data.pendingRemoval).toBeUndefined();
+      });
+    });
+
+    describe('listRemovals', () => {
+      it('rend les deux corvées, chacune reconnue par le flag du statut', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager);
+        const where = prisma.product.findMany.mock.calls[0][0].where;
+        expect(where.pendingRemoval).toBe(true);
+        expect(where.AND[0].OR).toEqual([
+          { status: { isOnlineSale: false } },
+          { status: { isOnlineSale: true } },
+        ]);
+      });
+
+      it('donne toutes les annonces à qui gère le site, sans filtre de boutique', async () => {
+        // Retirer une annonce est un travail de site : le borner aux boutiques
+        // visibles laisserait des annonces sans personne pour les ôter.
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'online.manage': true } },
+        ]);
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(employee);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND[0].OR).toEqual([
+          { status: { isOnlineSale: false } },
+        ]);
+      });
+
+      it('borne les vêtements à décrocher aux boutiques dont on voit les produits', async () => {
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'products.manage': true, 'products.view': true } },
+          { shopId: 'b2', permissions: { 'products.manage': true } },
+        ]);
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(employee);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND[0].OR).toEqual([
+          {
+            OR: [{ shopId: null }, { shopId: { in: ['b1'] } }],
+            status: { isOnlineSale: true },
+          },
+        ]);
+      });
+
+      it('ne cherche même pas quand aucune corvée n’est visible', async () => {
+        prisma.shopAccess.findMany.mockResolvedValue([
+          { shopId: 'b1', permissions: { 'products.view': true } },
+        ]);
+        await expect(service.listRemovals(employee)).resolves.toEqual({ products: [], total: 0 });
+        expect(prisma.product.findMany).not.toHaveBeenCalled();
+      });
+
+      it('cherche sur le nom et la référence, sans écraser les périmètres', async () => {
+        // Deux `OR` dans le même objet : le second remplace le premier, et la
+        // recherche ne filtrerait rien sans que rien ne le signale. D'où le
+        // `AND` qui porte les deux.
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager, 'bott');
+        const { AND } = prisma.product.findMany.mock.calls[0][0].where as {
+          AND: { OR: Record<string, unknown>[] }[];
+        };
+        expect(AND).toHaveLength(2);
+        expect(AND[0].OR).toHaveLength(2);
+        expect(AND[1].OR.map((c) => Object.keys(c)[0])).toEqual(['name', 'reference']);
+      });
+
+      it('ne pose pas de clause de recherche sans recherche', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(0);
+        await service.listRemovals(manager);
+        expect(prisma.product.findMany.mock.calls[0][0].where.AND).toHaveLength(1);
+      });
+
+      it('borne la liste et compte le total à part', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        prisma.product.count.mockResolvedValue(640);
+        const r = await service.listRemovals(manager);
+        expect(prisma.product.findMany.mock.calls[0][0].take).toBe(200);
+        expect(r.total).toBe(640);
+      });
+    });
+
+    describe('markRemovalsDone', () => {
+      it('solde plusieurs retraits d’un coup', async () => {
+        prisma.product.findMany.mockResolvedValue([
+          { id: 'p1', shopId: SHOP_ID },
+          { id: 'p2', shopId: SHOP_ID },
+        ]);
+        const r = await service.markRemovalsDone(manager, { productIds: ['p1', 'p2'] });
+        expect(r).toEqual({ count: 2 });
+        expect(prisma.product.updateMany).toHaveBeenCalledWith({
+          where: { id: { in: ['p1', 'p2'] } },
+          data: { pendingRemoval: false, isOnline: false },
+        });
+      });
+
+      it('ne touche que ceux encore en attente, et de son entreprise', async () => {
+        prisma.product.findMany.mockResolvedValue([]);
+        await service.markRemovalsDone(manager, { productIds: ['p1'] });
+        expect(prisma.product.findMany.mock.calls[0][0].where).toMatchObject({
+          companyId: COMPANY_ID,
+          pendingRemoval: true,
+        });
+      });
+
+      it('ne fait rien plutôt que d’échouer si un autre les a déjà soldés', async () => {
+        // Entre l'affichage et le clic, quelqu'un a pu faire le travail : ce
+        // n'est pas une erreur, c'est le travail fait.
+        prisma.product.findMany.mockResolvedValue([]);
+        const r = await service.markRemovalsDone(manager, { productIds: ['p1'] });
+        expect(r).toEqual({ count: 0 });
+        expect(prisma.product.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('vérifie l’accès boutique article par article', async () => {
+        prisma.product.findMany.mockResolvedValue([{ id: 'p1', shopId: 'shop-interdite' }]);
+        prisma.shopAccess.count.mockResolvedValue(0);
+        await expect(service.markRemovalsDone(employee, { productIds: ['p1'] })).rejects.toThrow(
+          'Produit introuvable.',
+        );
+        expect(prisma.product.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('périmètre du droit « en ligne »', () => {
+      beforeEach(() => {
+        prisma.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma));
+        prisma.status.findUniqueOrThrow.mockResolvedValue(inStock);
+        prisma.product.findFirst.mockResolvedValue(product());
+      });
+
+      /** Droits de l'employé sur la boutique du produit. */
+      const accorde = (...permissions: string[]) => {
+        prisma.shopAccess.count.mockResolvedValue(1);
+        prisma.shopAccess.findFirst.mockResolvedValue({
+          permissions: Object.fromEntries(permissions.map((p) => [p, true])),
+        });
+      };
+
+      it('laisse passer le gérant sans lire la table des accès', async () => {
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await service.changeStatus(manager, 'p1', { statusId: soldOnline.id, soldPrice: 10 });
+        expect(prisma.shopAccess.findFirst).not.toHaveBeenCalled();
+      });
+
+      it('laisse une vente en ligne à qui ne détient que ce droit', async () => {
+        accorde('online.manage');
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).resolves.toBeDefined();
+      });
+
+      it('lui refuse tout autre statut', async () => {
+        // C'est ce que le garde de route ne peut pas faire : le statut visé
+        // est dans le corps de la requête, pas dans l'URL.
+        accorde('online.manage');
+        prisma.status.findFirst.mockResolvedValue(sold);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: sold.id, soldPrice: 10 }),
+        ).rejects.toThrow('ne permet que les ventes en ligne');
+      });
+
+      it('laisse tout passer à qui détient le droit de vendre', async () => {
+        accorde('products.changeStatus');
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).resolves.toBeDefined();
+      });
+
+      it('cherche le droit dans toute l’entreprise sur le stock central', async () => {
+        // Un produit non assigné n'est couvert par aucune ligne d'accès : le
+        // détenir sur au moins une boutique suffit, comme partout ailleurs.
+        prisma.product.findFirst.mockResolvedValue(product({ shopId: null }));
+        prisma.shopAccess.count.mockResolvedValue(1);
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).resolves.toBeDefined();
+        expect(prisma.shopAccess.findFirst).not.toHaveBeenCalled();
+      });
+
+      it('refuse sur le stock central quand le droit manque partout', async () => {
+        prisma.product.findFirst.mockResolvedValue(product({ shopId: null }));
+        prisma.shopAccess.count.mockResolvedValue(0);
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).rejects.toThrow('ne permet que les ventes en ligne');
+      });
+
+      it('cherche le droit en ligne dans toute l’entreprise, pas sur la boutique', async () => {
+        // Droit d'entreprise : le site est unique. Coché sur une autre boutique,
+        // il vaut ici — sinon un article de la boutique B resterait invendable
+        // en ligne pour la personne qui tient pourtant le site.
+        prisma.shopAccess.count.mockResolvedValue(1);
+        prisma.shopAccess.findFirst.mockResolvedValue({ permissions: {} });
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).resolves.toBeDefined();
+      });
+
+      it('refuse quand il n’est coché nulle part', async () => {
+        // Deux comptages différents passent par `shopAccess.count` : l'accès à
+        // la boutique du produit, et la détention du droit. Seul le second doit
+        // manquer ici, sinon le produit serait « introuvable » avant même la
+        // question du droit.
+        prisma.shopAccess.count.mockImplementation((args: { where: { permissions?: unknown } }) =>
+          Promise.resolve(args.where.permissions ? 0 : 1),
+        );
+        prisma.shopAccess.findFirst.mockResolvedValue({ permissions: {} });
+        prisma.status.findFirst.mockResolvedValue(soldOnline);
+        await expect(
+          service.changeStatus(employee, 'p1', { statusId: soldOnline.id, soldPrice: 10 }),
+        ).rejects.toThrow('ne permet que les ventes en ligne');
+      });
+    });
+
+    describe('filtres', () => {
+      beforeEach(() => prisma.$transaction.mockResolvedValue([0, []]));
+
+      it('isole les articles annoncés en ligne', async () => {
+        await service.list(manager, { isOnline: 'true' });
+        expect(prisma.product.findMany.mock.calls[0][0].where.isOnline).toBe(true);
+      });
+
+      it('isole aussi ceux qui ne le sont pas', async () => {
+        await service.list(manager, { isOnline: 'false' });
+        expect(prisma.product.findMany.mock.calls[0][0].where.isOnline).toBe(false);
+      });
+
+      it('ne filtre rien quand rien n’est demandé', async () => {
+        await service.list(manager, {});
+        expect(prisma.product.findMany.mock.calls[0][0].where).not.toHaveProperty('isOnline');
+      });
     });
   });
 

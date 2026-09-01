@@ -224,16 +224,21 @@ model CategoryAttribute {
 /// also forbid two `false` — and a hand-written partial index would read as
 /// drift to `make check-db`. The rule is held in the statuses service.
 model Status {
-  id          String   @id @default(cuid())
-  companyId   String   @map("company_id")
-  name        String
-  color       String   @default("#6b7280")
-  position    Int      @default(0)
-  isDefault   Boolean  @default(false) @map("is_default")
-  isSale      Boolean  @default(false) @map("is_sale")
-  blocksSale  Boolean  @default(false) @map("blocks_sale")
-  leavesStock Boolean  @default(false) @map("leaves_stock")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  name         String
+  color        String   @default("#6b7280")
+  position     Int      @default(0)
+  isDefault    Boolean  @default(false) @map("is_default")
+  isSale       Boolean  @default(false) @map("is_sale")
+  blocksSale   Boolean  @default(false) @map("blocks_sale")
+  leavesStock  Boolean  @default(false) @map("leaves_stock")
+  /// Sale made through the online shop rather than over the counter. Like the
+  /// three flags above it carries behaviour, never a label: it is what tells
+  /// an online-only employee which sale statuses they may reach, and how the
+  /// revenue splits per channel.
+  isOnlineSale Boolean  @default(false) @map("is_online_sale")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   /// Position on the workflow diagram, set with the default flow.
   positionX Float? @map("position_x")
@@ -375,6 +380,19 @@ model Product {
   soldPrice     Decimal? @map("sold_price") @db.Decimal(10, 2)
   quantity      Int      @default(1)
 
+  /// Listed on the online shop. Orthogonal to the status: a garment hanging on
+  /// the rack can be advertised online at the same time, so this cannot be a
+  /// status — a product only ever holds one.
+  isOnline       Boolean  @default(false) @map("is_online")
+  /// Price shown online, when it differs from the shop label. Null means the
+  /// site shows `salePrice`: an identical price should not be typed twice.
+  onlinePrice    Decimal? @map("online_price") @db.Decimal(10, 2)
+  /// Sold, yet still present on the other channel — an online listing left to
+  /// take down, or a garment left on the rack. Raised by the sale, cleared by
+  /// the "retrait effectué" action, and listed as a chore in between. Which
+  /// channel to clear is read from the sale status, not stored twice.
+  pendingRemoval Boolean  @default(false) @map("pending_removal")
+
   saleType          SaleType  @map("sale_type")
   depositContractId String?   @map("deposit_contract_id")
   /// Frozen copy of DepositContract.commission, taken when the product moves to
@@ -408,6 +426,8 @@ model Product {
   @@index([statusId])
   @@index([depositContractId])
   @@index([reference])
+  @@index([isOnline])
+  @@index([pendingRemoval])
   @@map("product")
 }
 

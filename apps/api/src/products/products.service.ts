@@ -6,6 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { isUniqueViolation } from '../common/prisma-errors';
+import {
+  isCompanyPermission,
+  PERMISSION_LABELS,
+  readPermissions,
+  type Permission,
+} from '../common/permissions';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +23,7 @@ import {
   type NormalizedValue,
 } from './attributes.validation';
 import { splitCost } from './lot-split';
+import { removalScopes } from './removal-scope';
 import { consignmentReference, depositorCode, freeCode, resaleReference } from './references';
 import type { AssignShopDto } from './dto/assign-shop.dto';
 import type { CreateLotDto } from './dto/create-lot.dto';
@@ -26,10 +33,21 @@ import type { CreateProductDto } from './dto/create-product.dto';
 import type { FilterProductsDto, ProductSort } from './dto/filter-products.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import type { UpdateSaleDto } from './dto/update-sale.dto';
+import type { UpdateOnlineDto } from './dto/update-online.dto';
+import type { RemovalsDoneDto } from './dto/removals-done.dto';
 import type { ValueAttributeDto } from './dto/attribute-value.dto';
 import { dateFr, frNumber, yesNo, toCsv } from './csv-export';
 
 const PAR_PAGE_DEFAUT = 25;
+
+/**
+ * Plafond de l'écran des retraits.
+ *
+ * Généreux, parce que la liste se lit comme une tournée et que la couper en
+ * pages ferait repasser au même endroit. Le total est compté à part : une
+ * troncature muette se lirait comme « tout est là ».
+ */
+const MAX_REMOVALS = 200;
 
 const DETAIL_INCLUDE = {
   category: { select: { id: true, name: true } },
@@ -211,6 +229,9 @@ export class ProductsService {
       'Déposant',
       'Commission appliquée',
       'Déposant payé',
+      'En ligne',
+      'Prix en ligne',
+      'Retrait à faire',
       ...dynamicHeaders,
     ];
 
@@ -237,6 +258,9 @@ export class ProductsService {
         depositor,
         frNumber(p.appliedCommission?.toString() ?? null),
         yesNo(p.depositorPaid),
+        yesNo(p.isOnline),
+        frNumber(p.onlinePrice?.toString() ?? null),
+        yesNo(p.pendingRemoval),
         ...dynamicHeaders.map((name) => attributes.get(name)?.join(', ') ?? ''),
       ];
     });
@@ -286,6 +310,7 @@ export class ProductsService {
       ...(filters.depositorId ? { depositContract: { depositorId: filters.depositorId } } : {}),
       ...(filters.statusId ? { statusId: filters.statusId } : {}),
       ...(filters.saleType ? { saleType: filters.saleType } : {}),
+      ...(filters.isOnline !== undefined ? { isOnline: filters.isOnline === 'true' } : {}),
       ...(filters.search
         ? {
             OR: [
@@ -571,11 +596,20 @@ export class ProductsService {
   async changeStatusWith(
     tx: Prisma.TransactionClient,
     currentUser: CurrentUser,
-    product: { id: string; statusId: string; saleType: string; depositContractId: string | null },
+    product: {
+      id: string;
+      statusId: string;
+      saleType: string;
+      depositContractId: string | null;
+      shopId?: string | null;
+      isOnline?: boolean;
+    },
     dto: ChangeStatusDto,
   ) {
     const current = await tx.status.findUniqueOrThrow({ where: { id: product.statusId } });
     const target = await this.requireStatus(tx, currentUser, dto.statusId);
+
+    await this.requireStatusRight(currentUser, product.shopId ?? null, target);
 
     // Le flux de l'entreprise, s'il est défini, dit quelles transitions sont
     // permises. Les règles de flags s'appliquent par-dessus.
@@ -621,9 +655,33 @@ export class ProductsService {
       }
     }
 
+    // Ce qu'il reste à faire de l'autre côté, et qui doit le faire, dépendent
+    // du sens de la vente.
+    //
+    // **Vendu par le site** : celui qui enregistre la vente est celui qui tient
+    // le site, l'annonce est donc traitée avec la commande — il ne reste que le
+    // vêtement à aller décrocher, et seulement s'il est dans une boutique. Au
+    // stock central il n'est sur aucun portant : rien à retirer.
+    //
+    // **Sorti du stock autrement** — vendu au comptoir, rendu, retiré — alors
+    // que l'annonce est publiée : personne côté site n'est au courant. Elle
+    // reste en ligne tant qu'on ne l'ôte pas, et l'annonce n'est surtout PAS
+    // coupée ici : la couper effacerait la trace de ce qu'il reste à faire.
+    const removal =
+      target.leavesStock &&
+      (target.isOnlineSale ? product.shopId != null : product.isOnline === true);
+
     await tx.product.update({
       where: { id: product.id },
-      data: { status: { connect: { id: target.id } }, ...saleData },
+      data: {
+        status: { connect: { id: target.id } },
+        ...saleData,
+        ...(removal ? { pendingRemoval: true } : {}),
+        // Vendu par le site : plus rien à annoncer, et rien à retenir non plus
+        // puisque le site s'en occupe. Laisser le drapeau levé afficherait un
+        // article vendu parmi les articles en ligne.
+        ...(target.isOnlineSale && target.leavesStock ? { isOnline: false } : {}),
+      },
     });
     await tx.statusHistory.create({
       data: {
@@ -658,6 +716,9 @@ export class ProductsService {
         saleType: true,
         depositContractId: true,
         shopId: true,
+        // Nécessaire au calcul du retrait à faire : un article vendu au
+        // comptoir dont l'annonce est en ligne laisse une corvée derrière lui.
+        isOnline: true,
       },
     });
     if (products.length !== dto.lines.length) {
@@ -692,23 +753,28 @@ export class ProductsService {
   }
 
   /**
-   * Statut de vente de l'entreprise.
+   * Statut de vente **au comptoir** de l'entreprise.
    *
-   * C'est le flag `isSale` qui décide, jamais le libellé : le gérant peut
-   * renommer ses statuts (voir CLAUDE.md). Plusieurs statuts de vente restent
-   * possibles, il faut alors dire lequel.
+   * Ce sont les flags qui décident, jamais le libellé : le gérant peut renommer
+   * ses statuts (voir CLAUDE.md). `isOnlineSale` est exclu — depuis qu'il
+   * existe « Vendu en ligne », toute entreprise a deux statuts de vente, et
+   * demander « précisez lequel » au comptoir sur un cas devenu normal
+   * bloquerait chaque encaissement. Une vente en ligne se saisit depuis la
+   * fiche, où le statut est choisi explicitement.
    */
   private async saleStatus(currentUser: CurrentUser) {
     const ventes = await this.prisma.status.findMany({
-      where: { companyId: currentUser.companyId, isSale: true },
+      where: { companyId: currentUser.companyId, isSale: true, isOnlineSale: false },
       select: { id: true, name: true },
     });
     if (ventes.length === 0) {
-      throw new BadRequestException("Aucun statut de vente n'est défini pour cette entreprise.");
+      throw new BadRequestException(
+        "Aucun statut de vente au comptoir n'est défini pour cette entreprise.",
+      );
     }
     if (ventes.length > 1) {
       throw new BadRequestException(
-        `Plusieurs statuts de vente existent (${ventes.map((s) => s.name).join(', ')}) : précisez lequel.`,
+        `Plusieurs statuts de vente au comptoir existent (${ventes.map((s) => s.name).join(', ')}) : précisez lequel.`,
       );
     }
     return ventes[0];
@@ -806,11 +872,19 @@ export class ProductsService {
     }
     if (currentUser.isManager) return {};
 
+    // Les boutiques où l'employé a le droit de **voir les produits**, et non
+    // celles où il a une ligne d'accès : depuis que les droits d'entreprise
+    // sont recopiés sur toutes les boutiques, une ligne existe partout dès
+    // qu'on gère le catalogue ou le site. S'en contenter aurait montré le
+    // stock de boutiques qu'on n'a pas le droit de regarder.
     const accesses = await this.prisma.shopAccess.findMany({
       where: { userId: currentUser.userId, shop: { companyId: currentUser.companyId } },
-      select: { shopId: true },
+      select: { shopId: true, permissions: true },
     });
-    return { OR: [{ shopId: null }, { shopId: { in: accesses.map((a) => a.shopId) } }] };
+    const visibles = accesses
+      .filter((a) => readPermissions(a.permissions)['products.view'] === true)
+      .map((a) => a.shopId);
+    return { OR: [{ shopId: null }, { shopId: { in: visibles } }] };
   }
 
   private async requireShopAccess(currentUser: CurrentUser, shopId: string | null) {
@@ -819,6 +893,220 @@ export class ProductsService {
       where: { userId: currentUser.userId, shopId },
     });
     if (accesses === 0) throw new NotFoundException('Produit introuvable.');
+  }
+
+  /**
+   * Publie ou retire un article de la boutique en ligne, et fixe son prix web.
+   *
+   * `isOnline` est un drapeau sur le produit et non un statut : un vêtement sur
+   * un portant peut être annoncé sur le site en même temps, alors qu'un produit
+   * ne porte qu'un statut à la fois. Voir CLAUDE.md.
+   */
+  async setOnline(currentUser: CurrentUser, id: string, dto: UpdateOnlineDto) {
+    const product = await this.loadForWrite(currentUser, id);
+    const status = await this.prisma.status.findUniqueOrThrow({
+      where: { id: product.statusId },
+    });
+
+    // Le flag décide, jamais le libellé : vendu, rendu ou retiré, l'article
+    // n'est plus là — l'annoncer ferait vendre ce qu'on n'a plus.
+    if (dto.isOnline === true && status.leavesStock) {
+      throw new BadRequestException(
+        `Ce produit est « ${status.name} » : il ne fait plus partie du stock et ne peut pas être mis en ligne.`,
+      );
+    }
+
+    await this.prisma.product.update({
+      where: { id },
+      data: {
+        ...(dto.isOnline !== undefined ? { isOnline: dto.isOnline } : {}),
+        ...(dto.onlinePrice !== undefined ? { onlinePrice: dto.onlinePrice } : {}),
+        // Dépublier à la main fait le travail que le retrait en attente
+        // réclamait : la corvée n'a plus lieu d'être.
+        ...(dto.isOnline === false ? { pendingRemoval: false } : {}),
+      },
+    });
+
+    return this.detail(currentUser, id);
+  }
+
+  /**
+   * « Retrait effectué » : l'article vendu a été ôté de l'autre canal.
+   *
+   * Une seule action pour les deux sens — dépublier l'annonce d'un article
+   * vendu au comptoir, ou décrocher le vêtement d'un article vendu en ligne.
+   * Le sens se lit sur le statut de vente (`isOnlineSale`) et n'est donc pas
+   * stocké une seconde fois ; dans les deux cas l'annonce tombe, puisque
+   * l'article n'existe plus nulle part.
+   */
+  async markRemovalDone(currentUser: CurrentUser, id: string) {
+    const product = await this.loadForWrite(currentUser, id);
+    if (!product.pendingRemoval) {
+      throw new BadRequestException("Aucun retrait n'est en attente sur ce produit.");
+    }
+
+    await this.prisma.product.update({
+      where: { id },
+      data: { pendingRemoval: false, isOnline: false },
+    });
+
+    return this.detail(currentUser, id);
+  }
+
+  /**
+   * Tous les retraits à faire, pour l'écran dédié.
+   *
+   * Route à part et non un filtre de la liste des produits : les deux corvées
+   * n'ont pas le même périmètre — retirer une annonce vaut pour toute
+   * l'entreprise, décrocher un vêtement demande de voir les produits de la
+   * boutique. Le filtrage générique de la liste ne sait pas faire cette
+   * distinction, et l'appliquer y aurait caché à qui gère le site les annonces
+   * des boutiques qu'il ne peut pas consulter.
+   */
+  async listRemovals(currentUser: CurrentUser, search?: string) {
+    const scopes = await removalScopes(this.prisma, currentUser);
+    // Le sens se lit sur le flag du statut, jamais sur son libellé.
+    const cotes: Prisma.ProductWhereInput[] = [];
+    if (scopes.delist) {
+      cotes.push({ ...scopes.delist, status: { isOnlineSale: false } });
+    }
+    if (scopes.pull) {
+      cotes.push({ ...scopes.pull, status: { isOnlineSale: true } });
+    }
+    if (cotes.length === 0) return { products: [], total: 0 };
+
+    // Les deux `OR` — les périmètres et la recherche — passent par un `AND` et
+    // non par deux clés du même objet : la seconde écraserait la première, et
+    // la recherche ne filtrerait rien sans que rien ne le signale.
+    const where: Prisma.ProductWhereInput = {
+      companyId: currentUser.companyId,
+      pendingRemoval: true,
+      AND: [
+        { OR: cotes },
+        ...(search
+          ? [
+              {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' as const } },
+                  { reference: { contains: search, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
+
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          reference: true,
+          soldAt: true,
+          shop: { select: { id: true, name: true } },
+          status: { select: { id: true, name: true, color: true, isOnlineSale: true } },
+        },
+        orderBy: { soldAt: 'desc' },
+        take: MAX_REMOVALS,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return { products, total };
+  }
+
+  /**
+   * « Retrait effectué » sur plusieurs articles d'un coup.
+   *
+   * Le geste réel est groupé — on dépublie douze annonces sur le site, puis on
+   * revient dire que c'est fait — donc l'application doit l'être aussi : douze
+   * clics pour une seule action est ce qui fait abandonner une liste de tâches.
+   *
+   * Tout dans une transaction : une confirmation à moitié passée laisserait
+   * deviner ce qui a été soldé et ce qui reste, sans moyen de le savoir.
+   */
+  async markRemovalsDone(currentUser: CurrentUser, dto: RemovalsDoneDto) {
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: dto.productIds },
+        companyId: currentUser.companyId,
+        // Silencieusement ignorés s'ils ne sont plus en attente : quelqu'un
+        // d'autre a pu les solder entre l'affichage et le clic, et ce n'est pas
+        // une erreur — c'est le travail fait.
+        pendingRemoval: true,
+      },
+      select: { id: true, shopId: true },
+    });
+
+    for (const produit of products) {
+      await this.requireShopAccess(currentUser, produit.shopId);
+    }
+
+    if (products.length === 0) return { count: 0 };
+
+    await this.prisma.product.updateMany({
+      where: { id: { in: products.map((p) => p.id) } },
+      data: { pendingRemoval: false, isOnline: false },
+    });
+
+    return { count: products.length };
+  }
+
+  /**
+   * Un utilisateur qui ne détient que `online.manage` ne peut viser que les
+   * statuts de vente en ligne.
+   *
+   * Le garde de route ne peut pas s'en charger : il ne connaît pas le statut
+   * visé, qui est dans le corps de la requête. Même partage que le `?shopId=`
+   * du tableau de bord — la route ouvre, le service précise.
+   */
+  private async requireStatusRight(
+    currentUser: CurrentUser,
+    shopId: string | null,
+    target: { isOnlineSale: boolean },
+  ) {
+    if (currentUser.isManager) return;
+    if (await this.holds(currentUser, 'products.changeStatus', shopId)) return;
+    if (target.isOnlineSale && (await this.holds(currentUser, 'online.manage', shopId))) return;
+
+    throw new ForbiddenException(
+      `Le droit « ${PERMISSION_LABELS['online.manage']} » ne permet que les ventes en ligne. ` +
+        `Tout autre changement de statut demande « ${PERMISSION_LABELS['products.changeStatus']} ».`,
+    );
+  }
+
+  /**
+   * L'utilisateur détient-il ce droit sur cette boutique ?
+   *
+   * Même règle que le `PermissionsGuard` : un **droit d'entreprise** se cherche
+   * partout — le site est unique, il n'y a pas de vente en ligne par boutique —
+   * et le stock central aussi, puisqu'il n'appartient à aucune boutique.
+   *
+   * Le bypass gérant n'est **pas** refait ici : il appartient à l'appelant, une
+   * seule fois, comme dans le garde. Le dupliquer donnerait deux endroits où
+   * l'oublier le jour où la règle change.
+   */
+  private async holds(
+    currentUser: CurrentUser,
+    permission: Permission,
+    shopId: string | null,
+  ): Promise<boolean> {
+    if (shopId === null || isCompanyPermission(permission)) {
+      const compte = await this.prisma.shopAccess.count({
+        where: {
+          userId: currentUser.userId,
+          shop: { companyId: currentUser.companyId },
+          permissions: { path: [permission], equals: true },
+        },
+      });
+      return compte > 0;
+    }
+    const access = await this.prisma.shopAccess.findFirst({
+      where: { userId: currentUser.userId, shopId, shop: { companyId: currentUser.companyId } },
+      select: { permissions: true },
+    });
+    return readPermissions(access?.permissions)[permission] === true;
   }
 
   private async loadForWrite(currentUser: CurrentUser, id: string) {

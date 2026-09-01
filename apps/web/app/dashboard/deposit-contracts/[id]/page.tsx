@@ -3,6 +3,7 @@ import { DetachButton, DeleteContractButton, ContractForm, AttachForm } from './
 import { StatusBadge } from '@/components/status-badge';
 import { AccessDenied } from '@/components/access-denied';
 import { tolerantApiFetch } from '@/lib/api';
+import { formatDate } from '@/lib/dates';
 import { requireSession } from '@/lib/session';
 import {
   euros,
@@ -52,9 +53,8 @@ export default async function DepositContractPage({ params }: { params: Promise<
             </Link>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            {new Date(contract.startDate).toLocaleDateString('fr-FR')} →{' '}
-            {new Date(contract.endDate).toLocaleDateString('fr-FR')} · {contract.commission} % pour
-            la boutique · {CONTRACT_STATUS_LABELS[contract.status]}
+            {formatDate(contract.startDate)} → {formatDate(contract.endDate)} ·{' '}
+            {contract.commission} % pour la boutique · {CONTRACT_STATUS_LABELS[contract.status]}
           </p>
         </div>
         <ContractForm contract={contract}>

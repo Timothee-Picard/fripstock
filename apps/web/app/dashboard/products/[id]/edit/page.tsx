@@ -1,5 +1,6 @@
 import { ProductSheet } from '../product-sheet';
 import { apiFetch } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
 import type { Shop, CategoryTree, Product, Status } from '@/lib/types';
 
@@ -8,7 +9,7 @@ import type { Shop, CategoryTree, Product, Status } from '@/lib/types';
  * vient d'un composant unique, elle ne peut donc pas diverger.
  */
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await params;
 
   const [product, statuses, shops, tree] = await Promise.all([
@@ -19,6 +20,13 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   ]);
 
   return (
-    <ProductSheet product={product} mode="modifier" tree={tree} shops={shops} statuses={statuses} />
+    <ProductSheet
+      product={product}
+      mode="modifier"
+      tree={tree}
+      shops={shops}
+      statuses={statuses}
+      canManageOnline={hasPermission(session, 'online.manage')}
+    />
   );
 }

@@ -16,6 +16,9 @@ const {
   changeStatus,
   createProduct,
   deleteProduct,
+  markRemovalDone,
+  markRemovalsDone,
+  setOnline,
   toggleDepositorPayment,
   updateProduct,
   updateSale,
@@ -180,6 +183,72 @@ describe('toggleDepositorPayment', () => {
   it('rafraîchit le relevé du déposant, qui en dépend', async () => {
     await toggleDepositorPayment({}, form({ id: 'p1', paid: 'true' }));
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/depositors', 'layout');
+  });
+});
+
+describe('setOnline', () => {
+  it('publie sur une route à part, celle du droit « en ligne »', async () => {
+    await setOnline({}, form({ id: 'p1', isOnline: 'true', onlinePrice: '25' }));
+    const { route, method, body } = dernierAppel();
+    expect([route, method]).toEqual(['/products/p1/online', 'PUT']);
+    expect(body).toEqual({ isOnline: true, onlinePrice: 25 });
+  });
+
+  it('accepte la virgule décimale, comme partout ailleurs', async () => {
+    await setOnline({}, form({ id: 'p1', isOnline: 'true', onlinePrice: '25,50' }));
+    expect(dernierAppel().body).toEqual({ isOnline: true, onlinePrice: 25.5 });
+  });
+
+  it('un prix vide efface le prix du site, il ne vaut pas zéro', async () => {
+    // Sans ça, laisser le champ vide brancherait le site sur 0 € au lieu de le
+    // faire retomber sur le prix boutique.
+    await setOnline({}, form({ id: 'p1', isOnline: 'true', onlinePrice: '' }));
+    expect(dernierAppel().body).toEqual({ isOnline: true, onlinePrice: null });
+  });
+
+  it('sait aussi dépublier', async () => {
+    const state = await setOnline({}, form({ id: 'p1', isOnline: 'false' }));
+    expect(dernierAppel().body).toMatchObject({ isOnline: false });
+    expect(state.success).toContain('retiré');
+  });
+});
+
+describe('markRemovalDone', () => {
+  it('appelle la route de retrait, sans corps', async () => {
+    await markRemovalDone({}, form({ id: 'p1' }));
+    const { route, method } = dernierAppel();
+    expect([route, method]).toEqual(['/products/p1/removal-done', 'PUT']);
+  });
+
+  it('rafraîchit la liste : l’article sort des retraits à faire', async () => {
+    await markRemovalDone({}, form({ id: 'p1' }));
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/products');
+  });
+});
+
+describe('markRemovalsDone', () => {
+  it('envoie tous les identifiants en une requête', async () => {
+    const data = form({});
+    data.append('productId', 'p1');
+    data.append('productId', 'p2');
+    await markRemovalsDone({}, data);
+    const { route, method, body } = dernierAppel();
+    expect([route, method]).toEqual(['/products/removals-done', 'PUT']);
+    expect(body).toEqual({ productIds: ['p1', 'p2'] });
+  });
+
+  it('refuse un envoi vide sans appeler l’API', async () => {
+    const state = await markRemovalsDone({}, form({}));
+    expect(state.error).toBeDefined();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('accorde le message au nombre traité', async () => {
+    apiFetch.mockResolvedValue({ count: 1 });
+    const data = form({});
+    data.append('productId', 'p1');
+    const state = await markRemovalsDone({}, data);
+    expect(state.success).toBe('1 retrait enregistré.');
   });
 });
 
