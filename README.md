@@ -630,6 +630,11 @@ sélecteur de boutique et pagination naviguent en `scroll: false` : ils commande
 contenu situé **en dessous** d'eux, et remonter à chaque clic obligeait à redescendre pour
 lire le résultat.
 
+Sur l'écran des utilisateurs, les permissions de chaque employé sont **repliées** derrière
+un `<details>` natif — à cinq employés, cinq formulaires dépliés font défiler la page sur
+des mètres. Une ligne de résumé (« 4 permissions sur 2 boutiques ») reste visible replié,
+sans quoi la liste ne dirait plus rien de qui fait quoi.
+
 Sous 640 px la colonne de gauche est masquée faute de place : un panneau en superposition
 s'ouvre depuis l'en-tête et se referme dès qu'on a choisi, sans quoi il masquerait l'écran
 demandé.
