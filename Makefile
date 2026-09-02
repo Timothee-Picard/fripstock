@@ -2,8 +2,13 @@
 # Toutes les cibles supposent un fichier .env à la racine (cp .env.example .env).
 
 .DEFAULT_GOAL := help
+
+# Nom de projet de la stack de production locale. Distinct de celui du
+# développement (déduit du dossier) pour cloisonner images ET volumes.
+PROD_PROJECT := fripstock-prod
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
-	install hooks format generate migrate seed studio check check-fast check-format check-lint \
+	install hooks format generate migrate seed studio prod-build prod-up prod-down \
+	check check-fast check-format check-lint \
 	check-types check-db check-test check-build check-commits release
 
 help: ## Affiche cette aide
@@ -55,6 +60,28 @@ seed: ## Injecte le jeu de données de démonstration
 
 studio: ## Ouvre Prisma Studio sur http://localhost:5555
 	docker compose exec api npx prisma studio --port 5555 --hostname 0.0.0.0
+
+# --- Production --------------------------------------------------------------
+
+prod-build: ## Construit les images de production (ce que déploie Coolify)
+	@# docker-compose.prod.yml est un fichier à part : le compose par défaut
+	@# monte le code en volume et lance les serveurs en rechargement à chaud,
+	@# il ne construit rien de déployable.
+	@#
+	@# -p est indispensable. Sans lui, les deux composes partagent le nom de
+	@# projet (celui du dossier) et Compose en déduit les mêmes noms d'images :
+	@# construire la production écrasait `fripstock-api`, et le conteneur de
+	@# développement repartait sur l'image de production — un `make format`
+	@# refusé pour cause de permissions, sans que rien n'explique pourquoi.
+	docker compose -p $(PROD_PROJECT) -f docker-compose.prod.yml build
+
+prod-up: ## Démarre la stack de production en local, isolée des données de dev
+	docker compose -p $(PROD_PROJECT) -f docker-compose.prod.yml up -d
+
+prod-down: ## Arrête la stack de production locale et détruit SES volumes
+	@# Les volumes sont préfixés par le nom de projet : ceux du développement
+	@# ne sont pas concernés.
+	docker compose -p $(PROD_PROJECT) -f docker-compose.prod.yml down -v
 
 # --- Qualité -----------------------------------------------------------------
 # Toutes ces cibles passent par scripts/node-run.sh, qui utilise Node en local

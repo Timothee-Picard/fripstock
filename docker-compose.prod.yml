@@ -1,0 +1,114 @@
+# Compose de PRODUCTION — c'est ce fichier que Coolify déploie.
+# Le `docker-compose.yml` voisin est strictement celui du développement : il
+# monte le code de l'hôte en volume et lance les serveurs en rechargement à
+# chaud. Les deux ne se mélangent pas.
+#
+# Aucun `ports:` ici, uniquement `expose:` : Coolify route par son proxy, et
+# publier sur l'hôte exposerait la base et le stockage tout en entrant en
+# collision avec les autres applications du serveur. Seul `web` reçoit un
+# domaine.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    expose:
+      - '5432'
+    volumes:
+      # Postgres 18+ : PGDATA est /var/lib/postgresql/<major>/docker et le montage
+      # se fait sur /var/lib/postgresql, pas sur .../data comme jusqu'en 17.
+      # Monter l'ancien chemin fait échouer le démarrage.
+      - postgres_data:/var/lib/postgresql
+      # Pas de montage de ./docker/postgres : la base miroir qu'il crée ne sert
+      # qu'à la détection de dérive de `make check-db`, en développement et en CI.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    expose:
+      - '9000'
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      # Pas de SHADOW_DATABASE_URL : la base jetable ne sert qu'à `make check-db`.
+      JWT_SECRET: ${JWT_SECRET}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      # Le conteneur tourne en UTC : sans ce fuseau, une vente encaissée à
+      # 23 h 30 basculerait dans la recette du lendemain. La même valeur est
+      # posée sur `web`, les deux constantes doivent bouger ensemble.
+      SHOP_TIMEZONE: ${SHOP_TIMEZONE:-Europe/Paris}
+    expose:
+      - '3001'
+    healthcheck:
+      # Le CMD de l'image applique les migrations avant de démarrer Nest : ce
+      # vert-là signifie « base à jour », et c'est ce que `web` attend.
+      #
+      # 127.0.0.1 et surtout pas `localhost` : main.ts écoute sur 0.0.0.0, donc
+      # en IPv4 seulement, tandis que le wget de busybox tente ::1 en premier et
+      # se prend un « Connection refused » sur une API pourtant démarrée.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/health']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Variable magique Coolify : déclarée sans valeur, elle lui fait attribuer
+      # un domaine à ce service et poser les étiquettes du proxy. C'est le seul
+      # service joignable depuis Internet — le navigateur ne parle jamais à
+      # l'API, tous ses appels partent du serveur Next.
+      - SERVICE_FQDN_WEB_3000
+      - NODE_ENV=production
+      # URL interne au réseau docker, jamais vue par le navigateur.
+      - API_URL=http://api:3001
+      - SHOP_TIMEZONE=${SHOP_TIMEZONE:-Europe/Paris}
+    expose:
+      - '3000'
+
+volumes:
+  postgres_data:
+  minio_data:

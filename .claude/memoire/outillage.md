@@ -72,4 +72,51 @@ Vérifier le résultat directement en base :
 docker compose exec -T postgres psql -U fripstock -d fripstock -c 'SELECT ...'
 ```
 
+**Images de production** : `make prod-build`, qui construit
+`docker-compose.prod.yml` (fichier distinct — le compose par défaut monte le code
+en volume et ne produit rien de déployable). Quatre pièges s'y cachent, tous
+invisibles en développement :
+
+- **Le point d'entrée compilé est `dist/src/main.js`, pas `dist/main.js`.**
+  `prisma.config.ts` et `prisma/seed.ts` vivant hors de `src`, tsc élargit sa
+  racine et recrée l'arborescence sous `dist/`. Le `start:prod` livré par le
+  CLI Nest pointait sur le mauvais chemin, sans que rien ne s'en aperçoive :
+  personne n'avait encore lancé le mode production.
+- **`prisma generate` avant `nest build`, jamais l'inverse.** Le client est
+  généré en TypeScript dans `src/generated/` et c'est `nest build` qui le
+  compile. Et l'étape de construction doit porter une `DATABASE_URL`, même
+  bidon : `prisma.config.ts` résout `env('DATABASE_URL')` au chargement et lève
+  si elle manque. La génération ne se connecte à rien.
+- **Le `node_modules` de l'image finale reste complet.** `prisma` est une
+  `devDependency`, et `migrate deploy` en a besoin au démarrage : un
+  `npm ci --omit=dev` donne une image plus légère et un conteneur qui ne démarre
+  pas.
+- **La sonde de l'API vise `127.0.0.1`, jamais `localhost`.** `main.ts` écoute
+  sur `0.0.0.0`, donc en IPv4 seulement, tandis que le `wget` de busybox tente
+  `::1` en premier — la sonde renvoie « Connection refused » sur une API
+  parfaitement démarrée.
+
+**Le piège qui coûte le plus cher : les deux composes partagent le nom de
+projet**, celui du dossier, et Compose en déduit les noms d'images. Un
+`docker compose -f docker-compose.prod.yml build` nu écrase donc `fripstock-api`
+et `fripstock-web` : le conteneur de développement repart ensuite sur l'image de
+production, qui tourne en `USER node` et n'a pas la même arborescence. Le
+symptôme n'a rien à voir avec la cause — `make format` échoue sur un
+`EACCES: permission denied, open '/app/prisma/schema.prisma'`. Les cibles
+`prod-*` posent toutes `-p $(PROD_PROJECT)` pour cette raison ; ne jamais
+appeler le compose de production à la main sans elle.
+
+Les cibles cloisonnent aussi les volumes, préfixés par le même nom de projet :
+`make prod-down` détruit ceux de la stack de production locale et laisse la base
+de développement intacte.
+
+```sh
+make prod-build   # construit les deux images
+make prod-up      # démarre la stack de production en local
+make prod-down    # l'arrête et détruit SES volumes
+```
+
+`SHOP_TIMEZONE` ne figure dans aucun `.env.example` alors que le code la lit des
+deux côtés (défaut `Europe/Paris`). En production, la poser explicitement.
+
 Voir aussi [ou-chercher](ou-chercher.md).

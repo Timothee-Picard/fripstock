@@ -2,3 +2,7 @@ node_modules
 .next
 .git
 *.log
+coverage
+# Même raison que côté API : les secrets n'entrent pas dans l'image.
+.env
+.env.*
