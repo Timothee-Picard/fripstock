@@ -4,10 +4,19 @@ import { removalScopes } from '../products/removal-scope';
 import type { CurrentUser } from '../common/types/current-user';
 import type { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { readLayout, type LayoutEntry } from './dashboard-layout';
 import { dayBounds } from './today';
+import type { DashboardLayoutDto } from './dto/dashboard-layout.dto';
 import type { PeriodDto } from './dto/period.dto';
 
 const DEFAULT_DAYS = 30;
+
+/** Un attribut de l'entreprise, tel qu'on classe les ventes dessus. */
+interface AttributeRow {
+  id: string;
+  name: string;
+  type: string;
+}
 
 /** Une vente, avec le strict nécessaire au chiffre d'affaires et à la marge. */
 interface SoldRow {
@@ -19,7 +28,13 @@ interface SoldRow {
   appliedCommission: unknown;
   saleType: string;
   soldAt: Date | null;
+  /** Entrée en stock : l'autre borne du temps de rotation. */
+  createdAt: Date;
   category: { id: string; name: string };
+  /** Valeurs de listes (SELECT, MULTISELECT). */
+  attributeOptions: { option: { value: string; attribute: AttributeRow } }[];
+  /** Valeurs libres ; seul le texte sert au classement. */
+  attributeValues: { textValue: string | null; attribute: AttributeRow }[];
 }
 
 /** Une ligne de stock, vue par son statut. */
@@ -184,6 +199,125 @@ function returnsBlock(consignment: { status: { blocksSale: boolean } }[]) {
   };
 }
 
+/**
+ * Bornes hautes des tranches de rotation, en jours. La dernière est ouverte :
+ * au-delà de trois mois, ce qui compte n'est plus le nombre exact de jours mais
+ * le fait que l'article ne parte pas.
+ */
+const ROTATION_BUCKETS: (number | null)[] = [7, 14, 30, 60, 90, null];
+
+/**
+ * Temps de rotation : combien de temps un article reste en stock avant de
+ * partir. Une moyenne pour toute la boutique, réservée à `stats.view` comme le
+ * taux de retour et pour la même raison — elle ne dit pas ce qu'il y a en
+ * rayon, elle juge ce qui s'y vend.
+ *
+ * Compté de l'**entrée en stock** (`createdAt`) à la **vente** (`soldAt`), et
+ * seulement sur les articles vendus : un invendu n'a pas encore de durée, et le
+ * compter à zéro tirerait la moyenne vers le bas au fur et à mesure qu'on
+ * enregistre du stock.
+ *
+ * La **médiane** accompagne la moyenne parce qu'elles ne se contredisent pas
+ * pour rien : un manteau resté un an suffit à faire mentir une moyenne calculée
+ * sur trente ventes rapides.
+ */
+function rotationBlock(sold: SoldRow[]) {
+  const days = sold
+    .filter((p): p is SoldRow & { soldAt: Date } => p.soldAt !== null)
+    // Jamais négatif : une reprise de données peut avoir posé une vente avant
+    // la création de la fiche, et une durée négative n'a rien à afficher.
+    .map((p) => Math.max(0, (p.soldAt.getTime() - p.createdAt.getTime()) / 86400000))
+    .sort((a, b) => a - b);
+
+  // Tranche par borne haute incluse : `to = 7` prend tout ce qui est parti dans
+  // la semaine, la suivante prend la suite. Des bornes entières évitent la
+  // question du vêtement vendu au bout de 7,5 jours.
+  const buckets = ROTATION_BUCKETS.map((to, index) => ({
+    from: index === 0 ? 0 : (ROTATION_BUCKETS[index - 1] as number),
+    to,
+    count: 0,
+  }));
+  // La dernière tranche est ouverte : `find` trouve toujours.
+  for (const d of days) buckets.find((b) => b.to === null || d <= b.to)!.count += 1;
+
+  const middle = Math.floor(days.length / 2);
+  const median =
+    days.length === 0
+      ? 0
+      : days.length % 2 === 1
+        ? days[middle]
+        : (days[middle - 1] + days[middle]) / 2;
+
+  return {
+    rotation: {
+      count: days.length,
+      averageDays: days.length > 0 ? round(days.reduce((t, d) => t + d, 0) / days.length) : 0,
+      medianDays: round(median),
+      buckets,
+    },
+  };
+}
+
+/** Nombre de valeurs classées par attribut : au-delà, la barre devient illisible. */
+const TOP_VALUES = 6;
+
+/**
+ * Ventes classées par valeur d'attribut : la meilleure couleur, la meilleure
+ * marque, la taille qui part le mieux.
+ *
+ * Une entrée par attribut de l'entreprise, **même sans vente** : la liste des
+ * modules disponibles ne doit pas se mettre à changer selon la période
+ * regardée, sinon la carte qu'on venait d'ajouter disparaît du rangement dès
+ * qu'on remonte à sept jours.
+ *
+ * Seuls les attributs à vocabulaire borné (listes) et le texte libre sont
+ * classés : ranger des nombres ou des oui/non par chiffre d'affaires ne
+ * répondrait à aucune question qu'on se pose.
+ *
+ * Classé par **nombre d'articles vendus**, pas par chiffre d'affaires : la
+ * question est « qu'est-ce qui part », et un manteau à 120 € placerait sa
+ * couleur devant dix t-shirts. Le chiffre d'affaires reste joint, il se lit
+ * dans l'infobulle. À nombre égal, c'est lui qui départage.
+ *
+ * Un article en choix multiples compte dans **chacune** de ses valeurs : il
+ * apparaît donc plusieurs fois dans le même classement. C'est voulu — la
+ * question posée est « qu'est-ce qui se vend », pas « comment se répartit
+ * l'inventaire » — et l'écran le dit.
+ */
+function attributesBlock(sold: SoldRow[], definitions: AttributeRow[]) {
+  const values = new Map<string, Map<string, { value: string; revenue: number; count: number }>>();
+  for (const attribute of definitions) values.set(attribute.id, new Map());
+
+  const add = (attribute: AttributeRow, value: string, revenue: number) => {
+    const byValue = values.get(attribute.id);
+    // Un attribut hors du classement (nombre, booléen) n'a pas de case.
+    if (!byValue) return;
+    const entry = byValue.get(value) ?? { value, revenue: 0, count: 0 };
+    entry.revenue += revenue;
+    entry.count += 1;
+    byValue.set(value, entry);
+  };
+
+  for (const p of sold) {
+    const revenue = Number(p.soldPrice ?? 0);
+    for (const { option } of p.attributeOptions) add(option.attribute, option.value, revenue);
+    for (const v of p.attributeValues) {
+      const text = v.textValue?.trim();
+      if (text) add(v.attribute, text, revenue);
+    }
+  }
+
+  return {
+    topAttributes: definitions.map((attribute) => ({
+      ...attribute,
+      values: [...values.get(attribute.id)!.values()]
+        .map((v) => ({ ...v, revenue: round(v.revenue) }))
+        .sort((a, b) => b.count - a.count || b.revenue - a.revenue)
+        .slice(0, TOP_VALUES),
+    })),
+  };
+}
+
 @Injectable()
 export class StatsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -278,6 +412,40 @@ export class StatsService {
   }
 
   /**
+   * Rangement des modules du tableau de bord, propre à l'utilisateur.
+   *
+   * Aucune permission : c'est sa préférence d'affichage, pas une donnée de la
+   * boutique. Les blocs qu'il n'a pas le droit de voir restent absents du
+   * tableau de bord lui-même — ranger une carte ne l'ouvre pas.
+   */
+  async layout(currentUser: CurrentUser): Promise<{ modules: LayoutEntry[] }> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
+      select: { dashboardLayout: true },
+    });
+    return { modules: readLayout(user?.dashboardLayout) };
+  }
+
+  /**
+   * Enregistre le rangement complet.
+   *
+   * `updateMany` plutôt que `update` : la cible est l'utilisateur du jeton,
+   * scopé à son entreprise, et une ligne absente n'est pas une erreur à
+   * relever ici — le jeton d'un compte supprimé échoue déjà à l'authentification.
+   */
+  async saveLayout(
+    currentUser: CurrentUser,
+    dto: DashboardLayoutDto,
+  ): Promise<{ modules: LayoutEntry[] }> {
+    const modules = dto.modules.map((m) => ({ key: m.key, visible: m.visible }));
+    await this.prisma.user.updateMany({
+      where: { id: currentUser.userId, companyId: currentUser.companyId },
+      data: { dashboardLayout: modules },
+    });
+    return { modules };
+  }
+
+  /**
    * Tableau de bord.
    *
    * Tous les agrégats se définissent par les **flags de `Status`**, jamais par
@@ -358,74 +526,116 @@ export class StatsService {
         status: { isOnlineSale },
       };
 
-    const [sold, stock, consignmentPeriod, today, toDelist, toPull] = await Promise.all([
-      // Les produits vendus sur la période. Le volume est celui des ventes
-      // d'une boutique : on agrège en mémoire plutôt que d'empiler cinq
-      // requêtes d'agrégation.
-      droits.sales &&
-        this.prisma.product.findMany({
-          where: {
-            ...company,
-            ...droits.sales,
-            status: { isSale: true, ...(enLigne ? { isOnlineSale: true } : {}) },
-            soldAt: { gte: from, lte: to },
-          },
-          select: {
-            id: true,
-            name: true,
-            reference: true,
-            purchasePrice: true,
-            soldPrice: true,
-            appliedCommission: true,
-            saleType: true,
-            soldAt: true,
-            category: { select: { id: true, name: true } },
-          },
-        }),
-      droits.stock &&
-        this.prisma.product.findMany({
-          where: { ...company, ...droits.stock, ...stockDuCanal },
-          select: {
-            quantity: true,
-            salePrice: true,
-            status: { select: { id: true, name: true, color: true, leavesStock: true } },
-          },
-        }),
-      // Taux de retour : parmi les articles en dépôt-vente créés sur la période,
-      // ceux qui ont fini dans un statut bloquant (rendu, retiré).
-      //
-      // Volontairement **absent quand on regarde un canal** : il dit si les
-      // dépôts qu'on accepte se vendent, pas où ils se vendent. Un article
-      // rendu n'a été vendu nulle part, donc le filtrer par canal donnerait
-      // toujours zéro — un chiffre faux vaut moins que pas de chiffre.
-      !enLigne &&
+    const [sold, attributes, stock, consignmentPeriod, today, toDelist, toPull] = await Promise.all(
+      [
+        // Les produits vendus sur la période. Le volume est celui des ventes
+        // d'une boutique : on agrège en mémoire plutôt que d'empiler cinq
+        // requêtes d'agrégation.
         droits.sales &&
-        this.prisma.product.findMany({
-          where: {
-            ...company,
-            ...droits.sales,
-            saleType: 'CONSIGNMENT',
-            createdAt: { gte: from, lte: to },
-          },
-          select: { status: { select: { blocksSale: true } } },
-        }),
-      todayScope &&
-        this.prisma.product.findMany({
-          where: {
-            ...company,
-            ...todayScope,
-            status: { isSale: true, ...(enLigne ? { isOnlineSale: true } : {}) },
-            soldAt: { gte: jour.from, lte: jour.to },
-          },
-          select: { purchasePrice: true, soldPrice: true, appliedCommission: true, saleType: true },
-        }),
-      // Vendus au comptoir, annonce encore publiée : à dépublier.
-      removalScope(droits.online, false) &&
-        this.removalList(removalScope(droits.online, false) as Prisma.ProductWhereInput),
-      // Vendus par le site, vêtement encore en boutique : à décrocher.
-      removalScope(droits.shelf, true) &&
-        this.removalList(removalScope(droits.shelf, true) as Prisma.ProductWhereInput),
-    ]);
+          this.prisma.product.findMany({
+            where: {
+              ...company,
+              ...droits.sales,
+              status: { isSale: true, ...(enLigne ? { isOnlineSale: true } : {}) },
+              soldAt: { gte: from, lte: to },
+            },
+            select: {
+              id: true,
+              name: true,
+              reference: true,
+              purchasePrice: true,
+              soldPrice: true,
+              appliedCommission: true,
+              saleType: true,
+              soldAt: true,
+              // L'entrée en stock, pour le temps de rotation.
+              createdAt: true,
+              category: { select: { id: true, name: true } },
+              // Les valeurs portées par l'article, pour le classement par
+              // attribut. Jointes ici plutôt que re-demandées : les ventes de la
+              // période sont déjà chargées, une seconde requête relirait les
+              // mêmes lignes.
+              attributeOptions: {
+                select: {
+                  option: {
+                    select: {
+                      value: true,
+                      attribute: { select: { id: true, name: true, type: true } },
+                    },
+                  },
+                },
+              },
+              attributeValues: {
+                select: {
+                  textValue: true,
+                  attribute: { select: { id: true, name: true, type: true } },
+                },
+              },
+            },
+          }),
+        // Le catalogue des attributs classables, indépendant de la période : la
+        // liste des modules proposés ne doit pas s'allonger et se raccourcir
+        // selon les ventes du mois. `NUMBER` et `BOOLEAN` en sont absents — voir
+        // `attributesBlock`.
+        droits.sales &&
+          this.prisma.attributeDefinition.findMany({
+            where: {
+              companyId: currentUser.companyId,
+              type: { in: ['SELECT', 'MULTISELECT', 'TEXT'] },
+            },
+            select: { id: true, name: true, type: true },
+            orderBy: { name: 'asc' },
+          }),
+        droits.stock &&
+          this.prisma.product.findMany({
+            where: { ...company, ...droits.stock, ...stockDuCanal },
+            select: {
+              quantity: true,
+              salePrice: true,
+              status: { select: { id: true, name: true, color: true, leavesStock: true } },
+            },
+          }),
+        // Taux de retour : parmi les articles en dépôt-vente créés sur la période,
+        // ceux qui ont fini dans un statut bloquant (rendu, retiré).
+        //
+        // Volontairement **absent quand on regarde un canal** : il dit si les
+        // dépôts qu'on accepte se vendent, pas où ils se vendent. Un article
+        // rendu n'a été vendu nulle part, donc le filtrer par canal donnerait
+        // toujours zéro — un chiffre faux vaut moins que pas de chiffre.
+        !enLigne &&
+          droits.sales &&
+          this.prisma.product.findMany({
+            where: {
+              ...company,
+              ...droits.sales,
+              saleType: 'CONSIGNMENT',
+              createdAt: { gte: from, lte: to },
+            },
+            select: { status: { select: { blocksSale: true } } },
+          }),
+        todayScope &&
+          this.prisma.product.findMany({
+            where: {
+              ...company,
+              ...todayScope,
+              status: { isSale: true, ...(enLigne ? { isOnlineSale: true } : {}) },
+              soldAt: { gte: jour.from, lte: jour.to },
+            },
+            select: {
+              purchasePrice: true,
+              soldPrice: true,
+              appliedCommission: true,
+              saleType: true,
+            },
+          }),
+        // Vendus au comptoir, annonce encore publiée : à dépublier.
+        removalScope(droits.online, false) &&
+          this.removalList(removalScope(droits.online, false) as Prisma.ProductWhereInput),
+        // Vendus par le site, vêtement encore en boutique : à décrocher.
+        removalScope(droits.shelf, true) &&
+          this.removalList(removalScope(droits.shelf, true) as Prisma.ProductWhereInput),
+      ],
+    );
 
     return {
       period: { from: from.toISOString(), to: to.toISOString() },
@@ -442,6 +652,8 @@ export class StatsService {
           }
         : {}),
       ...(sold ? salesBlock(sold, from) : {}),
+      ...(sold ? rotationBlock(sold) : {}),
+      ...(sold && attributes ? attributesBlock(sold, attributes) : {}),
       ...(consignmentPeriod ? returnsBlock(consignmentPeriod) : {}),
       ...(stock ? stockBlock(stock) : {}),
       // Deux listes séparées et non une seule : ce ne sont pas les mêmes

@@ -74,6 +74,16 @@ model User {
   isManager    Boolean  @default(false) @map("is_manager")
   createdAt    DateTime @default(now()) @map("created_at")
 
+  /// Modules du tableau de bord : lesquels sont affichés et dans quel ordre,
+  /// sous la forme `[{ "key": "...", "visible": true }]`.
+  ///
+  /// Une préférence **personnelle**, pas un réglage d'entreprise : deux
+  /// employés d'une même boutique n'ont ni les mêmes droits ni le même
+  /// travail, et un rangement imposé masquerait à l'un ce que l'autre ne
+  /// regarde jamais. Null = jamais personnalisé, on retombe sur l'ordre par
+  /// défaut.
+  dashboardLayout Json? @map("dashboard_layout")
+
   company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   accesses      ShopAccess[]
   statusChanges StatusHistory[]
