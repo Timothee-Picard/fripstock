@@ -60,10 +60,13 @@ describe('Button', () => {
     expect(clic).not.toHaveBeenCalled();
   });
 
-  it.each(['primary', 'secondary', 'danger'] as const)('accepte la variante %s', (variant) => {
-    render(<Button variant={variant}>x</Button>);
-    expect(screen.getByRole('button')).toBeInTheDocument();
-  });
+  it.each(['primary', 'secondary', 'danger', 'destructive'] as const)(
+    'accepte la variante %s',
+    (variant) => {
+      render(<Button variant={variant}>x</Button>);
+      expect(screen.getByRole('button')).toBeInTheDocument();
+    },
+  );
 
   it('distingue visuellement la variante dangereuse', () => {
     const { rerender } = render(<Button variant="primary">x</Button>);

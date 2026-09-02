@@ -35,6 +35,22 @@ Company (le compte parent, un gérant)
 - Chaque Entreprise est totalement cloisonnée : aucune donnée (produits, catégories,
   clients déposants...) n'est partagée entre deux entreprises différentes.
 
+**Supprimer « le compte », c'est supprimer l'Entreprise** (`DELETE /auth/account`,
+`@ManagerOnly()`). Un gérant n'en a qu'une, et la lui retirer sans retirer l'entreprise
+laisserait ses employés enfermés dans des données que plus personne ne peut administrer.
+Un employé est supprimé par son gérant (`DELETE /users/:id`) — et l'écran du profil le lui
+**écrit** au lieu de masquer un bouton, sinon le refus passe pour une panne.
+
+- Le **mot de passe est réexigé**, comme pour un changement d'email : c'est définitif et il
+  n'y a pas de corbeille. La confirmation est une vraie modale, pas un `window.confirm()`,
+  parce qu'elle doit **montrer** ce qui part : `GET /auth/account` renvoie les chiffres
+  (boutiques, employés, produits, déposants, contrats), et ce qui est à zéro ne se dit pas.
+- **L'ordre de suppression n'est pas libre**, deux `onDelete: Restrict` s'y opposent : les
+  **produits d'abord** (leur catégorie et leur statut sont en `Restrict`), puis les
+  **catégories des feuilles vers la racine** (`parentId` en `Restrict`, que Postgres
+  vérifie ligne à ligne — même quand l'enfant disparaît dans la même commande). Le reste
+  tombe en cascade. Ne pas « simplifier » en un seul `company.delete()`.
+
 ## Catalogue : catégories & attributs — RÈGLE IMPORTANTE
 
 - Les **catégories** sont définies **au niveau Entreprise** (hiérarchiques, parent/enfant),

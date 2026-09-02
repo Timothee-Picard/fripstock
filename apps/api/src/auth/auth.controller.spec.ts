@@ -10,6 +10,8 @@ describe('AuthController', () => {
     me: jest.fn(),
     updateProfile: jest.fn(),
     changePassword: jest.fn(),
+    accountSummary: jest.fn(),
+    deleteAccount: jest.fn(),
   };
   const controller = new AuthController(auth as unknown as AuthService);
 
@@ -25,6 +27,8 @@ describe('AuthController', () => {
     ['me', 'GET', 'me'],
     ['updateProfile', 'PUT', 'profile'],
     ['changePassword', 'PUT', 'password'],
+    ['accountSummary', 'GET', 'account'],
+    ['deleteAccount', 'DELETE', 'account'],
   ])('%s → %s %s', (name, method, path) => {
     expect(route(AuthController, name)).toMatchObject({ method, path });
   });
@@ -33,8 +37,21 @@ describe('AuthController', () => {
     expect(route(AuthController, name).public).toBe(true);
   });
 
-  it.each(['me', 'updateProfile', 'changePassword'])('%s exige un jeton', (name) => {
-    expect(route(AuthController, name).public).toBe(false);
+  it.each(['me', 'updateProfile', 'changePassword', 'accountSummary', 'deleteAccount'])(
+    '%s exige un jeton',
+    (name) => {
+      expect(route(AuthController, name).public).toBe(false);
+    },
+  );
+
+  // Supprimer « le compte », c'est supprimer l'entreprise : un employé est
+  // supprimé par son gérant, via DELETE /users/:id.
+  it.each(['accountSummary', 'deleteAccount'])('%s est réservée au gérant', (name) => {
+    expect(route(AuthController, name).managerOnly).toBe(true);
+  });
+
+  it.each(['me', 'updateProfile', 'changePassword'])('%s reste ouverte à l’employé', (name) => {
+    expect(route(AuthController, name).managerOnly).toBe(false);
   });
 
   describe('délégation', () => {
@@ -65,6 +82,16 @@ describe('AuthController', () => {
       const dto = { currentPassword: 'x', newPassword: 'motdepasse' };
       void controller.changePassword(manager, dto);
       expect(auth.changePassword).toHaveBeenCalledWith(manager, dto);
+    });
+
+    it('accountSummary passe l’utilisateur courant', () => {
+      void controller.accountSummary(manager);
+      expect(auth.accountSummary).toHaveBeenCalledWith(manager);
+    });
+
+    it('deleteAccount passe utilisateur et mot de passe', () => {
+      void controller.deleteAccount(manager, { password: 'secret' });
+      expect(auth.deleteAccount).toHaveBeenCalledWith(manager, { password: 'secret' });
     });
   });
 });

@@ -185,6 +185,27 @@ Les emails sont normalisés (minuscules, espaces retirés) **avant** validation,
 distincts pour la contrainte d'unicité, et changer la casse de son propre email
 empêcherait de se reconnecter.
 
+**Supprimer le compte, c'est supprimer l'entreprise.** `DELETE /auth/account` est
+réservée au gérant (`@ManagerOnly()`) : un gérant n'a qu'une entreprise, et la lui retirer
+sans retirer l'entreprise laisserait ses employés enfermés dans des données que plus
+personne ne peut administrer. Un employé, lui, est supprimé par son gérant depuis
+`/dashboard/users` — l'écran du profil le lui **écrit**, plutôt que de masquer un bouton
+qui passerait pour une panne.
+
+Le mot de passe est réexigé, comme pour un changement d'email, et la confirmation est une
+vraie modale (`components/confirm-dialog.tsx`) et non le `window.confirm()` employé
+partout ailleurs : ici il n'y a rien à recréer, et la confirmation doit **montrer** ce qui
+part. `GET /auth/account` renvoie les chiffres qu'elle affiche — « 3 boutiques,
+128 produits, 6 contrats de dépôt » plutôt que « tout ». Ce qui est à zéro ne se dit pas.
+
+Deux pièges de cascade se cachent dans cette suppression, et le service les prend dans
+l'ordre : les **produits d'abord**, parce que leur catégorie et leur statut sont en
+`onDelete: Restrict` et qu'une cascade partie de l'entreprise buterait dessus ; puis les
+**catégories des feuilles vers la racine**, parce que `parentId` est en `Restrict` et que
+Postgres le vérifie ligne à ligne — y compris quand l'enfant disparaît dans la même
+commande. Le reste tombe en cascade. Côté web, le cookie de session est vidé avant la
+redirection vers `/login` : le garder ferait échouer chaque écran sur un 401.
+
 **Limite connue** : le changement de mot de passe renvoie un jeton neuf pour que la
 session courante reste valide, mais les jetons déjà émis ailleurs restent valables
 jusqu'à leur expiration (7 jours). Le JWT est sans état, rien ne permet de les révoquer.

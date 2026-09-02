@@ -33,6 +33,10 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   seule liste : l'inscription, la bibliothèque globale du seed et le catalogue de
   l'entreprise de démonstration. Contrairement aux statuts, aucune migration de
   données à prévoir : le catalogue se remanie librement après coup.
+- `auth/auth.service.ts` — `deleteAccount` supprime l'entreprise entière, et
+  l'**ordre y compte** : produits, puis catégories des feuilles vers la racine,
+  puis `company.delete()`. Deux `onDelete: Restrict` interdisent la cascade
+  directe. Ne pas raccourcir.
 - `products/lot-split.ts` — répartition d'un total au centime (plus forts restes).
   **Jumeau** dans `apps/web/lib/lot-split.ts` : modifier les deux.
 - `products/csv-export.ts` — séparateur `;`, BOM UTF-8, échappement des cellules
@@ -80,6 +84,11 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   deux listes selon le droit **et** selon l'endroit regardé. `app/dashboard/removals/`
   en est la liste complète, rangée par endroit où aller (`sections.ts`). Le sens du geste se lit sur
   `status.isOnlineSale`, jamais sur le libellé.
+- `components/confirm-dialog.tsx` — la seule vraie modale de l'application ; partout
+  ailleurs on confirme par `window.confirm()`, ce qui suffit à une suppression
+  réparable. Écrite à la main et non avec `<dialog>` : jsdom, où tournent les
+  tests, n'implémente pas `showModal()` (vérifié en jsdom 30). Focus, Échap et clic
+  sur le fond sont donc gérés dans le composant.
 - `components/shop-selector.tsx` — boutique du tableau de bord, écrite dans l'URL.
   Rendu par `app/dashboard/page.tsx`, **pas** par le layout : il ne pilote que cet
   écran. La liste des produits a son propre filtre boutique dans `products/filters.tsx`.
