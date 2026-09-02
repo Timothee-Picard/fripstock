@@ -62,6 +62,10 @@ describe('AuthService', () => {
         { id: 's6', name: 'Retiré' },
       ]);
       prisma.user.create.mockResolvedValue(user);
+      // Le catalogue de départ est posé dans la même transaction.
+      prisma.attributeTemplate.findMany.mockResolvedValue([]);
+      prisma.attributeDefinition.create.mockResolvedValue({ id: 'attr-1' });
+      prisma.category.create.mockResolvedValue({ id: 'cat-1' });
     }
 
     it('normalise l’email avant de vérifier le doublon et de créer', async () => {
@@ -90,6 +94,21 @@ describe('AuthService', () => {
       expect(statuts).toHaveLength(7);
       expect(statuts.map((s: { position: number }) => s.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
       expect(prisma.statusTransition.createMany.mock.calls[0][0].data.length).toBeGreaterThan(0);
+    });
+
+    it('pose le catalogue de départ, scopé sur la nouvelle entreprise', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      arrangeTransaction();
+      await service.register(dto);
+      // Un compte neuf arrivait sur un catalogue vide : la première création de
+      // produit obligeait à inventer catégories et attributs d'abord.
+      expect(prisma.attributeDefinition.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ companyId: COMPANY_ID }),
+        }),
+      );
+      expect(prisma.category.create).toHaveBeenCalled();
+      expect(prisma.category.create.mock.calls[0][0].data.companyId).toBe(COMPANY_ID);
     });
 
     it('fait du créateur le gérant de son entreprise', async () => {
@@ -332,6 +351,117 @@ describe('AuthService', () => {
       ).resolves.toMatchObject({ accessToken: 'jeton' });
       expect(hash).toHaveBeenCalledWith('neuf', 10);
       expect(prisma.user.update.mock.calls[0][0].data.passwordHash).toBe('hash-neuf');
+    });
+  });
+  describe('accountSummary', () => {
+    beforeEach(() => {
+      prisma.company.findFirst.mockResolvedValue({ name: 'Friperie' });
+      prisma.shop.count.mockResolvedValue(3);
+      prisma.user.count.mockResolvedValue(2);
+      prisma.product.count.mockResolvedValue(128);
+      prisma.depositor.count.mockResolvedValue(4);
+      prisma.depositContract.count.mockResolvedValue(6);
+    });
+
+    it('chiffre ce que la suppression emporterait', async () => {
+      await expect(service.accountSummary(manager)).resolves.toEqual({
+        companyName: 'Friperie',
+        shops: 3,
+        employees: 2,
+        products: 128,
+        depositors: 4,
+        contracts: 6,
+      });
+    });
+
+    it('ne compte pas le gérant parmi les employés', async () => {
+      await service.accountSummary(manager);
+      expect(prisma.user.count).toHaveBeenCalledWith({
+        where: { companyId: COMPANY_ID, isManager: false },
+      });
+    });
+
+    it('scope les contrats via leur déposant, qui porte seul le companyId', async () => {
+      await service.accountSummary(manager);
+      expect(prisma.depositContract.count).toHaveBeenCalledWith({
+        where: { depositor: { companyId: COMPANY_ID } },
+      });
+    });
+
+    it('refuse proprement un jeton dont l’entreprise a disparu', async () => {
+      prisma.company.findFirst.mockResolvedValue(null);
+      await expect(service.accountSummary(manager)).rejects.toThrow('Session expirée');
+    });
+  });
+
+  describe('deleteAccount', () => {
+    beforeEach(() => {
+      prisma.user.findFirst.mockResolvedValue(user);
+      prisma.category.deleteMany.mockResolvedValue({ count: 0 });
+    });
+
+    it('refuse proprement un jeton dont le compte a disparu', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(service.deleteAccount(manager, { password: 'secret' })).rejects.toThrow(
+        'Session expirée',
+      );
+      expect(prisma.company.delete).not.toHaveBeenCalled();
+    });
+
+    it('exige le mot de passe : une session ouverte ne suffit pas', async () => {
+      compare.mockResolvedValue(false);
+      await expect(service.deleteAccount(manager, { password: 'faux' })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.company.delete).not.toHaveBeenCalled();
+    });
+
+    it('supprime les produits avant les catégories, elles-mêmes avant l’entreprise', async () => {
+      const ordre: string[] = [];
+      prisma.product.deleteMany.mockImplementation(() => {
+        ordre.push('produits');
+        return Promise.resolve({ count: 12 });
+      });
+      prisma.category.deleteMany.mockImplementation(() => {
+        ordre.push('catégories');
+        return Promise.resolve({ count: 0 });
+      });
+      prisma.company.delete.mockImplementation(() => {
+        ordre.push('entreprise');
+        return Promise.resolve({});
+      });
+
+      await expect(service.deleteAccount(manager, { password: 'secret' })).resolves.toEqual({
+        deleted: true,
+      });
+      // Catégorie et statut d'un produit sont en `Restrict` : une cascade
+      // partie de l'entreprise buterait dessus.
+      expect(ordre).toEqual(['produits', 'catégories', 'entreprise']);
+    });
+
+    it('vide l’arbre des catégories des feuilles vers la racine', async () => {
+      // `parentId` est en `Restrict` et Postgres le vérifie ligne à ligne : il
+      // faut redescendre d'un niveau tant qu'il en tombe.
+      prisma.category.deleteMany
+        .mockResolvedValueOnce({ count: 8 })
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+
+      await service.deleteAccount(manager, { password: 'secret' });
+
+      expect(prisma.category.deleteMany).toHaveBeenCalledTimes(3);
+      expect(prisma.category.deleteMany).toHaveBeenCalledWith({
+        where: { companyId: COMPANY_ID, children: { none: {} } },
+      });
+      expect(prisma.company.delete).toHaveBeenCalledWith({ where: { id: COMPANY_ID } });
+    });
+
+    it("ne touche qu'à l'entreprise du jeton", async () => {
+      await service.deleteAccount(manager, { password: 'secret' });
+      expect(prisma.product.deleteMany).toHaveBeenCalledWith({
+        where: { companyId: COMPANY_ID },
+      });
     });
   });
 });

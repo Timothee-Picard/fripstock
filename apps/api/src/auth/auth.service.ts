@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { createBaseCatalog } from '../catalog/catalog.defaults';
 import { normalizeEmail } from '../common/email';
 import { readPermissions, PERMISSIONS, type Permission } from '../common/permissions';
 import type { ShopAccessSummary, CurrentUser } from '../common/types/current-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { BASE_STATUSES, BASE_TRANSITIONS } from '../statuses/statuses.defaults';
 import type { ChangePasswordDto } from './dto/change-password.dto';
+import type { DeleteAccountDto } from './dto/delete-account.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { RegisterDto } from './dto/register.dto';
@@ -28,7 +30,8 @@ export class AuthService {
 
   /**
    * Crée l'entreprise et son gérant en une transaction, avec les statuts de
-   * base. Aucune boutique n'est créée automatiquement : c'est une action à part.
+   * base et le catalogue de départ. Aucune boutique n'est créée
+   * automatiquement : c'est une action à part.
    */
   async register(dto: RegisterDto) {
     const email = normalizeEmail(dto.email);
@@ -63,6 +66,10 @@ export class AuthService {
           targetId: byName.get(target)!,
         })),
       });
+      // Catégories et attributs de départ : sans eux, la première création de
+      // produit obligeait à inventer un catalogue avant d'avoir vu un écran.
+      await createBaseCatalog(tx, company.id);
+
       return tx.user.create({
         data: {
           companyId: company.id,
@@ -224,6 +231,71 @@ export class AuthService {
     // Attention : les jetons déjà émis ailleurs, eux, restent valables jusqu'à
     // leur expiration — le JWT est sans état, rien ne permet de les révoquer.
     return this.issueToken(user.id, user.companyId, user.isManager);
+  }
+
+  /**
+   * Ce que la suppression du compte emporterait, pour que la confirmation le
+   * chiffre au lieu de l'annoncer vaguement. Le gérant ne se compte pas parmi
+   * les employés : il est celui qui lit l'écran.
+   */
+  async accountSummary(currentUser: CurrentUser) {
+    const { companyId } = currentUser;
+    const [company, shops, employees, products, depositors, contracts] = await Promise.all([
+      this.prisma.company.findFirst({ where: { id: companyId }, select: { name: true } }),
+      this.prisma.shop.count({ where: { companyId } }),
+      this.prisma.user.count({ where: { companyId, isManager: false } }),
+      this.prisma.product.count({ where: { companyId } }),
+      this.prisma.depositor.count({ where: { companyId } }),
+      this.prisma.depositContract.count({ where: { depositor: { companyId } } }),
+    ]);
+    if (!company) throw new UnauthorizedException('Session expirée. Reconnectez-vous.');
+
+    return { companyName: company.name, shops, employees, products, depositors, contracts };
+  }
+
+  /**
+   * Suppression du compte : l'entreprise entière et tout ce qu'elle contient.
+   *
+   * « Le compte », c'est l'entreprise — un gérant n'en a qu'une et une
+   * entreprise sans gérant n'aurait plus personne pour l'administrer. Supprimer
+   * le seul le laisserait ses employés enfermés dans des données que personne ne
+   * peut plus gérer. Un employé, lui, est supprimé par son gérant
+   * (`DELETE /users/:id`) : la route est réservée au gérant.
+   *
+   * Le mot de passe est réexigé, comme pour un changement d'email : c'est
+   * définitif, et il n'y a pas de corbeille.
+   */
+  async deleteAccount(currentUser: CurrentUser, dto: DeleteAccountDto) {
+    const user = await this.require(currentUser);
+
+    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Mot de passe incorrect.');
+
+    const { companyId } = currentUser;
+    await this.prisma.$transaction(async (tx) => {
+      // Les produits d'abord : leur catégorie et leur statut sont en `Restrict`,
+      // une cascade partie de l'entreprise buterait dessus. Ils emportent au
+      // passage leurs valeurs d'attributs et leur historique de statut.
+      await tx.product.deleteMany({ where: { companyId } });
+
+      // Puis les catégories, des feuilles vers la racine : `parentId` est en
+      // `Restrict`, et Postgres le vérifie ligne à ligne — y compris quand
+      // l'enfant disparaît dans la même commande. Supprimer l'arbre d'un coup
+      // échouerait donc sur ses propres descendants.
+      for (;;) {
+        const { count } = await tx.category.deleteMany({
+          where: { companyId, children: { none: {} } },
+        });
+        if (count === 0) break;
+      }
+
+      // Le reste tombe en cascade : boutiques, employés et leurs accès,
+      // attributs et leurs options, statuts et leur flux, déposants, contrats,
+      // notifications.
+      await tx.company.delete({ where: { id: companyId } });
+    });
+
+    return { deleted: true };
   }
 
   private async issueToken(userId: string, companyId: string, isManager: boolean) {

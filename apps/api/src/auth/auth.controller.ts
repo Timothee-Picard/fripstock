@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Post, Put } from '@nestjs/common';
 import { AuthUser } from '../common/decorators/current-user.decorator';
+import { ManagerOnly } from '../common/decorators/manager.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import type { CurrentUser } from '../common/types/current-user';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -42,5 +44,26 @@ export class AuthController {
   @Put('password')
   changePassword(@AuthUser() currentUser: CurrentUser, @Body() dto: ChangePasswordDto) {
     return this.auth.changePassword(currentUser, dto);
+  }
+
+  /**
+   * Ce que la suppression emporterait. Réservée au gérant comme la suppression
+   * elle-même : ces chiffres ne servent qu'à la confirmer.
+   */
+  @Get('account')
+  @ManagerOnly()
+  accountSummary(@AuthUser() currentUser: CurrentUser) {
+    return this.auth.accountSummary(currentUser);
+  }
+
+  /**
+   * Supprime l'entreprise et tout ce qu'elle contient. Réservée au gérant : un
+   * employé est supprimé par lui, via `DELETE /users/:id`.
+   */
+  @Delete('account')
+  @ManagerOnly()
+  @HttpCode(HttpStatus.OK)
+  deleteAccount(@AuthUser() currentUser: CurrentUser, @Body() dto: DeleteAccountDto) {
+    return this.auth.deleteAccount(currentUser, dto);
   }
 }

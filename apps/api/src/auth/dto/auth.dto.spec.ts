@@ -1,4 +1,5 @@
 import { ChangePasswordDto } from './change-password.dto';
+import { DeleteAccountDto } from './delete-account.dto';
 import { LoginDto } from './login.dto';
 import { RegisterDto } from './register.dto';
 import { UpdateProfileDto } from './update-profile.dto';
@@ -77,6 +78,19 @@ describe('DTO auth', () => {
         currentPassword: 'secret',
       });
       expect(instance.email).toBe('neuf@test.fr');
+    });
+  });
+
+  describe('DeleteAccountDto', () => {
+    it('exige le mot de passe', () => {
+      expect(validateDto(DeleteAccountDto, {}).errors).toContain('password');
+      expect(validateDto(DeleteAccountDto, { password: '' }).errors).toContain('password');
+    });
+
+    it('accepte un mot de passe quelconque : il est comparé, pas créé', () => {
+      // Aucun minimum de longueur ici : un compte peut avoir été créé avant
+      // une règle plus stricte, et son propriétaire doit pouvoir le supprimer.
+      expect(isValid(DeleteAccountDto, { password: 'x' })).toBe(true);
     });
   });
 

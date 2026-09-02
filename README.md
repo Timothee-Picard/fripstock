@@ -185,6 +185,27 @@ Les emails sont normalisés (minuscules, espaces retirés) **avant** validation,
 distincts pour la contrainte d'unicité, et changer la casse de son propre email
 empêcherait de se reconnecter.
 
+**Supprimer le compte, c'est supprimer l'entreprise.** `DELETE /auth/account` est
+réservée au gérant (`@ManagerOnly()`) : un gérant n'a qu'une entreprise, et la lui retirer
+sans retirer l'entreprise laisserait ses employés enfermés dans des données que plus
+personne ne peut administrer. Un employé, lui, est supprimé par son gérant depuis
+`/dashboard/users` — l'écran du profil le lui **écrit**, plutôt que de masquer un bouton
+qui passerait pour une panne.
+
+Le mot de passe est réexigé, comme pour un changement d'email, et la confirmation est une
+vraie modale (`components/confirm-dialog.tsx`) et non le `window.confirm()` employé
+partout ailleurs : ici il n'y a rien à recréer, et la confirmation doit **montrer** ce qui
+part. `GET /auth/account` renvoie les chiffres qu'elle affiche — « 3 boutiques,
+128 produits, 6 contrats de dépôt » plutôt que « tout ». Ce qui est à zéro ne se dit pas.
+
+Deux pièges de cascade se cachent dans cette suppression, et le service les prend dans
+l'ordre : les **produits d'abord**, parce que leur catégorie et leur statut sont en
+`onDelete: Restrict` et qu'une cascade partie de l'entreprise buterait dessus ; puis les
+**catégories des feuilles vers la racine**, parce que `parentId` est en `Restrict` et que
+Postgres le vérifie ligne à ligne — y compris quand l'enfant disparaît dans la même
+commande. Le reste tombe en cascade. Côté web, le cookie de session est vidé avant la
+redirection vers `/login` : le garder ferait échouer chaque écran sur un 401.
+
 **Limite connue** : le changement de mot de passe renvoie un jeton neuf pour que la
 session courante reste valide, mais les jetons déjà émis ailleurs restent valables
 jusqu'à leur expiration (7 jours). Le JWT est sans état, rien ne permet de les révoquer.
@@ -237,6 +258,28 @@ orphelines et intraduisibles.
 
 Un attribut cloné depuis un modèle est **totalement indépendant** : le renommer ou
 changer ses options n'affecte ni le modèle global ni les autres entreprises.
+
+### Le catalogue de départ
+
+**Une entreprise neuve arrive avec un catalogue, pas avec un écran vide.** L'inscription
+pose, dans la transaction de création, huit attributs (Taille, Couleur, Matière, Marque,
+Occasion, Motif, Pointure, Doublé) et neuf catégories — six vêtements sous une racine
+« Vêtements », plus « Sac » et « Accessoire » qui n'en sont pas — chacune rattachée aux
+attributs qui la concernent. Sans ça, le premier écran utile, créer un produit, exigeait
+d'aller d'abord inventer une catégorie puis ses attributs, et le formulaire refusait de
+s'ouvrir en attendant.
+
+Rien n'y est figé, contrairement aux statuts : c'est un point de départ à remanier. Le
+gérant renomme, supprime, ajoute — et les entreprises existantes gardent le catalogue
+qu'elles se sont fait, aucune migration de données ne leur impose celui-ci.
+
+La liste vit à un seul endroit, `apps/api/src/catalog/catalog.defaults.ts`, parce qu'elle
+sert **trois** usages : la bibliothèque globale de modèles (seed), le catalogue de
+l'entreprise de démonstration (seed), et celui de toute entreprise créée par
+l'inscription. Trois copies auraient dérivé. Les clones se rattachent à leur modèle
+(`clonedFromTemplateId`) quand la bibliothèque est seedée, et s'en passent sinon : en
+production seules les migrations tournent, la bibliothèque est vide, et le catalogue se
+pose quand même.
 
 ## Produits
 
@@ -863,8 +906,9 @@ lui éviterait au passage les ~2 Go de RAM que réclame `next build`.
 ### Premier compte
 
 Une base de production est vide. Le premier gérant se crée par l'écran `/register`, qui
-monte l'entreprise, ses statuts et son flux de transitions dans la même transaction. Les
-comptes suivants s'invitent depuis `/dashboard/users`.
+monte l'entreprise, ses statuts, son flux de transitions et son catalogue de départ
+(catégories et attributs) dans la même transaction. Les comptes suivants s'invitent depuis
+`/dashboard/users`.
 
 ### Points de vigilance
 

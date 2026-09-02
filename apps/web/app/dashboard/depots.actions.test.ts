@@ -3,6 +3,7 @@ import {
   ApiError,
   apiFetch,
   attraperRedirection,
+  clearToken,
   dernierAppel,
   form,
   resetMocks,
@@ -477,6 +478,35 @@ describe('profil', () => {
         form({ currentPassword: 'faux', newPassword: 'aaaaaaaa', confirmation: 'aaaaaaaa' }),
       ),
     ).resolves.toEqual({ error: 'Mot de passe actuel incorrect.' });
+  });
+
+  it('supprime le compte, oublie le jeton et ramène à la connexion', async () => {
+    await expect(
+      attraperRedirection(profil.deleteAccount({}, form({ password: 'secret' }))),
+    ).resolves.toBe('/login');
+    expect(dernierAppel()).toMatchObject({
+      route: '/auth/account',
+      method: 'DELETE',
+      body: { password: 'secret' },
+    });
+    // Le jeton désigne un compte disparu : le garder ferait échouer chaque
+    // écran sur un 401 au lieu de ramener à la connexion.
+    expect(clearToken).toHaveBeenCalled();
+  });
+
+  it('remonte le refus d’un mot de passe faux sans vider la session', async () => {
+    apiFetch.mockRejectedValue(new ApiError(401, 'Mot de passe incorrect.'));
+    await expect(profil.deleteAccount({}, form({ password: 'faux' }))).resolves.toEqual({
+      error: 'Mot de passe incorrect.',
+    });
+    expect(clearToken).not.toHaveBeenCalled();
+  });
+
+  it('reste lisible quand la panne n’est pas une réponse d’API', async () => {
+    apiFetch.mockRejectedValue(new Error('réseau'));
+    await expect(profil.deleteAccount({}, form({ password: 'secret' }))).resolves.toEqual({
+      error: 'Suppression impossible.',
+    });
   });
 });
 

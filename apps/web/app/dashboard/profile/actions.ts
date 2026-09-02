@@ -1,8 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
-import { setToken } from '@/lib/session';
+import { clearToken, setToken } from '@/lib/session';
 
 export interface ProfileState {
   error?: string;
@@ -55,4 +56,28 @@ export async function changePassword(_state: ProfileState, data: FormData): Prom
   }
 
   return { success: 'Mot de passe modifié.' };
+}
+
+/**
+ * Suppression du compte : l'entreprise entière, définitivement.
+ *
+ * Le mot de passe accompagne la demande — c'est ce que l'API réexige, et la
+ * modale le demande donc au moment du geste plutôt que sur l'écran.
+ */
+export async function deleteAccount(_state: ProfileState, data: FormData): Promise<ProfileState> {
+  try {
+    await apiFetch('/auth/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password: String(data.get('password') ?? '') }),
+    });
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : 'Suppression impossible.' };
+  }
+
+  // Le jeton désigne un compte qui n'existe plus : le garder ferait échouer
+  // chaque écran sur un 401 plutôt que ramener à la connexion.
+  await clearToken();
+  // Hors du try : redirect() lève une exception de contrôle que le catch
+  // présenterait comme un échec de suppression.
+  redirect('/login');
 }

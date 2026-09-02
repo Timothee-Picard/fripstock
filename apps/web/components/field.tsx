@@ -23,12 +23,15 @@ export function Button({
   className = '',
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'destructive';
 }) {
   const styles = {
     primary: 'bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400',
     secondary: 'border border-slate-300 text-slate-700 hover:bg-slate-50',
     danger: 'text-red-700 hover:bg-red-50 border border-red-200',
+    // Le rouge plein est réservé au geste lui-même, une fois la confirmation
+    // ouverte : `danger` ouvre la porte, `destructive` la franchit.
+    destructive: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
   }[variant];
   return (
     <button

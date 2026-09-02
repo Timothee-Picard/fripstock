@@ -117,6 +117,21 @@ export interface Session {
   shops: ShopAccess[];
 }
 
+/**
+ * Ce que la suppression du compte emporterait (`GET /auth/account`).
+ *
+ * Les chiffres sont là pour que la confirmation soit lisible : « supprimer
+ * définitivement » ne dit pas ce qu'on perd, « 3 boutiques et 128 produits » si.
+ */
+export interface AccountSummary {
+  companyName: string;
+  shops: number;
+  employees: number;
+  products: number;
+  depositors: number;
+  contracts: number;
+}
+
 export interface Shop {
   id: string;
   name: string;
