@@ -238,6 +238,28 @@ orphelines et intraduisibles.
 Un attribut cloné depuis un modèle est **totalement indépendant** : le renommer ou
 changer ses options n'affecte ni le modèle global ni les autres entreprises.
 
+### Le catalogue de départ
+
+**Une entreprise neuve arrive avec un catalogue, pas avec un écran vide.** L'inscription
+pose, dans la transaction de création, huit attributs (Taille, Couleur, Matière, Marque,
+Occasion, Motif, Pointure, Doublé) et neuf catégories — six vêtements sous une racine
+« Vêtements », plus « Sac » et « Accessoire » qui n'en sont pas — chacune rattachée aux
+attributs qui la concernent. Sans ça, le premier écran utile, créer un produit, exigeait
+d'aller d'abord inventer une catégorie puis ses attributs, et le formulaire refusait de
+s'ouvrir en attendant.
+
+Rien n'y est figé, contrairement aux statuts : c'est un point de départ à remanier. Le
+gérant renomme, supprime, ajoute — et les entreprises existantes gardent le catalogue
+qu'elles se sont fait, aucune migration de données ne leur impose celui-ci.
+
+La liste vit à un seul endroit, `apps/api/src/catalog/catalog.defaults.ts`, parce qu'elle
+sert **trois** usages : la bibliothèque globale de modèles (seed), le catalogue de
+l'entreprise de démonstration (seed), et celui de toute entreprise créée par
+l'inscription. Trois copies auraient dérivé. Les clones se rattachent à leur modèle
+(`clonedFromTemplateId`) quand la bibliothèque est seedée, et s'en passent sinon : en
+production seules les migrations tournent, la bibliothèque est vide, et le catalogue se
+pose quand même.
+
 ## Produits
 
 Cinq écrans : la liste filtrée (`/dashboard/products`), la création
@@ -863,8 +885,9 @@ lui éviterait au passage les ~2 Go de RAM que réclame `next build`.
 ### Premier compte
 
 Une base de production est vide. Le premier gérant se crée par l'écran `/register`, qui
-monte l'entreprise, ses statuts et son flux de transitions dans la même transaction. Les
-comptes suivants s'invitent depuis `/dashboard/users`.
+monte l'entreprise, ses statuts, son flux de transitions et son catalogue de départ
+(catégories et attributs) dans la même transaction. Les comptes suivants s'invitent depuis
+`/dashboard/users`.
 
 ### Points de vigilance
 

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { createBaseCatalog } from '../catalog/catalog.defaults';
 import { normalizeEmail } from '../common/email';
 import { readPermissions, PERMISSIONS, type Permission } from '../common/permissions';
 import type { ShopAccessSummary, CurrentUser } from '../common/types/current-user';
@@ -28,7 +29,8 @@ export class AuthService {
 
   /**
    * Crée l'entreprise et son gérant en une transaction, avec les statuts de
-   * base. Aucune boutique n'est créée automatiquement : c'est une action à part.
+   * base et le catalogue de départ. Aucune boutique n'est créée
+   * automatiquement : c'est une action à part.
    */
   async register(dto: RegisterDto) {
     const email = normalizeEmail(dto.email);
@@ -63,6 +65,10 @@ export class AuthService {
           targetId: byName.get(target)!,
         })),
       });
+      // Catégories et attributs de départ : sans eux, la première création de
+      // produit obligeait à inventer un catalogue avant d'avoir vu un écran.
+      await createBaseCatalog(tx, company.id);
+
       return tx.user.create({
         data: {
           companyId: company.id,

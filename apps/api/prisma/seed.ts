@@ -10,10 +10,11 @@
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
+import { BASE_ATTRIBUTES, BASE_CATEGORIES, CATEGORY_ROOT } from '../src/catalog/catalog.defaults';
 import type { PermissionMap } from '../src/common/permissions';
 import { BASE_STATUSES, BASE_TRANSITIONS } from '../src/statuses/statuses.defaults';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client';
-import { AttributeType, SaleType } from '../src/generated/prisma/enums';
+import { SaleType } from '../src/generated/prisma/enums';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -56,53 +57,18 @@ const DEMO_ONLINE_PERMISSIONS: PermissionMap = {
   'online.manage': true,
 };
 
-/** Global library, shared by every company, read-only. */
-const TEMPLATES: { name: string; type: AttributeType; options: string[] }[] = [
-  { name: 'Taille', type: 'SELECT', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
-  {
-    name: 'Couleur',
-    type: 'SELECT',
-    options: ['Noir', 'Blanc', 'Gris', 'Bleu', 'Rouge', 'Vert', 'Beige', 'Multicolore'],
-  },
-  {
-    name: 'Matière',
-    type: 'SELECT',
-    options: ['Coton', 'Laine', 'Cuir', 'Jean', 'Lin', 'Synthétique'],
-  },
-  { name: 'Marque', type: 'TEXT', options: [] },
-  // Choix multiples : un même article sert plusieurs occasions. C'est le seul
-  // attribut dont une valeur ne s'exclut pas des autres, et donc le seul qui
-  // fasse compter un article dans plusieurs lignes du classement.
-  {
-    name: 'Occasion',
-    type: 'MULTISELECT',
-    options: ['Quotidien', 'Travail', 'Soirée', 'Cérémonie', 'Sport'],
-  },
-  // Absent des chaussures et des accessoires, et laissé vide sur un article
-  // sur quatre : tous les champs ne sont pas toujours saisis, et un classement
-  // doit le supporter sans compter de valeur « rien ».
-  { name: 'Motif', type: 'SELECT', options: ['Uni', 'Rayé', 'Fleuri', 'À carreaux', 'Imprimé'] },
-  // Un nombre et un oui/non : ni l'un ni l'autre ne se classe par chiffre
-  // d'affaires — ils sont là pour qu'on vérifie qu'ils n'apparaissent pas dans
-  // les modules du tableau de bord.
-  { name: 'Pointure', type: 'NUMBER', options: [] },
-  { name: 'Doublé', type: 'BOOLEAN', options: [] },
-];
-
-/** Which attributes apply to which category: a bag has no size. */
-const HABILLEMENT = ['Taille', 'Couleur', 'Matière', 'Marque', 'Occasion', 'Motif'];
-const CATEGORIES: { name: string; attributes: string[] }[] = [
-  { name: 'Robe', attributes: HABILLEMENT },
-  { name: 'Haut', attributes: HABILLEMENT },
-  { name: 'Chemise', attributes: HABILLEMENT },
-  { name: 'Pantalon', attributes: HABILLEMENT },
-  { name: 'Manteau', attributes: [...HABILLEMENT, 'Doublé'] },
-  // Une pointure plutôt qu'une taille, et pas de motif : chaque catégorie
-  // n'emporte que les attributs qui la concernent.
-  { name: 'Chaussures', attributes: ['Taille', 'Couleur', 'Marque', 'Occasion', 'Pointure'] },
-  { name: 'Sac', attributes: ['Couleur', 'Matière', 'Marque', 'Occasion', 'Motif'] },
-  { name: 'Accessoire', attributes: ['Couleur', 'Matière', 'Marque', 'Occasion'] },
-];
+/**
+ * La bibliothèque globale, le catalogue de la démonstration et celui de toute
+ * entreprise créée par l'inscription sont **la même liste** — voir
+ * `src/catalog/catalog.defaults.ts`. Trois copies auraient dérivé.
+ *
+ * Deux entrées y sont là pour ce qu'elles font au tableau de bord : `Pointure`
+ * (nombre) et `Doublé` (oui/non) ne doivent jamais apparaître dans les modules
+ * de classement, qui ne rangent que les listes et le texte libre. `Motif` est
+ * laissé vide sur un article sur quatre plus bas, et absent des chaussures et
+ * des accessoires : un classement doit le supporter sans compter de valeur
+ * « rien ».
+ */
 
 /**
  * Dates relatives à l'instant du seed.
@@ -195,7 +161,7 @@ const CONTRATS = [
 ];
 
 async function seedTemplates() {
-  for (const template of TEMPLATES) {
+  for (const template of BASE_ATTRIBUTES) {
     const created = await prisma.attributeTemplate.upsert({
       where: { name: template.name },
       update: { type: template.type },
@@ -209,7 +175,7 @@ async function seedTemplates() {
       });
     }
   }
-  console.log(`  ${TEMPLATES.length} templates d'attributs`);
+  console.log(`  ${BASE_ATTRIBUTES.length} templates d'attributs`);
 }
 
 async function main() {
@@ -320,7 +286,7 @@ async function main() {
 
   // --- Company attributes, cloned from the templates ----------------------
   const attributes = new Map<string, string>();
-  for (const template of TEMPLATES) {
+  for (const template of BASE_ATTRIBUTES) {
     const source = await prisma.attributeTemplate.findUniqueOrThrow({
       where: { name: template.name },
       include: { options: true },
@@ -354,18 +320,18 @@ async function main() {
     }
     attributes.set(template.name, attribute.id);
   }
-  console.log(`  ${TEMPLATES.length} attributs clonés pour l'entreprise`);
+  console.log(`  ${BASE_ATTRIBUTES.length} attributs clonés pour l'entreprise`);
 
   // --- Categories ---------------------------------------------------------
   const categories = new Map<string, string>();
   let clothing = await prisma.category.findFirst({
-    where: { companyId: company.id, name: 'Vêtements' },
+    where: { companyId: company.id, name: CATEGORY_ROOT },
   });
   clothing ??= await prisma.category.create({
-    data: { companyId: company.id, name: 'Vêtements' },
+    data: { companyId: company.id, name: CATEGORY_ROOT },
   });
 
-  for (const entry of CATEGORIES) {
+  for (const entry of BASE_CATEGORIES) {
     let category = await prisma.category.findFirst({
       where: { companyId: company.id, name: entry.name },
     });
@@ -373,8 +339,8 @@ async function main() {
       data: {
         companyId: company.id,
         name: entry.name,
-        // Accessories are not clothing: bags stay at the root.
-        parentId: entry.name === 'Sac' ? null : clothing.id,
+        // Sacs et accessoires ne sont pas des vêtements : ils restent à la racine.
+        parentId: entry.underRoot ? clothing.id : null,
       },
     });
     categories.set(entry.name, category.id);
@@ -393,7 +359,7 @@ async function main() {
       });
     }
   }
-  console.log(`  ${CATEGORIES.length + 1} catégories`);
+  console.log(`  ${BASE_CATEGORIES.length + 1} catégories`);
 
   // --- Depositors and contracts -------------------------------------------
   const depositors = new Map<string, { id: string; code: string; commission: number }>();

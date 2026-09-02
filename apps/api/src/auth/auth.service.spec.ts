@@ -62,6 +62,10 @@ describe('AuthService', () => {
         { id: 's6', name: 'Retiré' },
       ]);
       prisma.user.create.mockResolvedValue(user);
+      // Le catalogue de départ est posé dans la même transaction.
+      prisma.attributeTemplate.findMany.mockResolvedValue([]);
+      prisma.attributeDefinition.create.mockResolvedValue({ id: 'attr-1' });
+      prisma.category.create.mockResolvedValue({ id: 'cat-1' });
     }
 
     it('normalise l’email avant de vérifier le doublon et de créer', async () => {
@@ -90,6 +94,21 @@ describe('AuthService', () => {
       expect(statuts).toHaveLength(7);
       expect(statuts.map((s: { position: number }) => s.position)).toEqual([0, 1, 2, 3, 4, 5, 6]);
       expect(prisma.statusTransition.createMany.mock.calls[0][0].data.length).toBeGreaterThan(0);
+    });
+
+    it('pose le catalogue de départ, scopé sur la nouvelle entreprise', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      arrangeTransaction();
+      await service.register(dto);
+      // Un compte neuf arrivait sur un catalogue vide : la première création de
+      // produit obligeait à inventer catégories et attributs d'abord.
+      expect(prisma.attributeDefinition.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ companyId: COMPANY_ID }),
+        }),
+      );
+      expect(prisma.category.create).toHaveBeenCalled();
+      expect(prisma.category.create.mock.calls[0][0].data.companyId).toBe(COMPANY_ID);
     });
 
     it('fait du créateur le gérant de son entreprise', async () => {

@@ -28,6 +28,11 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
 - `statuses/statuses.defaults.ts` — les 7 statuts et 20 transitions posés à la
   création d'une entreprise. En ajouter un impose une **migration de données** pour
   les entreprises existantes : les statuts sont figés après coup.
+- `catalog/catalog.defaults.ts` — attributs et catégories posés à la création d'une
+  entreprise, et `createBaseCatalog` qui les écrit. **Trois** appelants pour une
+  seule liste : l'inscription, la bibliothèque globale du seed et le catalogue de
+  l'entreprise de démonstration. Contrairement aux statuts, aucune migration de
+  données à prévoir : le catalogue se remanie librement après coup.
 - `products/lot-split.ts` — répartition d'un total au centime (plus forts restes).
   **Jumeau** dans `apps/web/lib/lot-split.ts` : modifier les deux.
 - `products/csv-export.ts` — séparateur `;`, BOM UTF-8, échappement des cellules

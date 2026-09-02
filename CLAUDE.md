@@ -49,6 +49,17 @@ Company (le compte parent, un gérant)
   Matière, Marque...) que chaque entreprise peut **cloner puis personnaliser librement**
   (renommer, changer les options) sans impacter les autres entreprises. Cette bibliothèque
   de templates est en lecture seule, gérée par seed, pas par les entreprises elles-mêmes.
+- **Une entreprise neuve arrive avec un catalogue**, posé par l'inscription dans la
+  transaction de création : les attributs de base et les catégories de base, chacune
+  rattachée aux attributs qui la concernent. Un catalogue vide rendait le premier écran
+  utile — créer un produit — inatteignable sans passer par deux écrans de réglage.
+  Contrairement aux statuts, **rien n'y est figé** : c'est un point de départ à remanier,
+  et aucune migration de données ne l'impose aux entreprises existantes.
+- La liste vit à un **seul endroit**, `catalog/catalog.defaults.ts`, parce qu'elle sert
+  trois usages : la bibliothèque globale (seed), le catalogue de la démonstration (seed)
+  et celui de toute inscription. Le clone se rattache à son template quand la bibliothèque
+  est seedée et s'en passe sinon — en production seules les migrations tournent, et le
+  catalogue doit se poser quand même.
 
 ## Produits — RÈGLE IMPORTANTE
 
