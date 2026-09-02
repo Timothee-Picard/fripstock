@@ -11,7 +11,11 @@ règles métier et les conventions.
 - **Stockage fichiers** : MinIO (compatible S3) pour les photos produit
 - **Auth** : JWT (email/mot de passe pour l'instant, OAuth Google prévu plus tard mais pas
   implémenté maintenant — ne pas complexifier le schéma User pour ça avant qu'on le demande)
-- **Orchestration** : docker-compose + Makefile
+- **Orchestration** : docker-compose + Makefile. **Deux composes, jamais mélangés** :
+  `docker-compose.yml` est strictement celui du développement (code monté en volume,
+  rechargement à chaud, ports publiés), `docker-compose.prod.yml` celui de la
+  production, déployé par Coolify. Même partage pour les images : `Dockerfile` et
+  `Dockerfile.prod` dans chaque app.
 - **Monorepo** : `apps/api` (NestJS), `apps/web` (Next.js)
 
 ## Hiérarchie métier
@@ -463,6 +467,18 @@ offerte pour rien.
 - Un **jour calendaire** (`AAAA-MM-JJ`, ce que renvoie l'API pour `today.date` et
   `byDay`) n'est pas un instant : il se formate avec `formatCalendarDay`, qui le lit à
   midi UTC pour qu'aucun décalage ne le fasse glisser sur la veille ou le lendemain.
+- **Un seul service est exposé en production**, `web`, et c'est le navigateur qui le
+  décide : il ne parle jamais à l'API. Photos, PDF de contrat et export CSV passent par
+  des route handlers Next qui rattachent le jeton depuis le cookie `httpOnly`. L'API,
+  PostgreSQL et MinIO restent en `expose:` sur le réseau interne — jamais en `ports:`.
+  C'est pour cette raison que `main.ts` n'appelle pas `enableCors()` : aucune requête ne
+  traverse d'origine. Donner un domaine à l'API imposerait de l'ajouter.
+- **Les migrations s'appliquent au démarrage du conteneur `api`** (`prisma migrate deploy`
+  avant Nest), et sa sonde `/health` ne passe au vert qu'ensuite. Rien à lancer à la main
+  après un déploiement.
+- **`SHOP_TIMEZONE` doit être posée explicitement en production**, sur `api` comme sur
+  `web` : les conteneurs tournent en UTC, et le défaut `Europe/Paris` des deux constantes
+  ne se voit que dans le code. Une vente de 23 h 30 basculerait sinon au lendemain.
 - Écrire les tests au fur et à mesure n'est pas demandé pour le MVP, sauf mention
   contraire dans un prompt d'étape.
 

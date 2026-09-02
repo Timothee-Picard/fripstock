@@ -20,15 +20,17 @@ make up
 
 `make` sans argument liste toutes les cibles disponibles.
 
-| Cible                         | Effet                                                       |
-| ----------------------------- | ----------------------------------------------------------- |
-| `make up`                     | Démarre la stack en arrière-plan                            |
-| `make down`                   | Arrête la stack, conserve les données                       |
-| `make build`                  | Reconstruit les images (après un changement de dépendances) |
-| `make logs`                   | Suit les logs de tous les services                          |
-| `make restart`                | Redémarre les conteneurs sans reconstruire                  |
-| `make ps`                     | État des conteneurs                                         |
-| `make sh-api` / `make sh-web` | Shell dans un conteneur                                     |
+| Cible                             | Effet                                                       |
+| --------------------------------- | ----------------------------------------------------------- |
+| `make up`                         | Démarre la stack en arrière-plan                            |
+| `make down`                       | Arrête la stack, conserve les données                       |
+| `make build`                      | Reconstruit les images (après un changement de dépendances) |
+| `make logs`                       | Suit les logs de tous les services                          |
+| `make restart`                    | Redémarre les conteneurs sans reconstruire                  |
+| `make ps`                         | État des conteneurs                                         |
+| `make sh-api` / `make sh-web`     | Shell dans un conteneur                                     |
+| `make prod-build`                 | Construit les images de production (voir « Déploiement »)   |
+| `make prod-up` / `make prod-down` | Stack de production en local, isolée du dev                 |
 
 ### Après un clone
 
@@ -754,6 +756,108 @@ Le menu ne propose que ce qui aboutira : une entrée dont la permission manque n
 affichée, et le filtrage se fait **côté serveur** plutôt qu'en masquant une liste complète
 envoyée au client.
 
+## Déploiement
+
+Le dépôt porte **deux fichiers Compose**, et ils ne se mélangent jamais :
+
+| Fichier                   | À quoi il sert                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`      | Développement seul : code de l'hôte monté en volume, rechargement à chaud, ports publiés en local |
+| `docker-compose.prod.yml` | Production : images construites, aucun port publié, migrations appliquées au démarrage            |
+
+Chaque application a de même son `Dockerfile` (développement) et son `Dockerfile.prod`
+(construction multi-étapes). `make prod-build` construit les deux images de production
+sans rien déployer — c'est le contrôle à passer avant de pousser une modification qui
+touche au déploiement. `make prod-up` et `make prod-down` font tourner cette stack en
+local pour l'essayer pour de bon.
+
+Ces trois cibles posent toutes un nom de projet Docker distinct, et ce n'est pas
+cosmétique : sans lui, les deux composes partagent celui du dossier, Compose en déduit
+les mêmes noms d'images, et construire la production écrase celles du développement. Le
+conteneur de dev repart alors sur l'image de prod et `make format` échoue sur une erreur
+de permissions qui ne dit rien de la cause. Le même préfixe cloisonne les volumes :
+`make prod-down` détruit ceux de la stack locale de production, jamais la base de
+développement.
+
+### Un seul service exposé
+
+**Le navigateur ne parle jamais à l'API.** `apps/web/lib/api.ts` lit `API_URL` côté
+serveur uniquement, et les trois flux qui pourraient faire exception passent eux aussi par
+des route handlers Next qui rattachent le jeton depuis le cookie `httpOnly` : les photos
+(`/api/photos/…`), le PDF de contrat (`/api/deposit-contracts/[id]/pdf`) et l'export CSV
+(`/api/export`).
+
+Conséquence directe : **seul `web` reçoit un domaine**. L'API, PostgreSQL et MinIO restent
+sur le réseau interne, en `expose:` et non en `ports:`. Ce n'est pas de la prudence
+décorative — publier ces ports offrirait la base et le stockage à Internet, et entrerait en
+collision avec les autres applications du serveur. C'est aussi pourquoi `main.ts` n'appelle
+pas `enableCors()` : aucune requête ne traverse d'origine. Le jour où l'API recevrait son
+propre domaine, il faudrait l'ajouter.
+
+### Déployer sur Coolify
+
+Ressource **Git Repository**, build pack **Docker Compose**.
+
+| Réglage        | Valeur                     |
+| -------------- | -------------------------- |
+| Branch         | `main`                     |
+| Base directory | `/`                        |
+| Compose file   | `/docker-compose.prod.yml` |
+| Domaine        | sur le service `web` seul  |
+
+Le compose déclare `SERVICE_FQDN_WEB_3000` sur `web` : Coolify y attribue le domaine et
+pose les étiquettes de son proxy. Fixer le domaine dans l'interface, service par service,
+revient au même.
+
+Variables d'environnement à créer :
+
+| Variable              | Rôle                                                         |
+| --------------------- | ------------------------------------------------------------ |
+| `POSTGRES_USER`       | Compte PostgreSQL                                            |
+| `POSTGRES_PASSWORD`   | Mot de passe PostgreSQL                                      |
+| `POSTGRES_DB`         | Nom de la base                                               |
+| `MINIO_ROOT_USER`     | Compte MinIO, sert aussi de clé d'accès à l'API              |
+| `MINIO_ROOT_PASSWORD` | Mot de passe MinIO, sert aussi de clé secrète                |
+| `MINIO_BUCKET`        | Bucket des photos produit, créé tout seul au premier envoi   |
+| `JWT_SECRET`          | Signature des jetons. **L'API refuse de démarrer sans**      |
+| `SHOP_TIMEZONE`       | Fuseau d'affichage de la boutique, `Europe/Paris` par défaut |
+
+Aucune variable `*_PORT` n'est utile : rien n'est publié sur l'hôte. Les valeurs du
+`.env.example` sont celles du développement et n'ont rien à faire ici — `JWT_SECRET`
+surtout, qui doit être long et aléatoire.
+
+**`SHOP_TIMEZONE` est le piège discret** : elle ne figure dans aucun `.env.example`, et les
+conteneurs tournent en UTC. Sans elle, une vente encaissée à 23 h 30 bascule dans la
+recette du lendemain. Elle se pose sur `api` **et** sur `web` — les deux constantes
+(`apps/api/src/stats/today.ts`, `apps/web/lib/dates.ts`) doivent toujours porter la même
+valeur.
+
+### Migrations
+
+Le conteneur `api` lance `prisma migrate deploy` avant de démarrer Nest. Un déploiement
+applique donc les migrations tout seul, et sa sonde `/health` ne passe au vert qu'ensuite —
+`web` attend ce vert pour démarrer. Rien à lancer à la main.
+
+Le seed, lui, ne tourne jamais en production : il refuse `NODE_ENV=production`, puisqu'il
+crée des comptes de démonstration.
+
+### Premier compte
+
+Une base de production est vide. Le premier gérant se crée par l'écran `/register`, qui
+monte l'entreprise, ses statuts et son flux de transitions dans la même transaction. Les
+comptes suivants s'invitent depuis `/dashboard/users`.
+
+### Points de vigilance
+
+- **Une seule réplique de l'API.** Elle porte un job planifié (l'alerte d'échéance des
+  contrats de dépôt) ; deux exemplaires enverraient la notification en double.
+- **`NODE_ENV=production` doit atteindre le runtime de `web`**, pas seulement son build :
+  c'est de là que `lib/session.ts` déduit le drapeau `Secure` du cookie de session. Les
+  images de production le posent, mais un `docker run` bricolé à la main pourrait l'oublier.
+- **MinIO est appelé en clair** (`useSSL: false`, codé en dur dans `uploads.service.ts`).
+  Correct pour un saut entre conteneurs du même réseau ; pointer vers un S3 externe en TLS
+  demanderait une modification du code.
+
 ## Contribuer
 
 ### Convention de commit
@@ -851,14 +955,15 @@ le script le signale au lieu de le faire en silence.
 apps/
 ├── api/       API NestJS (TypeScript strict, Prisma, class-validator)
 └── web/       Front Next.js (App Router, TypeScript, Tailwind)
-docker-compose.yml   postgres, minio, api, web
-Makefile             raccourcis de développement et vérifications
-scripts/             node-run.sh, check-db.sh, release.sh
-.githooks/           commit-msg, pre-commit, pre-push
-.github/workflows/   CI et publication des releases
-prompts/             archive des prompts ayant servi à construire l'app
-docs/KIT.md          documentation du kit de démarrage
-.claude/             agents, skills, hooks, et memoire/ (notes pour Claude Code)
+docker-compose.yml       postgres, minio, api, web — développement
+docker-compose.prod.yml  les mêmes en production, sans port publié
+Makefile                 raccourcis de développement et vérifications
+scripts/                 node-run.sh, check-db.sh, release.sh
+.githooks/               commit-msg, pre-commit, pre-push
+.github/workflows/       CI et publication des releases
+prompts/                 archive des prompts ayant servi à construire l'app
+docs/KIT.md              documentation du kit de démarrage
+.claude/                 agents, skills, hooks, et memoire/ (notes pour Claude Code)
 ```
 
 - **`CLAUDE.md`** — règles métier et conventions de code. C'est le document qui fait foi ;

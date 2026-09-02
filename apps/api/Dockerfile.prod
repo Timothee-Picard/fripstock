@@ -1,0 +1,52 @@
+# Image de production de l'API. Le Dockerfile voisin reste celui du
+# développement (hot reload, code monté en volume) : les deux coexistent, et
+# c'est docker-compose.prod.yml qui désigne celui-ci.
+
+# --- Étape de construction ---------------------------------------------------
+FROM node:24-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# `prisma generate` charge prisma.config.ts, qui résout env('DATABASE_URL') et
+# lève si la variable manque. La génération ne se connecte à aucune base : cette
+# URL n'est qu'un jeton de passage, jamais utilisée. La vraie arrive au runtime.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build?schema=public
+
+# L'ordre compte : Prisma 7 génère un client TypeScript dans src/generated/
+# (ignoré par git, donc absent d'un clone neuf), et c'est `nest build` qui le
+# compile ensuite vers dist/. Générer après le build laisserait un dist sans client.
+RUN npx --no -- prisma generate
+RUN npm run build
+
+# --- Image finale ------------------------------------------------------------
+FROM node:24-alpine AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV API_PORT=3001
+
+# node_modules est repris en entier, dépendances de développement comprises :
+# `prisma` en fait partie et la commande de migration au démarrage en a besoin.
+# Un `npm ci --omit=dev` produirait une image plus légère et un conteneur qui ne
+# démarre pas.
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node package.json ./
+# Nécessaires à `prisma migrate deploy` : le dossier des migrations et la
+# configuration qui lui fournit DATABASE_URL.
+COPY --chown=node:node prisma ./prisma
+COPY --chown=node:node prisma.config.ts ./
+
+USER node
+
+EXPOSE 3001
+
+# Les migrations passent avant le démarrage : le healthcheck ne vire au vert
+# qu'une fois la base à jour, et `web` attend ce vert pour démarrer.
+CMD ["sh", "-c", "npx --no -- prisma migrate deploy && npm run start:prod"]

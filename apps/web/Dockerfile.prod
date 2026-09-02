@@ -1,0 +1,41 @@
+# Image de production du front. Le Dockerfile voisin reste celui du
+# développement (`next dev`, code monté en volume).
+
+# --- Étape de construction ---------------------------------------------------
+FROM node:24-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# `next build` n'appelle jamais l'API : toutes les pages qui en dépendent lisent
+# le cookie de session et sont donc rendues à la demande. C'est ce que vérifie
+# déjà `make check-build`, qui tourne sans stack.
+RUN npm run build
+
+# --- Image finale ------------------------------------------------------------
+FROM node:24-alpine AS runtime
+
+WORKDIR /app
+
+# En production, et pas seulement au build : c'est de cette variable que
+# lib/session.ts déduit le drapeau `secure` du cookie fripstock_token.
+ENV NODE_ENV=production
+ENV PORT=3000
+# Écouter sur la loopback rendrait le port injoignable depuis le réseau docker.
+ENV HOSTNAME=0.0.0.0
+
+# `output: 'standalone'` (next.config.ts) produit un serveur autonome avec ses
+# seules dépendances utiles. Les fichiers statiques en sont exclus par
+# construction et se copient à part.
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
