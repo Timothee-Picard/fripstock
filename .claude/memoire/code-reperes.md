@@ -33,7 +33,14 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
 - `products/csv-export.ts` — séparateur `;`, BOM UTF-8, échappement des cellules
   commençant par `=`, `+`, `-`, `@`.
 - `stats/stats.service.ts` — découpage du tableau de bord par droit ; les blocs
-  refusés ne sont pas calculés, donc absents de la réponse.
+  refusés ne sont pas calculés, donc absents de la réponse. Le temps de rotation
+  et le classement par valeur d'attribut se calculent **sur les lignes de vente
+  déjà chargées** : y ajouter un agrégat ne demande pas une requête de plus,
+  seulement un champ au `select`.
+- `stats/dashboard-layout.ts` — relecture défensive de `User.dashboardLayout`.
+  L'API valide la **forme** des clés, jamais leur sens : le catalogue des
+  modules appartient à l'écran, et une clé inconnue s'ignore à l'affichage. Rien
+  à synchroniser entre les deux côtés, c'est délibéré.
 - `stats/today.ts` — bornes de la journée dans le fuseau boutique, et le **jour
   calendaire** (`day`) à afficher, l'instant se reformatant en la veille côté
   serveur Next qui tourne en UTC.
@@ -54,6 +61,16 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   UTC, le navigateur non. `formatCalendarDay` pour un `AAAA-MM-JJ`, qui n'est pas
   un instant. **Jumeau** de `SHOP_TIMEZONE` dans `stats/today.ts` côté API.
 - `app/dashboard/counter.tsx` — le comptoir de vente.
+- `components/dashboard-modules.tsx` — la zone rangeable des graphiques :
+  glisser-déposer natif (aucune bibliothèque), boutons ↑ ↓ pour le clavier,
+  réserve des masqués. Une carte porteuse d'`attribute` est un exemplaire du
+  module « par attribut » : la réserve n'en montre qu'une entrée générique et le
+  choix se fait par le `select` de la carte, qui **échange** les deux entrées
+  plutôt que d'en créer une. Le contenu des cartes est **rendu par le serveur** et
+  passé en propriété : `app/dashboard/page.tsx` compose la liste, ce fichier ne
+  s'occupe que de l'ordre. `lib/dashboard-modules.ts` croise cette liste avec le
+  rangement enregistré — c'est lui qui décide du sort d'un module jamais rangé
+  ou devenu introuvable.
 - `app/dashboard/removals-card.tsx` — l'aperçu des retraits sur le tableau de bord,
   deux listes selon le droit **et** selon l'endroit regardé. `app/dashboard/removals/`
   en est la liste complète, rangée par endroit où aller (`sections.ts`). Le sens du geste se lit sur

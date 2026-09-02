@@ -1,14 +1,30 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
+import { saveDashboardLayout } from './actions';
 import { Counter } from './counter';
 import { Removals } from './removals-card';
-import { CategoryBars, StockPie, SalesCurve } from '@/components/dashboard-charts';
+import {
+  AttributeBars,
+  CategoryBars,
+  RotationBars,
+  StockPie,
+  SalesCurve,
+} from '@/components/dashboard-charts';
+import { DashboardModules, type DashboardModule } from '@/components/dashboard-modules';
 import { PeriodSelector } from '@/components/period-selector';
 import { ShopSelector } from '@/components/shop-selector';
 import { apiFetch } from '@/lib/api';
 import { formatCalendarDay, formatDate } from '@/lib/dates';
+import { arrangeModules, ATTRIBUTE_MODULE_PREFIX } from '@/lib/dashboard-modules';
 import { hasPermission, hasPermissionOnShop } from '@/lib/permissions';
 import { requireSession } from '@/lib/session';
-import { eurosNumber, ONLINE_CHANNEL, type Dashboard, type Status } from '@/lib/types';
+import {
+  eurosNumber,
+  ONLINE_CHANNEL,
+  type Dashboard,
+  type DashboardLayout,
+  type Status,
+} from '@/lib/types';
 
 function Chiffre({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
@@ -17,24 +33,6 @@ function Chiffre({ label, value, detail }: { label: string; value: string; detai
       <span className="mt-1 block text-2xl font-semibold text-slate-900">{value}</span>
       {detail ? <span className="mt-0.5 block text-xs text-slate-600">{detail}</span> : null}
     </div>
-  );
-}
-
-function Card({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-medium text-slate-900">{title}</h2>
-      {hint ? <p className="mt-0.5 mb-2 text-xs text-slate-600">{hint}</p> : null}
-      {children}
-    </section>
   );
 }
 
@@ -63,12 +61,26 @@ export default async function PageTableauDeBord({
   // les blocs autorisés. Un bloc absent est un droit qui manque, pas une panne.
   // La vente rapide en ligne a besoin du statut visé. C'est le flag qui le
   // désigne, jamais le libellé — le gérant peut renommer ses statuts.
-  const [stats, statuses] = await Promise.all([
+  // Le rangement des modules est une préférence de compte : il ne dépend ni de
+  // la période ni de la boutique regardée, et se lit donc à part.
+  const [stats, statuses, layout] = await Promise.all([
     apiFetch<Dashboard>(`/stats/dashboard?${requete.toString()}`),
     apiFetch<Status[]>('/statuses'),
+    apiFetch<DashboardLayout>('/stats/layout'),
   ]);
   const statutEnLigne = statuses.find((s) => s.isOnlineSale)?.id;
-  const { sales, stock, returns, today, byDay, topCategories, topProducts, removals } = stats;
+  const {
+    sales,
+    stock,
+    returns,
+    today,
+    byDay,
+    topCategories,
+    topProducts,
+    rotation,
+    topAttributes,
+    removals,
+  } = stats;
 
   // Vendre est un droit **par boutique** : le détenir à la Gare n'autorise pas
   // à encaisser au Centre-ville. Le comptoir ne s'affiche donc que là où la
@@ -84,42 +96,56 @@ export default async function PageTableauDeBord({
   const canSeeOnline =
     canSellOnline || hasPermission(session, 'stats.view') || hasPermission(session, 'stock.view');
 
-  // Les cartes de graphiques se composent, plutôt que d'occuper des colonnes
-  // fixes : à un seul bloc autorisé, la grille ne doit pas laisser un trou.
-  const cartes: React.ReactNode[] = [];
+  // Les modules du tableau de bord, dans leur ordre par défaut. Chacun n'existe
+  // que si son bloc est là : un bloc absent est un droit qui manque, et une
+  // carte vide se lirait comme « rien à signaler » plutôt que « pas pour vous ».
+  //
+  // Les classements par attribut arrivent en dernier et masqués par défaut :
+  // une entreprise en a quatre ou cinq, et les afficher tous d'office noierait
+  // le reste. On les ajoute depuis « Personnaliser ».
+  type Candidate = Omit<DashboardModule, 'visible'> & { defaultVisible: boolean };
+  const modules: Candidate[] = [];
+  const add = (m: Omit<Candidate, 'defaultVisible'> & { defaultVisible?: boolean }) => {
+    modules.push({
+      defaultVisible: true,
+      ...m,
+      // Ces contenus voyagent dans un **tableau** de propriétés jusqu'au
+      // composant client : React y réclame une clé, comme pour n'importe quelle
+      // liste d'éléments. Elle est posée ici, sur la clé du module, plutôt que
+      // recopiée à la main sur chaque graphique.
+      content: <Fragment key={m.key}>{m.content}</Fragment>,
+    });
+  };
+
   if (byDay) {
-    cartes.push(
-      <Card
-        key="ventes"
-        title="Ventes sur la période"
-        hint="Montant réellement encaissé, jour par jour."
-      >
-        <SalesCurve data={byDay} />
-      </Card>,
-    );
+    add({
+      key: 'sales-curve',
+      title: 'Ventes sur la période',
+      hint: 'Montant réellement encaissé, jour par jour.',
+      content: <SalesCurve data={byDay} />,
+    });
   }
   if (stock) {
-    cartes.push(
-      <Card
-        key="stock"
-        title={enLigne ? 'Articles en ligne, par statut' : 'Stock par statut'}
-        hint="Tous statuts confondus, quantités comprises."
-      >
-        <StockPie data={stock.byStatus} />
-      </Card>,
-    );
+    add({
+      key: 'stock-pie',
+      title: enLigne ? 'Articles en ligne, par statut' : 'Stock par statut',
+      hint: 'Tous statuts confondus, quantités comprises.',
+      content: <StockPie data={stock.byStatus} />,
+    });
   }
   if (topCategories) {
-    cartes.push(
-      <Card key="categories" title="Catégories par chiffre d'affaires">
-        <CategoryBars data={topCategories} />
-      </Card>,
-    );
+    add({
+      key: 'top-categories',
+      title: "Catégories par chiffre d'affaires",
+      content: <CategoryBars data={topCategories} />,
+    });
   }
   if (topProducts) {
-    cartes.push(
-      <Card key="meilleures" title="Meilleures ventes">
-        {topProducts.length === 0 ? (
+    add({
+      key: 'top-products',
+      title: 'Meilleures ventes',
+      content:
+        topProducts.length === 0 ? (
           <p className="py-12 text-center text-sm text-slate-600">Aucune vente sur la période.</p>
         ) : (
           <ol className="divide-y divide-slate-100">
@@ -138,10 +164,40 @@ export default async function PageTableauDeBord({
               </li>
             ))}
           </ol>
-        )}
-      </Card>,
-    );
+        ),
+    });
   }
+  if (rotation) {
+    add({
+      key: 'rotation',
+      title: 'Temps de rotation',
+      hint: "De l'entrée en stock à la vente, sur les articles vendus de la période.",
+      content: <RotationBars data={rotation} />,
+    });
+  }
+  // Un candidat par attribut, mais **un seul module** aux yeux de l'écran :
+  // la réserve n'en propose qu'une entrée générique, et l'attribut se choisit
+  // sur la carte. Les attributs vont et viennent — en énumérer un par entrée
+  // ferait une réserve qui se périme, et une carte orpheline à la première
+  // suppression. Ici, l'attribut supprimé disparaît du catalogue, sa carte avec
+  // lui, et le rangement se recolle tout seul.
+  for (const attribute of topAttributes ?? []) {
+    add({
+      key: `${ATTRIBUTE_MODULE_PREFIX}${attribute.id}`,
+      title: `Meilleures ventes par ${attribute.name.toLowerCase()}`,
+      hint:
+        attribute.type === 'MULTISELECT'
+          ? 'Un article portant plusieurs valeurs compte dans chacune.'
+          : undefined,
+      defaultVisible: false,
+      attribute: { id: attribute.id, name: attribute.name },
+      content: <AttributeBars data={attribute} />,
+    });
+  }
+
+  // Le rangement enregistré l'emporte ; ce qu'il ne mentionne pas se pose à la
+  // fin, avec sa visibilité par défaut.
+  const arranged = arrangeModules(modules, layout.modules);
 
   return (
     <div className="space-y-6">
@@ -273,9 +329,9 @@ export default async function PageTableauDeBord({
             ) : null}
           </div>
 
-          <div className={cartes.length > 1 ? 'grid gap-4 xl:grid-cols-2' : 'grid gap-4'}>
-            {cartes}
-          </div>
+          {/* Chacun range son tableau de bord : l'ordre et les modules affichés
+              sont une préférence de compte, enregistrée côté API. */}
+          <DashboardModules modules={arranged} save={saveDashboardLayout} />
 
           <p className="text-xs text-slate-600">
             {sales

@@ -12,9 +12,21 @@ const vendu = (over: Partial<Record<string, unknown>> = {}) => ({
   appliedCommission: null,
   saleType: 'RESALE',
   soldAt: new Date('2026-08-10T12:00:00.000Z'),
+  // Entré en stock dix jours avant la vente : le temps de rotation par défaut.
+  createdAt: new Date('2026-07-31T12:00:00.000Z'),
   category: { id: 'c1', name: 'Sac' },
+  attributeOptions: [],
+  attributeValues: [],
   ...over,
 });
+
+/** Une valeur de liste portée par un article vendu (Couleur : Rouge). */
+const option = (attribute: { id: string; name: string; type: string }, value: string) => ({
+  option: { value, attribute },
+});
+
+const COULEUR = { id: 'a1', name: 'Couleur', type: 'SELECT' };
+const MARQUE = { id: 'a2', name: 'Marque', type: 'TEXT' };
 
 const enStock = (over: Partial<Record<string, unknown>> = {}) => ({
   quantity: 1,
@@ -56,6 +68,8 @@ describe('StatsService', () => {
       'stock',
       'returns',
       'today',
+      'rotation',
+      'topAttributes',
     ].filter((cle) => !(cle in d));
     if (manquants.length > 0) {
       throw new Error(`blocs absents pour un gérant : ${manquants.join(', ')}`);
@@ -72,6 +86,8 @@ describe('StatsService', () => {
   beforeEach(() => {
     prisma = createPrismaMock();
     service = new StatsService(asPrisma(prisma));
+    // Le catalogue des attributs classables, lu à part des produits.
+    prisma.attributeDefinition.findMany.mockResolvedValue([]);
   });
 
   describe('période', () => {
@@ -607,6 +623,157 @@ describe('StatsService', () => {
       await complet();
       const appels = prisma.product.findMany.mock.calls.slice(-2);
       for (const appel of appels) expect(appel[0].orderBy).toEqual({ soldAt: 'desc' });
+    });
+  });
+
+  describe('temps de rotation', () => {
+    /** Un article vendu `jours` après son entrée en stock. */
+    const rotation = (jours: number, over: Record<string, unknown> = {}) =>
+      vendu({
+        createdAt: new Date('2026-08-10T12:00:00.000Z'),
+        soldAt: new Date(new Date('2026-08-10T12:00:00.000Z').getTime() + jours * 86400000),
+        ...over,
+      });
+
+    it('moyenne et médiane de l’entrée en stock à la vente', async () => {
+      arrange([rotation(2), rotation(10), rotation(60)]);
+      const { rotation: r } = await complet();
+      expect(r).toMatchObject({ count: 3, averageDays: 24, medianDays: 10 });
+    });
+
+    it('prend la moyenne des deux valeurs centrales quand le compte est pair', async () => {
+      arrange([rotation(4), rotation(10)]);
+      const { rotation: r } = await complet();
+      expect(r.medianDays).toBe(7);
+    });
+
+    it('range les ventes par tranche, la dernière étant ouverte', async () => {
+      arrange([rotation(3), rotation(7), rotation(12), rotation(200)]);
+      const { rotation: r } = await complet();
+      // Borne haute incluse : sept jours tombe dans la première tranche.
+      expect(r.buckets).toEqual([
+        { from: 0, to: 7, count: 2 },
+        { from: 7, to: 14, count: 1 },
+        { from: 14, to: 30, count: 0 },
+        { from: 30, to: 60, count: 0 },
+        { from: 60, to: 90, count: 0 },
+        { from: 90, to: null, count: 1 },
+      ]);
+    });
+
+    it('ne descend jamais sous zéro sur une vente antérieure à la fiche', async () => {
+      arrange([rotation(-5)]);
+      const { rotation: r } = await complet();
+      expect(r.averageDays).toBe(0);
+    });
+
+    it('ignore une vente sans date et rend zéro sans aucune', async () => {
+      arrange([rotation(4, { soldAt: null })]);
+      const { rotation: r } = await complet();
+      expect(r).toMatchObject({ count: 0, averageDays: 0, medianDays: 0 });
+    });
+  });
+
+  describe('classement par valeur d’attribut', () => {
+    it('classe les valeurs par nombre d’articles vendus, pas par euros', async () => {
+      // Deux rouges à petit prix passent devant un manteau bleu : la question
+      // posée est ce qui part, pas ce qui rapporte.
+      prisma.attributeDefinition.findMany.mockResolvedValue([COULEUR]);
+      arrange([
+        vendu({ soldPrice: '10', attributeOptions: [option(COULEUR, 'Rouge')] }),
+        vendu({ soldPrice: '120', attributeOptions: [option(COULEUR, 'Bleu')] }),
+        vendu({ soldPrice: '15', attributeOptions: [option(COULEUR, 'Rouge')] }),
+      ]);
+      const { topAttributes } = await complet();
+      expect(topAttributes).toEqual([
+        {
+          ...COULEUR,
+          values: [
+            { value: 'Rouge', revenue: 25, count: 2 },
+            { value: 'Bleu', revenue: 120, count: 1 },
+          ],
+        },
+      ]);
+    });
+
+    it('départage deux valeurs à égalité par le chiffre d’affaires', async () => {
+      prisma.attributeDefinition.findMany.mockResolvedValue([COULEUR]);
+      arrange([
+        vendu({ soldPrice: '10', attributeOptions: [option(COULEUR, 'Rouge')] }),
+        vendu({ soldPrice: '30', attributeOptions: [option(COULEUR, 'Bleu')] }),
+      ]);
+      const { topAttributes } = await complet();
+      expect(topAttributes[0].values.map((v) => v.value)).toEqual(['Bleu', 'Rouge']);
+    });
+
+    it('classe aussi le texte libre, espaces en trop retirés', async () => {
+      prisma.attributeDefinition.findMany.mockResolvedValue([MARQUE]);
+      arrange([
+        vendu({ soldPrice: '20', attributeValues: [{ textValue: ' Levis ', attribute: MARQUE }] }),
+        vendu({ soldPrice: '10', attributeValues: [{ textValue: 'Levis', attribute: MARQUE }] }),
+        // Un attribut renseigné à vide ne fabrique pas une valeur « rien ».
+        vendu({ soldPrice: '90', attributeValues: [{ textValue: null, attribute: MARQUE }] }),
+      ]);
+      const { topAttributes } = await complet();
+      expect(topAttributes[0].values).toEqual([{ value: 'Levis', revenue: 30, count: 2 }]);
+    });
+
+    it('garde une entrée par attribut même sans vente', async () => {
+      // Sinon la carte qu'on vient d'ajouter disparaîtrait du rangement dès
+      // qu'on remonte à sept jours.
+      prisma.attributeDefinition.findMany.mockResolvedValue([COULEUR, MARQUE]);
+      arrange([]);
+      const { topAttributes } = await complet();
+      expect(topAttributes).toEqual([
+        { ...COULEUR, values: [] },
+        { ...MARQUE, values: [] },
+      ]);
+    });
+
+    it('ignore la valeur d’un attribut absent du catalogue classable', async () => {
+      prisma.attributeDefinition.findMany.mockResolvedValue([COULEUR]);
+      const pointure = { id: 'a9', name: 'Pointure', type: 'NUMBER' };
+      arrange([vendu({ soldPrice: '30', attributeOptions: [option(pointure, '42')] })]);
+      const { topAttributes } = await complet();
+      expect(topAttributes).toEqual([{ ...COULEUR, values: [] }]);
+    });
+
+    it('ne garde que les six premières valeurs', async () => {
+      prisma.attributeDefinition.findMany.mockResolvedValue([COULEUR]);
+      arrange(
+        Array.from({ length: 9 }, (_, i) =>
+          vendu({ soldPrice: `${i + 1}`, attributeOptions: [option(COULEUR, `c${i}`)] }),
+        ),
+      );
+      const { topAttributes } = await complet();
+      expect(topAttributes[0].values).toHaveLength(6);
+      // Une vente chacun : c'est le chiffre d'affaires qui départage.
+      expect(topAttributes[0].values[0].value).toBe('c8');
+    });
+  });
+
+  describe('rangement des modules', () => {
+    it('rend le rangement enregistré', async () => {
+      prisma.user.findFirst.mockResolvedValue({
+        dashboardLayout: [{ key: 'rotation', visible: false }],
+      });
+      await expect(service.layout(manager)).resolves.toEqual({
+        modules: [{ key: 'rotation', visible: false }],
+      });
+    });
+
+    it('rend une liste vide quand rien n’a jamais été rangé', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+      await expect(service.layout(manager)).resolves.toEqual({ modules: [] });
+    });
+
+    it('enregistre le rangement sur le seul compte du jeton', async () => {
+      const modules = [{ key: 'rotation', visible: true }];
+      await expect(service.saveLayout(manager, { modules })).resolves.toEqual({ modules });
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: manager.userId, companyId: COMPANY_ID },
+        data: { dashboardLayout: modules },
+      });
     });
   });
 

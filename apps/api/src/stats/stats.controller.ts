@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import type { CurrentUser } from '../common/types/current-user';
+import { DashboardLayoutDto } from './dto/dashboard-layout.dto';
 import { PeriodDto } from './dto/period.dto';
 import { StatsService } from './stats.service';
 
@@ -22,5 +23,19 @@ export class StatsController {
   @Get('dashboard')
   dashboard(@AuthUser() currentUser: CurrentUser, @Query() filters: PeriodDto) {
     return this.stats.dashboard(currentUser, filters);
+  }
+
+  /**
+   * Rangement des modules, propre à l'utilisateur du jeton — sans permission
+   * ni identifiant dans l'URL : on ne range que son propre tableau de bord.
+   */
+  @Get('layout')
+  layout(@AuthUser() currentUser: CurrentUser) {
+    return this.stats.layout(currentUser);
+  }
+
+  @Put('layout')
+  saveLayout(@AuthUser() currentUser: CurrentUser, @Body() dto: DashboardLayoutDto) {
+    return this.stats.saveLayout(currentUser, dto);
   }
 }

@@ -26,6 +26,41 @@ export function ViewIcon() {
   );
 }
 
+/** Poignée de déplacement : les six points d'une prise à glisser. */
+export function DragIcon() {
+  return (
+    <svg {...commun}>
+      <circle cx="9" cy="6" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="18" r="1" />
+      <circle cx="15" cy="6" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="18" r="1" />
+    </svg>
+  );
+}
+
+/** Œil barré : masquer un module du tableau de bord. */
+export function HideIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M10.7 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2" />
+      <path d="M6.6 6.7A17.2 17.2 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 4.5-1.1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <path d="M3 3l18 18" />
+    </svg>
+  );
+}
+
+/** Plus : ajouter un module masqué au tableau de bord. */
+export function AddIcon() {
+  return (
+    <svg {...commun}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
 export function EditIcon() {
   return (
     <svg {...commun}>

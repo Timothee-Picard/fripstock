@@ -492,6 +492,30 @@ export interface Dashboard {
   byDay?: { day: string; revenue: number; count: number }[];
   topCategories?: { id: string; name: string; revenue: number; count: number }[];
   topProducts?: { id: string; name: string; reference: string | null; revenue: number }[];
+  /**
+   * Temps de rotation : de l'entrée en stock à la vente. La médiane accompagne
+   * la moyenne — un manteau resté un an fait mentir la seconde à lui seul.
+   *
+   * `buckets[].to` à `null` marque la dernière tranche, ouverte.
+   */
+  rotation?: {
+    count: number;
+    averageDays: number;
+    medianDays: number;
+    buckets: { from: number; to: number | null; count: number }[];
+  };
+  /**
+   * Ventes classées par valeur d'attribut : la meilleure couleur, la meilleure
+   * marque. Une entrée par attribut classable de l'entreprise, **même sans
+   * vente** — sinon la carte disparaîtrait du rangement dès qu'on change de
+   * période.
+   */
+  topAttributes?: {
+    id: string;
+    name: string;
+    type: AttributeType;
+    values: { value: string; revenue: number; count: number }[];
+  }[];
   stock?: {
     byStatus: {
       id: string;
@@ -505,4 +529,20 @@ export interface Dashboard {
     activeValue: number;
   };
   returns?: { consignmentOverPeriod: number; returned: number; rate: number };
+}
+
+/**
+ * Rangement des modules du tableau de bord, propre à chaque utilisateur.
+ *
+ * L'ordre du tableau est l'ordre à l'écran. Une clé inconnue vient d'une
+ * version antérieure de l'écran : on l'ignore. Un module absent de la liste n'a
+ * jamais été rangé : il se pose à la fin, avec sa visibilité par défaut.
+ */
+export interface DashboardLayoutEntry {
+  key: string;
+  visible: boolean;
+}
+
+export interface DashboardLayout {
+  modules: DashboardLayoutEntry[];
 }
