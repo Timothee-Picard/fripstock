@@ -12,7 +12,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
 import type { PermissionMap } from '../src/common/permissions';
 import { BASE_STATUSES, BASE_TRANSITIONS } from '../src/statuses/statuses.defaults';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { Prisma, PrismaClient } from '../src/generated/prisma/client';
 import { AttributeType, SaleType } from '../src/generated/prisma/enums';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -70,18 +70,38 @@ const TEMPLATES: { name: string; type: AttributeType; options: string[] }[] = [
     options: ['Coton', 'Laine', 'Cuir', 'Jean', 'Lin', 'Synthétique'],
   },
   { name: 'Marque', type: 'TEXT', options: [] },
+  // Choix multiples : un même article sert plusieurs occasions. C'est le seul
+  // attribut dont une valeur ne s'exclut pas des autres, et donc le seul qui
+  // fasse compter un article dans plusieurs lignes du classement.
+  {
+    name: 'Occasion',
+    type: 'MULTISELECT',
+    options: ['Quotidien', 'Travail', 'Soirée', 'Cérémonie', 'Sport'],
+  },
+  // Absent des chaussures et des accessoires, et laissé vide sur un article
+  // sur quatre : tous les champs ne sont pas toujours saisis, et un classement
+  // doit le supporter sans compter de valeur « rien ».
+  { name: 'Motif', type: 'SELECT', options: ['Uni', 'Rayé', 'Fleuri', 'À carreaux', 'Imprimé'] },
+  // Un nombre et un oui/non : ni l'un ni l'autre ne se classe par chiffre
+  // d'affaires — ils sont là pour qu'on vérifie qu'ils n'apparaissent pas dans
+  // les modules du tableau de bord.
+  { name: 'Pointure', type: 'NUMBER', options: [] },
+  { name: 'Doublé', type: 'BOOLEAN', options: [] },
 ];
 
 /** Which attributes apply to which category: a bag has no size. */
+const HABILLEMENT = ['Taille', 'Couleur', 'Matière', 'Marque', 'Occasion', 'Motif'];
 const CATEGORIES: { name: string; attributes: string[] }[] = [
-  { name: 'Robe', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { name: 'Haut', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { name: 'Chemise', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { name: 'Pantalon', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { name: 'Manteau', attributes: ['Taille', 'Couleur', 'Matière', 'Marque'] },
-  { name: 'Chaussures', attributes: ['Taille', 'Couleur', 'Marque'] },
-  { name: 'Sac', attributes: ['Couleur', 'Matière', 'Marque'] },
-  { name: 'Accessoire', attributes: ['Couleur', 'Matière', 'Marque'] },
+  { name: 'Robe', attributes: HABILLEMENT },
+  { name: 'Haut', attributes: HABILLEMENT },
+  { name: 'Chemise', attributes: HABILLEMENT },
+  { name: 'Pantalon', attributes: HABILLEMENT },
+  { name: 'Manteau', attributes: [...HABILLEMENT, 'Doublé'] },
+  // Une pointure plutôt qu'une taille, et pas de motif : chaque catégorie
+  // n'emporte que les attributs qui la concernent.
+  { name: 'Chaussures', attributes: ['Taille', 'Couleur', 'Marque', 'Occasion', 'Pointure'] },
+  { name: 'Sac', attributes: ['Couleur', 'Matière', 'Marque', 'Occasion', 'Motif'] },
+  { name: 'Accessoire', attributes: ['Couleur', 'Matière', 'Marque', 'Occasion'] },
 ];
 
 /**
@@ -209,13 +229,16 @@ async function main() {
   company ??= await prisma.company.create({ data: { name: 'Friperie Démo' } });
 
   // Demo accounts are reset on every pass, password included: they exist to be
-  // tested, changing password among other things.
+  // tested, changing password among other things. Le rangement du tableau de
+  // bord en fait partie : un `make seed` doit rendre l'écran par défaut, sinon
+  // la démonstration dépend de ce que la dernière session avait déplacé.
   const manager = await prisma.user.upsert({
     where: { email: MANAGER_EMAIL },
     update: {
       passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
       firstName: 'Camille',
       lastName: 'Durand',
+      dashboardLayout: Prisma.DbNull,
     },
     create: {
       companyId: company.id,
@@ -244,6 +267,7 @@ async function main() {
       passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
       firstName: 'Théo',
       lastName: 'Bernard',
+      dashboardLayout: Prisma.DbNull,
     },
     create: {
       companyId: company.id,
@@ -441,7 +465,21 @@ async function main() {
     onlinePrice?: number;
     /** Sold on one channel, still present on the other: a chore to clear. */
     pendingRemoval?: boolean;
+    /**
+     * Entrée en stock, en jours avant aujourd'hui. À défaut, elle est déduite
+     * de la date de vente — voir la création plus bas. Renseignée à la main sur
+     * quelques articles pour que le temps de rotation montre ses extrêmes : un
+     * article parti en deux jours, un autre resté presque un an.
+     */
+    stockDaysAgo?: number;
+    /** Attributs à choix unique (SELECT). */
     options: Record<string, string>;
+    /** Attributs à choix multiples : plusieurs valeurs pour un même attribut. */
+    multi?: Record<string, string[]>;
+    /** Attributs numériques (la pointure d'une paire de chaussures). */
+    numbers?: Record<string, number>;
+    /** Attributs oui/non (un manteau doublé ou non). */
+    flags?: Record<string, boolean>;
     brand: string;
   }
 
@@ -458,7 +496,8 @@ async function main() {
       status: 'En rayon',
       purchasePrice: 8,
       salePrice: 25,
-      options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
+      options: { Motif: 'Fleuri', Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
       brand: 'Zara',
     },
     {
@@ -470,6 +509,7 @@ async function main() {
       purchasePrice: 5,
       salePrice: 18,
       options: { Taille: 'L', Couleur: 'Blanc', Matière: 'Lin' },
+      multi: { Occasion: ['Travail'] },
       brand: 'Uniqlo',
     },
     {
@@ -481,7 +521,8 @@ async function main() {
       status: 'En rayon',
       purchasePrice: 6,
       salePrice: 22,
-      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      multi: { Occasion: ['Quotidien'] },
       brand: "Levi's",
     },
     {
@@ -491,7 +532,8 @@ async function main() {
       status: 'En rayon',
       purchasePrice: 4,
       salePrice: 15,
-      options: { Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      options: { Motif: 'Imprimé', Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Monoprix',
     },
     {
@@ -502,7 +544,9 @@ async function main() {
       status: 'En rayon',
       purchasePrice: 20,
       salePrice: 65,
-      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Sandro',
     },
     {
@@ -513,6 +557,8 @@ async function main() {
       purchasePrice: 15,
       salePrice: 48,
       options: { Taille: 'L', Couleur: 'Beige', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Burberry',
     },
     {
@@ -523,6 +569,8 @@ async function main() {
       purchasePrice: 12,
       salePrice: 35,
       options: { Taille: 'M', Couleur: 'Blanc' },
+      multi: { Occasion: ['Travail'] },
+      numbers: { Pointure: 37 },
       brand: 'Adidas',
     },
     {
@@ -533,6 +581,7 @@ async function main() {
       purchasePrice: 3,
       salePrice: 12,
       options: { Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Sans marque',
     },
     {
@@ -546,6 +595,7 @@ async function main() {
       purchasePrice: 2,
       salePrice: 9,
       options: { Couleur: 'Rouge', Matière: 'Laine' },
+      multi: { Occasion: ['Cérémonie', 'Soirée'] },
       brand: 'Sans marque',
     },
     {
@@ -555,7 +605,8 @@ async function main() {
       status: 'En stock',
       purchasePrice: 4,
       salePrice: 16,
-      options: { Taille: 'XL', Couleur: 'Vert', Matière: 'Coton' },
+      options: { Motif: 'Rayé', Taille: 'XL', Couleur: 'Vert', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Bershka',
     },
     {
@@ -565,7 +616,8 @@ async function main() {
       status: 'En stock',
       purchasePrice: 7,
       salePrice: 24,
-      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Uni', Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Mango',
     },
     {
@@ -577,7 +629,8 @@ async function main() {
       status: 'En stock',
       purchasePrice: 9,
       salePrice: 28,
-      options: { Couleur: 'Beige', Matière: 'Cuir' },
+      options: { Motif: 'Fleuri', Couleur: 'Beige', Matière: 'Cuir' },
+      multi: { Occasion: ['Soirée'] },
       brand: 'Lancel',
     },
 
@@ -592,6 +645,8 @@ async function main() {
       soldPrice: 32,
       soldDaysAgo: 0,
       options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
+      flags: { Doublé: false },
       brand: "Levi's",
     },
     {
@@ -600,10 +655,12 @@ async function main() {
       shop: CV,
       status: 'Vendu',
       purchasePrice: 2,
+      stockDaysAgo: 2,
       salePrice: 10,
       soldPrice: 8,
       soldDaysAgo: 0,
-      options: { Taille: 'S', Couleur: 'Blanc', Matière: 'Coton' },
+      options: { Motif: 'Rayé', Taille: 'S', Couleur: 'Blanc', Matière: 'Coton' },
+      multi: { Occasion: ['Travail'] },
       brand: 'Petit Bateau',
     },
     {
@@ -616,6 +673,8 @@ async function main() {
       soldPrice: 42,
       soldDaysAgo: 1,
       options: { Taille: 'M', Couleur: 'Noir' },
+      multi: { Occasion: ['Quotidien'] },
+      numbers: { Pointure: 36 },
       brand: 'Minelli',
     },
     {
@@ -627,7 +686,8 @@ async function main() {
       salePrice: 19,
       soldPrice: 19,
       soldDaysAgo: 3,
-      options: { Taille: 'M', Couleur: 'Vert', Matière: 'Synthétique' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Vert', Matière: 'Synthétique' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Zara',
     },
     {
@@ -639,7 +699,8 @@ async function main() {
       salePrice: 20,
       soldPrice: 18,
       soldDaysAgo: 6,
-      options: { Taille: 'L', Couleur: 'Gris', Matière: 'Coton' },
+      options: { Motif: 'À carreaux', Taille: 'L', Couleur: 'Gris', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien', 'Sport'] },
       brand: 'Nike',
     },
     {
@@ -652,6 +713,7 @@ async function main() {
       soldPrice: 24,
       soldDaysAgo: 9,
       options: { Taille: 'L', Couleur: 'Beige', Matière: 'Coton' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Celio',
     },
     {
@@ -663,7 +725,8 @@ async function main() {
       salePrice: 17,
       soldPrice: 15,
       soldDaysAgo: 14,
-      options: { Taille: 'S', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      options: { Motif: 'Fleuri', Taille: 'S', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Promod',
     },
     {
@@ -675,7 +738,8 @@ async function main() {
       salePrice: 14,
       soldPrice: 14,
       soldDaysAgo: 18,
-      options: { Couleur: 'Bleu', Matière: 'Coton' },
+      options: { Motif: 'Fleuri', Couleur: 'Bleu', Matière: 'Coton' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Sans marque',
     },
     {
@@ -687,7 +751,9 @@ async function main() {
       salePrice: 34,
       soldPrice: 30,
       soldDaysAgo: 24,
-      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Uniqlo',
     },
     {
@@ -696,10 +762,13 @@ async function main() {
       shop: CV,
       status: 'Vendu',
       purchasePrice: 9,
+      stockDaysAgo: 150,
       salePrice: 29,
       soldPrice: 29,
       soldDaysAgo: 31,
       options: { Taille: 'L', Couleur: 'Beige' },
+      multi: { Occasion: ['Cérémonie'] },
+      numbers: { Pointure: 43 },
       brand: 'Sans marque',
     },
 
@@ -712,6 +781,7 @@ async function main() {
       contract: 'martin-ete',
       salePrice: 60,
       options: { Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Lancel',
     },
     {
@@ -721,7 +791,8 @@ async function main() {
       status: 'Réservé',
       contract: 'martin-ete',
       salePrice: 85,
-      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Uni', Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
       brand: 'Maje',
     },
     {
@@ -735,6 +806,8 @@ async function main() {
       soldDaysAgo: 0,
       depositorPaid: false,
       options: { Taille: 'M', Couleur: 'Beige' },
+      multi: { Occasion: ['Quotidien', 'Sport'] },
+      numbers: { Pointure: 42 },
       brand: 'Minelli',
     },
     {
@@ -748,6 +821,7 @@ async function main() {
       soldDaysAgo: 12,
       depositorPaid: true,
       options: { Couleur: 'Rouge', Matière: 'Synthétique' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Hermès',
     },
     {
@@ -757,7 +831,8 @@ async function main() {
       status: 'Rendu au client',
       contract: 'martin-ete',
       salePrice: 22,
-      options: { Taille: 'M', Couleur: 'Blanc', Matière: 'Coton' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Blanc', Matière: 'Coton' },
+      multi: { Occasion: ['Travail'] },
       brand: 'Comptoir des Cotonniers',
     },
 
@@ -769,7 +844,9 @@ async function main() {
       status: 'En rayon',
       contract: 'martin-hiver',
       salePrice: 95,
-      options: { Taille: 'M', Couleur: 'Beige', Matière: 'Laine' },
+      options: { Motif: 'À carreaux', Taille: 'M', Couleur: 'Beige', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Sézane',
     },
     {
@@ -779,7 +856,8 @@ async function main() {
       status: 'En rayon',
       contract: 'martin-hiver',
       salePrice: 55,
-      options: { Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      options: { Motif: 'Rayé', Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Eric Bompard',
     },
 
@@ -792,6 +870,8 @@ async function main() {
       contract: 'durand',
       salePrice: 120,
       options: { Taille: 'L', Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
+      flags: { Doublé: false },
       brand: 'Schott',
     },
     {
@@ -805,6 +885,8 @@ async function main() {
       soldDaysAgo: 4,
       depositorPaid: false,
       options: { Taille: 'L', Couleur: 'Blanc' },
+      multi: { Occasion: ['Travail'] },
+      numbers: { Pointure: 41 },
       brand: 'Converse',
     },
     {
@@ -814,7 +896,8 @@ async function main() {
       status: 'En stock',
       contract: 'durand',
       salePrice: 38,
-      options: { Couleur: 'Vert', Matière: 'Coton' },
+      options: { Motif: 'Fleuri', Couleur: 'Vert', Matière: 'Coton' },
+      multi: { Occasion: ['Soirée'] },
       brand: 'Eastpak',
     },
 
@@ -826,7 +909,8 @@ async function main() {
       status: 'En rayon',
       contract: 'nguyen',
       salePrice: 42,
-      options: { Taille: 'S', Couleur: 'Bleu', Matière: 'Synthétique' },
+      options: { Motif: 'Imprimé', Taille: 'S', Couleur: 'Bleu', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Ba&sh',
     },
     {
@@ -839,7 +923,9 @@ async function main() {
       soldPrice: 65,
       soldDaysAgo: 8,
       depositorPaid: true,
-      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Noir', Matière: 'Laine' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Claudie Pierlot',
     },
     {
@@ -850,6 +936,8 @@ async function main() {
       contract: 'nguyen',
       salePrice: 28,
       options: { Taille: 'S', Couleur: 'Rouge' },
+      multi: { Occasion: ['Quotidien'] },
+      numbers: { Pointure: 40 },
       brand: 'Repetto',
     },
 
@@ -861,7 +949,8 @@ async function main() {
       status: 'Rendu au client',
       contract: 'bonnet',
       salePrice: 40,
-      options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
+      options: { Motif: 'Imprimé', Taille: 'M', Couleur: 'Multicolore', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Sans marque',
     },
     {
@@ -870,11 +959,13 @@ async function main() {
       shop: MA,
       status: 'Vendu',
       contract: 'bonnet',
+      stockDaysAgo: 320,
       salePrice: 55,
       soldPrice: 50,
       soldDaysAgo: 40,
       depositorPaid: true,
       options: { Couleur: 'Rouge', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Vanessa Bruno',
     },
 
@@ -901,7 +992,9 @@ async function main() {
       salePrice: 45,
       isOnline: true,
       onlinePrice: 52,
-      options: { Taille: 'M', Couleur: 'Beige', Matière: 'Coton' },
+      options: { Motif: 'À carreaux', Taille: 'M', Couleur: 'Beige', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Burberry',
     },
     {
@@ -913,7 +1006,8 @@ async function main() {
       purchasePrice: 7,
       salePrice: 24,
       isOnline: true,
-      options: { Taille: 'L', Couleur: 'Beige', Matière: 'Laine' },
+      options: { Motif: 'Rayé', Taille: 'L', Couleur: 'Beige', Matière: 'Laine' },
+      multi: { Occasion: ['Travail'] },
       brand: 'Sézane',
     },
     {
@@ -925,7 +1019,8 @@ async function main() {
       salePrice: 34,
       isOnline: true,
       onlinePrice: 39,
-      options: { Taille: 'S', Couleur: 'Vert', Matière: 'Synthétique' },
+      options: { Motif: 'Uni', Taille: 'S', Couleur: 'Vert', Matière: 'Synthétique' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
       brand: 'Maje',
     },
     {
@@ -939,6 +1034,7 @@ async function main() {
       salePrice: 38,
       isOnline: true,
       options: { Couleur: 'Beige', Matière: 'Cuir' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Vanessa Bruno',
     },
     {
@@ -949,7 +1045,8 @@ async function main() {
       purchasePrice: 5,
       salePrice: 19,
       isOnline: true,
-      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      options: { Motif: 'À carreaux', Taille: 'M', Couleur: 'Bleu', Matière: 'Jean' },
+      multi: { Occasion: ['Quotidien'] },
       brand: "Levi's",
     },
     {
@@ -964,7 +1061,9 @@ async function main() {
       salePrice: 68,
       isOnline: true,
       onlinePrice: 75,
-      options: { Taille: 'M', Couleur: 'Gris', Matière: 'Laine' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
+      flags: { Doublé: false },
       brand: 'Sandro',
     },
 
@@ -981,7 +1080,9 @@ async function main() {
       isOnline: true,
       onlinePrice: 80,
       pendingRemoval: true,
-      options: { Taille: 'L', Couleur: 'Noir', Matière: 'Cuir' },
+      options: { Motif: 'Uni', Taille: 'L', Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Schott',
     },
     {
@@ -996,6 +1097,8 @@ async function main() {
       isOnline: true,
       pendingRemoval: true,
       options: { Taille: 'S', Couleur: 'Noir' },
+      multi: { Occasion: ['Cérémonie'] },
+      numbers: { Pointure: 39 },
       brand: 'Jonak',
     },
     {
@@ -1006,12 +1109,14 @@ async function main() {
       shop: CV,
       status: 'Vendu',
       contract: 'martin-ete',
+      stockDaysAgo: 210,
       salePrice: 48,
       soldPrice: 45,
       soldDaysAgo: 2,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      options: { Motif: 'Imprimé', Taille: 'M', Couleur: 'Multicolore', Matière: 'Synthétique' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Ba&sh',
     },
 
@@ -1028,6 +1133,8 @@ async function main() {
       soldDaysAgo: 1,
       pendingRemoval: true,
       options: { Taille: 'L', Couleur: 'Bleu', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Zara',
     },
     {
@@ -1040,7 +1147,8 @@ async function main() {
       soldPrice: 22,
       soldDaysAgo: 4,
       pendingRemoval: true,
-      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Rayé', Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Other Stories',
     },
 
@@ -1056,6 +1164,7 @@ async function main() {
       soldPrice: 30,
       soldDaysAgo: 5,
       options: { Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Cérémonie', 'Soirée'] },
       brand: 'Eric Bompard',
     },
     {
@@ -1069,7 +1178,8 @@ async function main() {
       soldPrice: 58,
       soldDaysAgo: 6,
       depositorPaid: false,
-      options: { Couleur: 'Noir', Matière: 'Cuir' },
+      options: { Motif: 'Uni', Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Soirée'] },
       brand: 'Polène',
     },
     {
@@ -1083,6 +1193,8 @@ async function main() {
       soldDaysAgo: 8,
       pendingRemoval: true,
       options: { Taille: 'M', Couleur: 'Blanc' },
+      multi: { Occasion: ['Quotidien', 'Sport'] },
+      numbers: { Pointure: 38 },
       brand: 'Veja',
     },
 
@@ -1100,7 +1212,9 @@ async function main() {
       soldPrice: 55,
       soldDaysAgo: 3,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Fleuri', Taille: 'M', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
+      flags: { Doublé: false },
       brand: 'Uniqlo',
     },
     {
@@ -1113,7 +1227,8 @@ async function main() {
       soldPrice: 29,
       soldDaysAgo: 5,
       pendingRemoval: true,
-      options: { Taille: 'S', Couleur: 'Bleu', Matière: 'Coton' },
+      options: { Motif: 'Rayé', Taille: 'S', Couleur: 'Bleu', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Sézane',
     },
     {
@@ -1126,7 +1241,8 @@ async function main() {
       soldPrice: 24,
       soldDaysAgo: 7,
       pendingRemoval: true,
-      options: { Taille: 'L', Couleur: 'Vert', Matière: 'Coton' },
+      options: { Motif: 'Uni', Taille: 'L', Couleur: 'Vert', Matière: 'Coton' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Bellerose',
     },
     {
@@ -1139,7 +1255,8 @@ async function main() {
       soldPrice: 21,
       soldDaysAgo: 9,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Bleu', Matière: 'Coton' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Bleu', Matière: 'Coton' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Ralph Lauren',
     },
     {
@@ -1151,7 +1268,8 @@ async function main() {
       salePrice: 32,
       soldPrice: 30,
       soldDaysAgo: 11,
-      options: { Couleur: 'Noir', Matière: 'Cuir' },
+      options: { Motif: 'À carreaux', Couleur: 'Noir', Matière: 'Cuir' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
       brand: 'Sandro',
     },
     {
@@ -1165,6 +1283,8 @@ async function main() {
       soldDaysAgo: 13,
       pendingRemoval: true,
       options: { Taille: 'L', Couleur: 'Noir' },
+      multi: { Occasion: ['Travail'] },
+      numbers: { Pointure: 37 },
       brand: 'Free Lance',
     },
     {
@@ -1178,6 +1298,7 @@ async function main() {
       soldDaysAgo: 15,
       pendingRemoval: true,
       options: { Taille: 'S', Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien', 'Sport'] },
       brand: 'Comptoir des Cotonniers',
     },
     {
@@ -1191,7 +1312,9 @@ async function main() {
       soldDaysAgo: 2,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Gris', Matière: 'Laine' },
+      options: { Motif: 'À carreaux', Taille: 'M', Couleur: 'Gris', Matière: 'Laine' },
+      multi: { Occasion: ['Travail', 'Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Zadig & Voltaire',
     },
     {
@@ -1205,7 +1328,8 @@ async function main() {
       soldDaysAgo: 4,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      options: { Motif: 'Fleuri', Taille: 'S', Couleur: 'Noir', Matière: 'Synthétique' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Claudie Pierlot',
     },
     {
@@ -1219,7 +1343,8 @@ async function main() {
       soldDaysAgo: 6,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'L', Couleur: 'Rouge', Matière: 'Laine' },
+      options: { Motif: 'Uni', Taille: 'L', Couleur: 'Rouge', Matière: 'Laine' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Petit Bateau',
     },
     {
@@ -1234,6 +1359,7 @@ async function main() {
       isOnline: true,
       pendingRemoval: true,
       options: { Couleur: 'Beige', Matière: 'Coton' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Vanessa Bruno',
     },
     {
@@ -1248,6 +1374,8 @@ async function main() {
       isOnline: true,
       pendingRemoval: true,
       options: { Taille: 'L', Couleur: 'Beige' },
+      multi: { Occasion: ['Quotidien'] },
+      numbers: { Pointure: 36 },
       brand: 'Paraboot',
     },
     {
@@ -1261,7 +1389,8 @@ async function main() {
       soldDaysAgo: 12,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Beige', Matière: 'Laine' },
+      options: { Motif: 'Uni', Taille: 'M', Couleur: 'Beige', Matière: 'Laine' },
+      multi: { Occasion: ['Soirée', 'Cérémonie'] },
       brand: 'Maje',
     },
     {
@@ -1275,7 +1404,9 @@ async function main() {
       soldDaysAgo: 14,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'XL', Couleur: 'Beige', Matière: 'Cuir' },
+      options: { Motif: 'À carreaux', Taille: 'XL', Couleur: 'Beige', Matière: 'Cuir' },
+      multi: { Occasion: ['Quotidien'] },
+      flags: { Doublé: true },
       brand: 'Schott',
     },
     {
@@ -1289,7 +1420,8 @@ async function main() {
       soldDaysAgo: 17,
       isOnline: true,
       pendingRemoval: true,
-      options: { Taille: 'M', Couleur: 'Blanc', Matière: 'Lin' },
+      options: { Motif: 'Rayé', Taille: 'M', Couleur: 'Blanc', Matière: 'Lin' },
+      multi: { Occasion: ['Travail'] },
       brand: 'Uniqlo',
     },
     {
@@ -1298,12 +1430,14 @@ async function main() {
       shop: MA,
       status: 'Vendu',
       purchasePrice: 4,
+      stockDaysAgo: 22,
       salePrice: 16,
       soldPrice: 15,
       soldDaysAgo: 20,
       isOnline: true,
       pendingRemoval: true,
       options: { Couleur: 'Beige', Matière: 'Cuir' },
+      multi: { Occasion: ['Quotidien'] },
       brand: 'Sandro',
     },
   ];
@@ -1327,7 +1461,9 @@ async function main() {
   // lui : les relations sont en cascade.
   await prisma.product.deleteMany({ where: { companyId: company.id } });
 
+  let rangProduit = 0;
   for (const entry of products) {
+    rangProduit += 1;
     const contrat = entry.contract ? contracts.get(entry.contract)! : null;
     const deposant = contrat ? depositors.get(contrat.depositor)! : null;
 
@@ -1359,6 +1495,14 @@ async function main() {
         appliedCommission: vendu && contrat ? contrat.commission : null,
         depositorPaid: contrat ? (entry.depositorPaid ?? false) : null,
         soldAt: vendu ? ilYA(entry.soldDaysAgo ?? 0, 11 + (compteurAchat % 8)) : null,
+        // Entrée en stock : celle de l'article quand elle est écrite, sinon de
+        // quelques jours à trois mois avant la vente, pour que le temps de
+        // rotation du tableau de bord raconte autre chose que « zéro jour ».
+        // Déterministe, pour que deux `make seed` donnent la même démonstration.
+        createdAt: ilYA(
+          entry.stockDaysAgo ?? (entry.soldDaysAgo ?? 0) + 3 + ((rangProduit * 17) % 95),
+          9,
+        ),
         description: entry.description ?? null,
         internalNote: entry.note ?? null,
         quantity: entry.quantity ?? 1,
@@ -1377,8 +1521,10 @@ async function main() {
       },
     });
 
-    // SELECT attributes.
-    for (const [attributeName, value] of Object.entries(entry.options)) {
+    // SELECT et MULTISELECT : même table, une ligne par valeur retenue. Le
+    // second en pose simplement plusieurs pour le même attribut — c'est
+    // pourquoi un article y compte dans chacun de ses classements.
+    const poserOption = async (attributeName: string, value: string) => {
       const option = await prisma.attributeOption.findUniqueOrThrow({
         where: {
           attributeDefinitionId_value: {
@@ -1389,6 +1535,34 @@ async function main() {
       });
       await prisma.productAttributeOption.create({
         data: { productId: product.id, attributeOptionId: option.id },
+      });
+    };
+    for (const [attributeName, value] of Object.entries(entry.options)) {
+      await poserOption(attributeName, value);
+    }
+    for (const [attributeName, values] of Object.entries(entry.multi ?? {})) {
+      for (const value of values) await poserOption(attributeName, value);
+    }
+
+    // NUMBER et BOOLEAN : renseignés sur les fiches, absents des classements du
+    // tableau de bord — ranger des pointures par chiffre d'affaires ne répond à
+    // aucune question. Ils sont là pour qu'on le constate.
+    for (const [attributeName, numberValue] of Object.entries(entry.numbers ?? {})) {
+      await prisma.attributeValue.create({
+        data: {
+          productId: product.id,
+          attributeDefinitionId: attributes.get(attributeName)!,
+          numberValue,
+        },
+      });
+    }
+    for (const [attributeName, booleanValue] of Object.entries(entry.flags ?? {})) {
+      await prisma.attributeValue.create({
+        data: {
+          productId: product.id,
+          attributeDefinitionId: attributes.get(attributeName)!,
+          booleanValue,
+        },
       });
     }
 
