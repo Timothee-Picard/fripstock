@@ -256,10 +256,56 @@ des blocs distincts, et le service n'envoie que ceux auxquels l'utilisateur a dr
 | Bloc                                                        | Droit                                       | Contenu                                                                      |
 | ----------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------- |
 | `sales`, `byDay`, `topCategories`, `topProducts`, `returns` | `stats.view`                                | Chiffre d'affaires, marge, panier moyen, courbe, classements, taux de retour |
+| `rotation`, `topAttributes`                                 | `stats.view`                                | Temps de rotation, ventes classées par valeur d'attribut                     |
 | `stock`                                                     | `stock.view`                                | Stock actif et sa valeur, répartition par statut                             |
 | `today`                                                     | `stats.view` **ou** `products.changeStatus` | Recette du jour. `today.margin` n'est joint qu'avec `stats.view`             |
 | `removals.toDelist`                                         | `online.manage`                             | Vendus au comptoir, annonce encore publiée : à dépublier                     |
 | `removals.toPull`                                           | `products.manage`                           | Vendus par le site, vêtement encore en boutique : à décrocher                |
+
+**Le temps de rotation et le classement par attribut relèvent de `stats.view`**, comme le
+taux de retour et pour la même raison : ils ne disent pas ce qu'il y a en rayon, ils jugent
+ce qui s'y vend. La rotation se compte de l'**entrée en stock** (`createdAt`) à la **vente**
+(`soldAt`), sur les seuls articles vendus — un invendu n'a pas encore de durée, et le
+compter à zéro tirerait la moyenne vers le bas au fil des saisies. La **médiane accompagne
+toujours la moyenne** : un manteau resté un an suffit à faire mentir la seconde.
+
+**Le classement par attribut porte sur les listes et le texte libre**, jamais sur les
+nombres ni les oui/non — ranger des pointures ne répond à aucune question. Il se compte en
+**nombre d'articles vendus**, pas en euros : la question est ce qui part, et un manteau à
+120 € placerait sa couleur devant dix t-shirts. Le chiffre d'affaires reste joint et se lit
+dans l'infobulle ; à nombre égal, c'est lui qui départage. Une entrée par attribut
+classable de l'entreprise est renvoyée **même sans vente** : la liste des modules proposés
+ne doit pas changer selon la période regardée, sinon la carte qu'on vient d'ajouter
+disparaît dès qu'on remonte à sept jours. Un article en choix multiples compte dans
+**chacune** de ses valeurs — la question posée est « qu'est-ce qui se vend », pas « comment
+se répartit l'inventaire », et l'écran le dit.
+
+**Les graphiques du tableau de bord sont des modules rangeables.** Chacun s'affiche ou se
+masque, et leur ordre se change par glisser-déposer dans la zone des graphiques — pas
+ailleurs : la recette du jour, le comptoir et les retraits sont des actions, ils ne se
+rangent pas. C'est une **préférence personnelle** (`User.dashboardLayout`), pas un réglage
+d'entreprise : deux employés d'une même boutique n'ont ni les mêmes droits ni le même
+travail, et un rangement imposé masquerait à l'un ce que l'autre ne regarde jamais.
+
+- `GET /stats/layout` et `PUT /stats/layout` — **aucune permission** : ranger une carte
+  n'ouvre pas le bloc qu'elle contient, et les blocs restent découpés par droit comme
+  avant.
+- La forme stockée est une **liste ordonnée** de `{ key, visible }` : l'ordre du tableau
+  est l'ordre à l'écran, rien d'autre ne le porte. L'API en valide la **forme** et non le
+  sens — elle ne connaît pas le catalogue des modules, qui appartient à l'écran. Une clé
+  devenue inconnue est ignorée à l'affichage, pas un 400 qui bloquerait tout le reste.
+- Un module **absent de la liste** n'a jamais été rangé : il se pose à la fin avec sa
+  visibilité par défaut, plutôt que de disparaître parce qu'il est né après elle.
+- **« Meilleures ventes par attribut » est UN module qu'on ajoute plusieurs fois**, et non
+  un module par attribut. La réserve n'en propose qu'une entrée générique et l'attribut se
+  choisit **sur la carte** : les attributs vont et viennent, et une réserve qui les
+  énumérerait se périmerait à la première suppression. En interne chaque carte porte la clé
+  `attribute:<attributeId>` — c'est ce qui la relie à son classement, et ce qui la fait
+  disparaître proprement quand l'attribut est supprimé, sans laisser d'entrée morte. Aucune
+  carte d'attribut n'est posée par défaut.
+- Le rangement ne part qu'au « Terminer », **complet** : on essaie, on regarde, on garde ou
+  on abandonne. Et le glisser-déposer ne suffit pas seul — chaque carte porte aussi deux
+  boutons de déplacement, qui sont la version utilisable sans souris, pas un pis-aller.
 
 **L'aperçu du tableau de bord n'est pas la liste.** L'écran `/dashboard/removals` en donne
 la totalité, cherchable et paginée : un article vendu il y a trois semaines n'est ni dans

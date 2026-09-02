@@ -37,8 +37,11 @@ sinon `check-format` échoue sur du Prettier.
 Avant de déclarer une tâche finie, c'est `make check` qu'il faut : `check-fast`
 ne dit rien des tests ni du build.
 
-**Le seed remet les produits à zéro** à chaque passage, contrairement au reste
-qui fait de l'upsert. C'est délibéré : il sautait auparavant ceux dont la
+**Le seed remet les produits à zéro** à chaque passage — et avec eux le
+rangement du tableau de bord des deux comptes de démonstration
+(`dashboardLayout` remis à `Prisma.DbNull`, comme leur mot de passe) : une
+démonstration ne doit pas dépendre de ce que la session précédente avait
+déplacé. Le reste fait de l'upsert. C'est délibéré : il sautait auparavant ceux dont la
 référence existait déjà, et comme les références se calculent dans l'ordre du
 tableau `products`, insérer une entrée au milieu décalait toutes les suivantes
 sur des références prises, silencieusement ignorées. La base gardait un mélange

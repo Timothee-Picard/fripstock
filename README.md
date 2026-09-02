@@ -554,9 +554,10 @@ Marquer une alerte comme lue la masque pour tout le monde.
 
 `/dashboard` affiche le tableau de bord : le choix de la boutique, la recette du jour, le
 comptoir de vente, puis les chiffres de la période — chiffre d'affaires, marge boutique,
-panier moyen, stock actif et taux de retour, avec la courbe des ventes, la répartition du
-stock par statut et les meilleures ventes. Période et boutique vivent dans l'URL, donc la
-vue est partageable.
+panier moyen, stock actif et taux de retour, suivis des **modules graphiques** : courbe des
+ventes, répartition du stock par statut, catégories par chiffre d'affaires, meilleures
+ventes, temps de rotation, et un classement par valeur d'attribut (la meilleure couleur, la
+meilleure marque…). Période et boutique vivent dans l'URL, donc la vue est partageable.
 
 **Aucune permission unique ne gouverne cet écran** : la route `/stats/dashboard` ne porte
 pas de `@RequirePermission`. Trois droits y ouvrent des blocs distincts, et le service
@@ -565,6 +566,7 @@ n'envoie **que** ceux auxquels l'utilisateur a droit :
 | Bloc                                                         | Droit                                       |
 | ------------------------------------------------------------ | ------------------------------------------- |
 | CA, marge, panier moyen, courbe, classements, taux de retour | `stats.view`                                |
+| Temps de rotation, classements par valeur d'attribut         | `stats.view`                                |
 | Stock actif et sa valeur, répartition par statut             | `stock.view`                                |
 | Recette du jour (sans la marge)                              | `stats.view` **ou** `products.changeStatus` |
 
@@ -616,6 +618,65 @@ Un **jour calendaire** (`AAAA-MM-JJ`, ce que l'API renvoie pour `today.date` et 
 courbe des ventes) n'est pas un instant : `formatCalendarDay` le lit à midi UTC, ce qui
 laisse douze heures de marge de chaque côté et l'empêche de glisser sur la veille ou le
 lendemain.
+
+### Temps de rotation et meilleures valeurs
+
+**Le temps de rotation** dit combien de temps un article reste en stock avant de partir :
+de son entrée en stock à sa vente, en moyenne pour toute la boutique. Il ne se calcule que
+sur les articles **vendus** — un invendu n'a pas encore de durée, et le compter à zéro
+ferait baisser la moyenne à chaque nouvelle saisie. La **médiane** est affichée à côté de
+la moyenne, parce qu'elles se contredisent utilement : un manteau resté un an suffit à
+fausser la seconde, et l'histogramme des tranches (≤ 7 j, 7 à 14 j… 90 j et +) montre
+laquelle des deux raconte la vérité du rayon.
+
+**Le classement par valeur d'attribut** répond à « quelle couleur se vend le mieux ? »,
+« quelle taille part le plus vite ? ». Il se compte en **nombre d'articles vendus** et non
+en euros : la question est ce qui part, et un manteau à 120 € mettrait sa couleur devant
+dix t-shirts. Le chiffre d'affaires suit dans l'infobulle, et départage deux valeurs à
+égalité de quantité.
+
+Il porte sur les attributs à liste (choix unique ou multiple) et sur le texte libre, jamais
+sur les nombres ni les oui/non : ranger des pointures ne répond à aucune question qu'on se
+pose. Un article en choix multiples compte dans **chacune** de ses valeurs — la carte le
+dit, parce que le total des barres dépasse alors le nombre de ventes.
+
+Le classement existe pour **chaque** attribut de l'entreprise, même sans vente sur la
+période : sinon la carte qu'on vient d'ajouter disparaîtrait dès qu'on remonte à sept
+jours. Elle affiche alors « aucune vente renseignant cet attribut ».
+
+### Ranger ses modules
+
+Les cartes graphiques se rangent : **« Personnaliser »** ouvre le mode rangement, où chaque
+carte se déplace par glisser-déposer (ou avec deux boutons ↑ ↓, pour qui n'a pas de souris)
+et se masque d'un clic. Les modules masqués restent listés en dessous, et se réaffichent
+**à leur place**, pas à la fin. Le déplacement ne quitte pas la zone des graphiques : la
+recette du jour, le comptoir et les retraits à faire sont des actions, ils ne se rangent
+pas.
+
+Rien n'est enregistré tant qu'on n'a pas cliqué **« Terminer »** : on essaie un rangement,
+on le regarde, on le garde ou on l'abandonne — enregistrer à chaque déplacement figerait
+l'essai raté avant qu'on ait pu se raviser.
+
+Le rangement est une **préférence personnelle**, gardée sur le compte (`GET` / `PUT
+/stats/layout`, sans permission : ranger une carte n'ouvre pas le bloc qu'elle contient).
+Ce n'est pas un réglage d'entreprise : deux employés d'une même boutique n'ont ni les mêmes
+droits ni le même travail, et un rangement imposé masquerait à l'un ce que l'autre ne
+regarde jamais. Gardé côté serveur et non dans le navigateur, il suit l'utilisateur d'un
+poste à l'autre et le tableau de bord — rendu côté serveur — sort déjà rangé, sans que les
+cartes sautent de place après coup.
+
+**« Meilleures ventes par attribut » s'ajoute plusieurs fois.** La réserve n'en propose
+qu'une entrée — pas une par attribut : les attributs se créent et se suppriment, et une
+liste qui les énumérerait se périmerait à la première suppression. On clique, la carte se
+pose, et un menu **sur la carte** dit quel attribut elle classe. Une deuxième carte pour la
+marque, une troisième pour la taille : autant qu'il reste d'attributs libres, et l'entrée
+disparaît de la réserve quand ils sont tous posés. Changer l'attribut d'une carte lui garde
+sa place et renvoie l'ancien dans la réserve.
+
+Supprimer un attribut du catalogue emporte sa carte, et rien d'autre : le rangement se
+recolle sur les cartes restantes, sans entrée morte ni graphique vide. Même chose pour un
+module apparu depuis le dernier rangement — il se pose à la fin plutôt que de disparaître
+faute d'être dans une liste écrite avant lui.
 
 ### Le comptoir
 
