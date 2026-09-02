@@ -96,6 +96,25 @@ invisibles en développement :
   `::1` en premier — la sonde renvoie « Connection refused » sur une API
   parfaitement démarrée.
 
+**`npm ci` qui expire au déploiement Coolify** (`npm error code ETIMEDOUT`) :
+ce n'est pas la configuration, c'est le serveur. Compose bâtit les deux services
+en parallèle et leurs installations se disputent la bande passante — au premier
+déploiement, celle de l'API a mis 356 s pour ses 919 paquets et celle du front a
+expiré à 407 s ; la seule extraction de `node:24-alpine`, 53 Mo, avait déjà pris
+43 s. Ces trois chiffres, ensemble, désignent un hôte étroit et non une erreur.
+
+Les deux `Dockerfile.prod` montent depuis un cache npm partagé
+(`RUN --mount=type=cache,target=/root/.npm`) : la reprise ne retélécharge que ce
+qui manque, et le second service trouve en cache ce que le premier vient de
+tirer. Mesuré en local, 48 s à froid contre 5 s à chaud pour les mêmes 511
+paquets. **Relancer le déploiement suffit donc**, là où il fallait auparavant
+espérer un réseau plus clément.
+
+Pas de directive `# syntax=` en tête de ces fichiers : Coolify y insère ses
+propres lignes `ARG` (« Added 18 ARG declarations » dans son log), et une
+directive `syntax` doit être la toute première ligne. Le frontend intégré de
+Docker 29 gère `RUN --mount` sans elle.
+
 **Le piège qui coûte le plus cher : les deux composes partagent le nom de
 projet**, celui du dossier, et Compose en déduit les noms d'images. Un
 `docker compose -f docker-compose.prod.yml build` nu écrase donc `fripstock-api`

@@ -841,6 +841,25 @@ applique donc les migrations tout seul, et sa sonde `/health` ne passe au vert q
 Le seed, lui, ne tourne jamais en production : il refuse `NODE_ENV=production`, puisqu'il
 crée des comptes de démonstration.
 
+### Si la construction échoue
+
+Un `npm ci` qui s'arrête sur `npm error code ETIMEDOUT` ne dit rien de la configuration :
+il dit que le serveur de construction est lent. Compose bâtit les deux services en
+parallèle, leurs deux installations se disputent la bande passante, et l'une des deux
+finit par dépasser le délai de npm.
+
+Les deux `Dockerfile.prod` gardent pour cette raison le cache npm d'une construction à
+l'autre (`--mount=type=cache`), en plus de délais et de tentatives relevés. La
+conséquence pratique : **relancer le déploiement suffit**. La reprise ne retélécharge que
+ce qui manque — mesuré en local, `npm ci` passe de 48 secondes à 5 sur le même jeu de
+paquets, sans un octet de réseau.
+
+Si l'échec se répète malgré tout, le serveur est trop juste pour construire. La sortie est
+alors de déporter la construction — un « Build Server » Coolify distinct, ou des images
+bâties par GitHub Actions et poussées sur un registre, `docker-compose.prod.yml` passant de
+`build:` à `image:`. Le serveur ne ferait plus que tirer des images toutes faites, ce qui
+lui éviterait au passage les ~2 Go de RAM que réclame `next build`.
+
 ### Premier compte
 
 Une base de production est vide. Le premier gérant se crée par l'écran `/register`, qui

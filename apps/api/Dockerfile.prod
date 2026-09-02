@@ -8,7 +8,18 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# Le serveur de construction de Coolify est lent, et Compose bâtit les deux
+# services en parallèle : deux `npm ci` s'y disputent la bande passante, et
+# celui du front expirait au bout de sept minutes (ETIMEDOUT). D'où les délais
+# et tentatives relevés, et surtout le cache npm conservé d'une construction à
+# l'autre — sans lui, chaque reprise après échec retélécharge tout et rejoue la
+# même course.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund \
+      --fetch-retries=5 \
+      --fetch-retry-mintimeout=20000 \
+      --fetch-retry-maxtimeout=120000 \
+      --fetch-timeout=600000
 
 COPY . .
 
