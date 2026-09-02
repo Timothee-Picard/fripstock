@@ -52,6 +52,8 @@ const GRILLE = '#e2e8f0';
 type ByDay = NonNullable<Dashboard['byDay']>;
 type TopCategories = NonNullable<Dashboard['topCategories']>;
 type Stock = NonNullable<Dashboard['stock']>;
+type Rotation = NonNullable<Dashboard['rotation']>;
+type TopAttribute = NonNullable<Dashboard['topAttributes']>[number];
 
 const PAR_JOUR = {
   x: 'day',
@@ -62,6 +64,16 @@ const CATEGORIES = {
   label: 'name',
   value: 'revenue',
 } as const satisfies Record<string, keyof TopCategories[number]>;
+
+const PAR_TRANCHE = {
+  label: 'label',
+  value: 'count',
+} as const;
+
+const PAR_VALEUR = {
+  label: 'value',
+  value: 'count',
+} as const satisfies Record<string, keyof TopAttribute['values'][number]>;
 
 const PAR_STATUT = {
   label: 'name',
@@ -172,6 +184,116 @@ export function CategoryBars({ data }: { data: TopCategories }) {
         <YAxis type="category" dataKey={CATEGORIES.label} tick={AXE} tickLine={false} width={96} />
         <Tooltip formatter={enEuros("Chiffre d'affaires")} />
         <Bar dataKey={CATEGORIES.value} fill="#0f172a" radius={[0, 4, 4, 0]} maxBarSize={22} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/**
+ * Libellé d'une tranche de rotation.
+ *
+ * Il se fabrique ici et non côté API : celle-ci renvoie des bornes, qui sont
+ * la donnée. « 90 j et + » est une phrase, et les phrases sont à l'écran.
+ */
+function trancheLabel(bucket: Rotation['buckets'][number]): string {
+  if (bucket.to === null) return `${bucket.from} j et +`;
+  if (bucket.from === 0) return `≤ ${bucket.to} j`;
+  return `${bucket.from} à ${bucket.to} j`;
+}
+
+/**
+ * Temps de rotation : combien d'articles partent en une semaine, en un mois,
+ * ou traînent.
+ *
+ * Des barres verticales et non une courbe : ce sont des tranches, pas une
+ * évolution — l'œil compare des hauteurs, il ne suit pas une tendance. La
+ * moyenne et la médiane sont posées au-dessus, en toutes lettres : c'est le
+ * chiffre qu'on retient, l'histogramme dit seulement s'il est représentatif.
+ */
+export function RotationBars({ data }: { data: Rotation }) {
+  if (data.count === 0) {
+    return <p className="py-12 text-center text-sm text-slate-600">Aucune vente sur la période.</p>;
+  }
+
+  const tranches = data.buckets.map((b) => ({ ...b, label: trancheLabel(b) }));
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <p className="text-sm text-slate-600">
+          <strong className="text-xl font-semibold text-slate-900">
+            {data.averageDays.toLocaleString('fr-FR')} j
+          </strong>{' '}
+          en moyenne
+        </p>
+        <p className="text-sm text-slate-600">
+          <strong className="text-base font-semibold text-slate-900">
+            {data.medianDays.toLocaleString('fr-FR')} j
+          </strong>{' '}
+          pour la moitié des ventes
+        </p>
+        <p className="text-xs text-slate-600">sur {data.count} article(s) vendu(s)</p>
+      </div>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={tranches} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+          <CartesianGrid stroke={GRILLE} vertical={false} />
+          <XAxis dataKey={PAR_TRANCHE.label} tick={AXE} tickLine={false} />
+          <YAxis tick={AXE} tickLine={false} axisLine={false} allowDecimals={false} />
+          <Tooltip
+            formatter={(value: unknown): [string, string] => [
+              `${Number(value ?? 0)} article(s)`,
+              'Vendus',
+            ]}
+          />
+          <Bar dataKey={PAR_TRANCHE.value} fill="#0f172a" radius={[4, 4, 0, 0]} maxBarSize={48} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/**
+ * Meilleures ventes pour un attribut : la couleur, la marque ou la taille qui
+ * part le mieux.
+ *
+ * En **nombre d'articles** et non en euros : la question est ce qui se vend, et
+ * un manteau à 120 € mettrait sa couleur devant dix t-shirts. Le chiffre
+ * d'affaires suit dans l'infobulle, pour qui veut les deux.
+ *
+ * Même forme que les catégories — barres horizontales, libellés lisibles sans
+ * pencher la tête — parce que c'est la même question posée sur un autre axe.
+ */
+export function AttributeBars({ data }: { data: TopAttribute }) {
+  if (data.values.length === 0) {
+    return (
+      <p className="py-12 text-center text-sm text-slate-600">
+        Aucune vente renseignant cet attribut sur la période.
+      </p>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(160, data.values.length * 40)}>
+      <BarChart
+        data={data.values}
+        layout="vertical"
+        margin={{ top: 4, right: 16, bottom: 0, left: 8 }}
+      >
+        <CartesianGrid stroke={GRILLE} horizontal={false} />
+        <XAxis type="number" tick={AXE} tickLine={false} axisLine={false} allowDecimals={false} />
+        <YAxis type="category" dataKey={PAR_VALEUR.label} tick={AXE} tickLine={false} width={96} />
+        <Tooltip
+          formatter={(value: unknown, _nom: unknown, item: unknown): [string, string] => {
+            // Le chiffre d'affaires n'est pas sur l'axe, mais il vient avec :
+            // « douze noirs » et « douze noirs à 40 € » ne se lisent pas pareil.
+            const ligne = (item as { payload?: { revenue?: number } } | undefined)?.payload;
+            return [
+              `${Number(value ?? 0)} article(s) — ${eurosNumber(ligne?.revenue ?? 0)}`,
+              'Vendus',
+            ];
+          }}
+        />
+        <Bar dataKey={PAR_VALEUR.value} fill="#0f172a" radius={[0, 4, 4, 0]} maxBarSize={22} />
       </BarChart>
     </ResponsiveContainer>
   );
