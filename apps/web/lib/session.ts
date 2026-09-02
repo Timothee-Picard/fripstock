@@ -1,9 +1,33 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { apiFetch, ApiError, COOKIE_NAME } from './api';
 import type { Session } from './types';
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 jours, comme l'expiration du JWT.
+
+/**
+ * Le drapeau `Secure` se déduit du protocole réellement servi, pas de
+ * `NODE_ENV`.
+ *
+ * Un `Set-Cookie; Secure` reçu sur une origine `http://` est **jeté sans un
+ * mot** par le navigateur : le jeton n'est jamais stocké. L'écran qui suit la
+ * connexion s'affiche pourtant — il lit le cookie dans le store mémoire de
+ * Next, pas dans le navigateur — et la déconnexion ne se voit qu'au clic
+ * suivant. C'est exactement ce qui arrive derrière un Coolify encore sans
+ * certificat, où l'application est déployée en production mais servie en
+ * clair.
+ *
+ * Le protocole vient de `x-forwarded-proto`, posé par le proxy : le client ne
+ * peut pas le forger pour dégrader le cookie, sa requête traverse toujours le
+ * proxy qui réécrit l'en-tête. Dès que le domaine reçoit un vrai certificat,
+ * `Secure` revient de lui-même, sans variable à penser à poser.
+ */
+async function isHttps(): Promise<boolean> {
+  // Plusieurs proxies en chaîne empilent les valeurs : le premier est celui vu
+  // par le client, et c'est le seul qui dit sur quoi son cookie va voyager.
+  const forwarded = (await headers()).get('x-forwarded-proto');
+  return forwarded?.split(',')[0].trim().toLowerCase() === 'https';
+}
 
 /**
  * Le jeton est déposé dans un cookie **httpOnly** : il n'est jamais lisible par
@@ -18,8 +42,7 @@ export async function setToken(token: string): Promise<void> {
   (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
-    // `secure` seulement hors développement : en local on est en http.
-    secure: process.env.NODE_ENV === 'production',
+    secure: await isHttps(),
     path: '/',
     maxAge: COOKIE_MAX_AGE,
   });

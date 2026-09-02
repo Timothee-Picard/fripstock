@@ -476,6 +476,13 @@ offerte pour rien.
 - **Les migrations s'appliquent au démarrage du conteneur `api`** (`prisma migrate deploy`
   avant Nest), et sa sonde `/health` ne passe au vert qu'ensuite. Rien à lancer à la main
   après un déploiement.
+- **Le drapeau `Secure` du cookie de session se déduit du protocole servi**
+  (`x-forwarded-proto`, dans `apps/web/lib/session.ts`), jamais de `NODE_ENV`. Un
+  `Set-Cookie; Secure` reçu sur une origine `http://` est jeté sans un mot par le
+  navigateur : le jeton n'est pas stocké, l'écran qui suit la connexion s'affiche quand
+  même — il lit le cookie dans le store mémoire de Next — et la déconnexion ne se voit
+  qu'au clic suivant. Un déploiement encore sans certificat reste donc utilisable, et le
+  cookie redevient `Secure` de lui-même le jour où le domaine en obtient un.
 - **`SHOP_TIMEZONE` doit être posée explicitement en production**, sur `api` comme sur
   `web` : les conteneurs tournent en UTC, et le défaut `Europe/Paris` des deux constantes
   ne se voit que dans le code. Une vente de 23 h 30 basculerait sinon au lendemain.

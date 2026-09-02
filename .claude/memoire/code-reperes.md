@@ -55,6 +55,10 @@ Modules qui concentrent une règle, à lire avant d'en réimplémenter une varia
   écran transverse) et `hasPermissionOnShop` (**sur cette boutique-là**, dès qu'un
   écran en vise une). Se tromper des deux propose une action que l'API refusera.
 - `lib/navigation.ts` — entrées du menu, cookie de repli, titre de section.
+- `lib/session.ts` — pose et relit le cookie de session. Son `secure` vient de
+  `x-forwarded-proto` et **jamais** de `NODE_ENV` : un `Secure` posé sur de l'HTTP
+  est jeté par le navigateur, et le symptôme trompe — l'écran d'après la connexion
+  s'affiche (store mémoire de Next), la déconnexion n'arrive qu'au clic suivant.
 - `lib/form-lines.ts` — lecture des tableaux ligne-par-ligne (lot, contrat).
 - `lib/dates.ts` — **toute** date affichée passe par là, dans le fuseau boutique.
   Un `toLocaleDateString` sans `timeZone` casse l'hydratation : le serveur est en

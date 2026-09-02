@@ -99,6 +99,11 @@ reste illisible par le JavaScript de la page, donc une faille XSS ne peut pas
 l'exfiltrer. Le navigateur ne parle d'ailleurs jamais directement à l'API — tous les
 appels partent du serveur Next, qui rattache le jeton lui-même.
 
+Son drapeau `Secure` suit le **protocole réellement servi** (`x-forwarded-proto`), et non
+`NODE_ENV` : un déploiement encore sans certificat garde un cookie utilisable, là où un
+`Secure` posé sur de l'HTTP serait jeté par le navigateur et déconnecterait au premier
+clic. Voir les points de vigilance du déploiement.
+
 Trois niveaux d'autorisation, tous appliqués côté API et jamais seulement dans l'UI :
 
 | Niveau          | Mécanisme                               | Exemple                                |
@@ -870,9 +875,14 @@ comptes suivants s'invitent depuis `/dashboard/users`.
 
 - **Une seule réplique de l'API.** Elle porte un job planifié (l'alerte d'échéance des
   contrats de dépôt) ; deux exemplaires enverraient la notification en double.
-- **`NODE_ENV=production` doit atteindre le runtime de `web`**, pas seulement son build :
-  c'est de là que `lib/session.ts` déduit le drapeau `Secure` du cookie de session. Les
-  images de production le posent, mais un `docker run` bricolé à la main pourrait l'oublier.
+- **Le domaine de `web` doit finir en HTTPS**, et le proxy doit poser `x-forwarded-proto`.
+  `lib/session.ts` en déduit le drapeau `Secure` du cookie de session, plutôt que de
+  `NODE_ENV` : sur un domaine servi en clair, un cookie `Secure` est jeté sans un mot par
+  le navigateur, et la déconnexion ne se voit qu'au clic suivant — l'écran d'après la
+  connexion s'affiche quand même, puisqu'il lit le cookie dans le store mémoire de Next.
+  Le cookie repasse en `Secure` de lui-même dès que le certificat est en place. Un domaine
+  en `sslip.io` sur une IP nue n'obtient pas de certificat Let's Encrypt : Traefik y répond
+  avec son certificat par défaut, et le navigateur reste en HTTP.
 - **MinIO est appelé en clair** (`useSSL: false`, codé en dur dans `uploads.service.ts`).
   Correct pour un saut entre conteneurs du même réseau ; pointer vers un S3 externe en TLS
   demanderait une modification du code.
