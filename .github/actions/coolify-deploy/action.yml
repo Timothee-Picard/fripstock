@@ -115,7 +115,13 @@ runs:
         COOLIFY_UUID: ${{ inputs.uuid }}
       run: |
         set -euo pipefail
-        response=$(curl -sS --fail-with-body -H "Authorization: Bearer $COOLIFY_TOKEN" \
+        # POST, et non GET : Coolify 4.3.0 a basculé tous les endpoints qui
+        # modifient un état — `/deploy` comme les cycles de vie des ressources —
+        # et répond 405 aux appels en GET, que ses versions antérieures
+        # acceptaient. La documentation en circulation montre encore l'ancienne
+        # forme.
+        response=$(curl -sS --fail-with-body -X POST \
+          -H "Authorization: Bearer $COOLIFY_TOKEN" \
           "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_UUID")
         echo "$response" | jq .
         deployment=$(echo "$response" | jq -r '.deployments[0].deployment_uuid // empty')
