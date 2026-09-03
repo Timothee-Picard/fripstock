@@ -80,10 +80,27 @@ runs:
         # Le domaine sort de la ressource et n'est pas configuré une seconde fois
         # côté GitHub : une URL recopiée finit par désigner l'autre environnement,
         # et la sonde dirait alors « vert » sur un déploiement qu'elle n'a pas vu.
-        # Coolify peut en lister plusieurs, séparés par des virgules.
-        fqdn=$(echo "$app" | jq -r '.fqdn // empty' | cut -d, -f1)
+        #
+        # Il faut le chercher à deux endroits. Une ressource ordinaire le porte
+        # dans `fqdn` ; une ressource Docker Compose — la nôtre — le range par
+        # service dans `docker_compose_domains`, que l'API rend tantôt en
+        # tableau, tantôt en chaîne JSON. D'où le balayage de toutes les chaînes
+        # plutôt qu'un chemin figé, dont la forme varie d'une version à l'autre :
+        # on garde la première qui ressemble à une URL, et un service sans
+        # domaine (api, postgres, minio) n'en fournit simplement aucune. Les
+        # domaines multiples d'un même service sont séparés par des virgules.
+        fqdn=$(echo "$app" | jq -r '
+          [ (.fqdn // empty),
+            ( .docker_compose_domains
+              | if type == "string" then (fromjson? // .) else . end
+              | .. | strings )
+          ]
+          | map(split(",")) | flatten
+          | map(select(startswith("http")))
+          | first // empty
+        ')
         if [ -z "$fqdn" ]; then
-          echo "::error::la ressource $COOLIFY_UUID ne porte aucun domaine."
+          echo "::error::aucun domaine sur la ressource $COOLIFY_UUID, ni dans fqdn ni dans docker_compose_domains."
           exit 1
         fi
         echo "fqdn=$fqdn" >> "$GITHUB_OUTPUT"

@@ -158,6 +158,12 @@ GitHub `production`.
   deux ressources suivent `main`, et sans épinglage un tag déploierait son
   `HEAD`. Il lit le domaine sur la ressource pour appeler la sonde, plutôt que
   de le reprendre d'une variable GitHub.
+- **Le domaine d'une ressource compose n'est pas dans `fqdn`.** Coolify range
+  celui d'une ressource Docker Compose — la nôtre — par service dans
+  `docker_compose_domains`, rendu tantôt en tableau, tantôt en chaîne JSON.
+  L'action balaie donc les deux champs et garde la première chaîne qui commence
+  par `http`, au lieu de suivre un chemin figé dont la forme change d'une
+  version à l'autre.
 - **Seuil de version : Coolify ≥ 4.1.0.** En dessous, `git_commit_sha` est
   ignoré au profit de `HEAD` (`coollabsio/coolify#9865`, mai 2026) — l'action
   vérifie et refuse, sinon le déploiement mettrait en ligne autre chose que le
