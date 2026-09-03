@@ -9,7 +9,7 @@ PROD_PROJECT := fripstock-prod
 .PHONY: help up down build rebuild logs restart ps sh-api sh-web \
 	install hooks format generate migrate seed studio prod-build prod-up prod-down \
 	check check-fast check-format check-lint \
-	check-types check-db check-test check-build check-commits release
+	check-types check-db check-test check-build check-commits deploy
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -176,7 +176,10 @@ check-commits: ## Vérifie la convention sur les messages de commit (défaut : t
 	@echo "--> messages de commit"
 	@./scripts/check-commits.sh $(RANGE)
 
-# --- Release -----------------------------------------------------------------
+# --- Déploiement -------------------------------------------------------------
 
-release: ## Calcule le prochain vX.Y.Z depuis les commits, génère le CHANGELOG et pose le tag
-	./scripts/release.sh
+deploy: ## Pose un tag vX.Y.Z et déploie la production (choix de la branche et de la version)
+	@# Le tag n'est pas qu'une étiquette : release.yml s'y déclenche, rejoue les
+	@# vérifications et déploie sur Coolify après approbation. Le script montre
+	@# ce qu'il va exécuter et attend une validation — il pousse.
+	./scripts/deploy.sh
