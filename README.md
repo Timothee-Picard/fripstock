@@ -899,10 +899,10 @@ crée des comptes de démonstration.
 sans rien savoir de la CI : un `make check` rouge partait en ligne exactement comme un
 vert. Désormais c'est GitHub Actions qui appelle Coolify, et seulement après ses contrôles.
 
-| Événement                     | Ce qui est rejoué                    | Ce qui est déployé                            |
-| ----------------------------- | ------------------------------------ | --------------------------------------------- |
-| Push / merge sur `main`       | `make check` + démarrage de la stack | **Staging**, sur le commit                    |
-| Tag `vX.Y.Z` (`make release`) | les mêmes, plus `make prod-build`    | **Production**, sur le tag, après approbation |
+| Événement                    | Ce qui est rejoué                    | Ce qui est déployé                            |
+| ---------------------------- | ------------------------------------ | --------------------------------------------- |
+| Push / merge sur `main`      | `make check` + démarrage de la stack | **Staging**, sur le commit                    |
+| Tag `vX.Y.Z` (`make deploy`) | les mêmes, plus `make prod-build`    | **Production**, sur le tag, après approbation |
 
 Les deux ressources Coolify suivent `main`, ce qui ne veut pas dire qu'elles déploient son
 `HEAD` : l'action **épingle le commit** (`git_commit_sha` de l'API Coolify) avant de
@@ -1071,17 +1071,36 @@ illisibles par la glibc de l'hôte. Les lancer localement échoue sur un
 La CI, elle, installe ses dépendances nativement : elle pose `FRIPSTOCK_RUNNER=local`
 pour court-circuiter Docker et lancer les mêmes cibles directement.
 
-### Publier une version
+### Publier une version, c'est déployer la production
 
 ```bash
-make release
+make deploy
 ```
 
-Le script lit les commits depuis le dernier tag, en déduit le bump
-(`feat` → mineur, `fix` → patch, `!` ou `BREAKING CHANGE` → majeur) et te le
-propose — Entrée pour accepter, ou `M`/`m`/`p` pour forcer. Il génère le
-`CHANGELOG.md`, pose un tag annoté `vX.Y.Z` et demande confirmation avant de
-pousser. Le tag déclenche la création de la release GitHub.
+Le tag n'est pas qu'une étiquette : `release.yml` s'y déclenche, rejoue les
+vérifications et déploie la production après approbation. `make deploy` est donc
+le geste de mise en production, et il se déroule en trois questions, chacune une
+liste à parcourir aux flèches :
+
+1. **La branche à taguer**, `main` en tête puis les autres par date de commit.
+2. **La version** : majeur, mineur, patch — le bump déduit des commits
+   (`feat` → mineur, `fix` → patch, `!` ou `BREAKING CHANGE` → majeur) est
+   présélectionné, donc Entrée suffit — ou une version saisie à la main.
+3. **Le récapitulatif** : les commandes exactes qui vont s'exécuter, `Annuler`
+   étant le choix par défaut. Rien n'est modifié avant cette validation.
+
+La branche est **comparée à son équivalent GitHub** avant tout, et une
+désynchronisation est un refus, pas un avertissement : ce qui se déploie est le
+commit tagué tel que GitHub le connaît, pas l'état de ta machine. En retard, le
+tag manquerait du code déjà publié ; en avance, il embarquerait du code jamais
+passé par la CI.
+
+Deux situations où le script prévient que **rien ne sera déployé**, tout en
+posant quand même le tag — utile pour jalonner :
+
+- une branche autre que `main`, que le job `guard` de `release.yml` refuse ;
+- une version saisie à la main qui sort du motif `vX.Y.Z`, auquel seul le
+  workflow se déclenche.
 
 Tant que la version majeure est `0`, un breaking change ne bump que le mineur —
 le script le signale au lieu de le faire en silence.
@@ -1095,7 +1114,7 @@ apps/
 docker-compose.yml       postgres, minio, api, web — développement
 docker-compose.prod.yml  les mêmes en production, sans port publié
 Makefile                 raccourcis de développement et vérifications
-scripts/                 node-run.sh, check-db.sh, release.sh
+scripts/                 node-run.sh, check-db.sh, deploy.sh
 .githooks/               commit-msg, pre-commit, pre-push
 .github/workflows/       CI et publication des releases
 prompts/                 archive des prompts ayant servi à construire l'app

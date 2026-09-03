@@ -550,9 +550,14 @@ doc croirait encore à tort**.
   fix(api): scope les contrats de dépôt via client.companyId
   ```
 
-- **Versions en tags `vX.Y.Z`** (semver), posés par `make release` : le script calcule le
-  bump depuis les commits conventionnels et le propose, l'humain valide. Tant que la
+- **Versions en tags `vX.Y.Z`** (semver), posés par `make deploy` : le script calcule le
+  bump depuis les commits conventionnels et le présélectionne, l'humain valide. Tant que la
   version majeure est `0`, un breaking change ne bump que le mineur.
+- **Poser un tag, c'est déployer la production** — `release.yml` s'y déclenche. D'où les
+  garde-fous de `make deploy` : la branche est comparée à son équivalent GitHub et une
+  désynchronisation refuse, parce que ce qui se déploie est le commit tel que GitHub le
+  connaît. Un tag hors `main`, ou hors du motif `vX.Y.Z`, se pose mais ne déploie rien, et
+  le script le dit avant de valider.
 - **`make check` avant une PR** — client Prisma, format, lint, types, dérive Prisma,
   tests, build. C'est exactement ce que lance la CI ; ne recopie jamais ces commandes
   ailleurs, appelle la cible.

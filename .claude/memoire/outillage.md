@@ -146,7 +146,7 @@ deux côtés (défaut `Europe/Paris`). En production, la poser explicitement.
 
 **Le déploiement part de la CI, plus de Coolify.** L'auto-deploy est coupé sur
 les deux ressources. `ci.yml` déploie le **staging** après ses contrôles sur
-chaque push de `main` ; `release.yml`, déclenché par le tag de `make release`,
+chaque push de `main` ; `release.yml`, déclenché par le tag de `make deploy`,
 déploie la **production** après approbation d'un relecteur de l'Environment
 GitHub `production`.
 
