@@ -164,6 +164,10 @@ GitHub `production`.
   L'action balaie donc les deux champs et garde la première chaîne qui commence
   par `http`, au lieu de suivre un chemin figé dont la forme change d'une
   version à l'autre.
+- **Deux seuils de version, dans deux sens opposés.** Depuis **4.3.0**, tout
+  endpoint qui modifie un état veut un **`POST`** — `/deploy` compris — et
+  répond 405 à un `GET`, que les versions antérieures acceptaient : la
+  documentation et les exemples en circulation montrent encore l'ancienne forme.
 - **Seuil de version : Coolify ≥ 4.1.0.** En dessous, `git_commit_sha` est
   ignoré au profit de `HEAD` (`coollabsio/coolify#9865`, mai 2026) — l'action
   vérifie et refuse, sinon le déploiement mettrait en ligne autre chose que le
