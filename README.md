@@ -14,6 +14,7 @@ make up
 ```
 
 - Front : http://localhost:3000 — affiche le statut renvoyé par l'API
+- Sonde du front : http://localhost:3000/api/health
 - API : http://localhost:3001/health
 - Console MinIO : http://localhost:9001 (identifiants dans le `.env`)
 - PostgreSQL : `localhost:5432`
@@ -880,6 +881,14 @@ valeur.
 Le conteneur `api` lance `prisma migrate deploy` avant de démarrer Nest. Un déploiement
 applique donc les migrations tout seul, et sa sonde `/health` ne passe au vert qu'ensuite —
 `web` attend ce vert pour démarrer. Rien à lancer à la main.
+
+`web` a sa propre sonde, `/api/health`, et c'est **celle-là que Coolify affiche** : `web`
+est le seul service à recevoir un domaine. Sans elle, l'application se montrait
+« Running (no healthcheck) » — elle tournait, mais rien ne permettait de le vérifier ni
+d'attendre qu'un nouveau déploiement soit prêt avant de lui envoyer le trafic. Elle
+n'appelle **pas** l'API : elle répond de ce conteneur-ci. Relayer l'API ferait tomber le
+front en `unhealthy` avec elle, le proxy retirerait le domaine, et il ne resterait plus
+même une page d'erreur à lire.
 
 Le seed, lui, ne tourne jamais en production : il refuse `NODE_ENV=production`, puisqu'il
 crée des comptes de démonstration.

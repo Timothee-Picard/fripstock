@@ -108,6 +108,25 @@ services:
       - SHOP_TIMEZONE=${SHOP_TIMEZONE:-Europe/Paris}
     expose:
       - '3000'
+    healthcheck:
+      # Sans cette sonde, Coolify affiche « Running (no healthcheck) » : c'est
+      # `web` qui porte le domaine, donc lui dont l'état est montré.
+      #
+      # Elle ne traverse pas l'API à dessein — une API tombée ferait passer
+      # `web` en `unhealthy`, le proxy retirerait le domaine, et il ne resterait
+      # plus même une page d'erreur. Le `depends_on` ci-dessus dit déjà l'ordre
+      # de démarrage.
+      #
+      # 127.0.0.1 et surtout pas `localhost`, même piège que pour l'API : le
+      # serveur écoute sur 0.0.0.0, donc en IPv4 seulement, et le wget de
+      # busybox tente ::1 en premier.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      # Plus court que celui de l'API : `server.js` n'a pas de migration à
+      # appliquer avant de répondre.
+      start_period: 20s
 
 volumes:
   postgres_data:
