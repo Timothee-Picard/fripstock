@@ -8,10 +8,54 @@ on:
 permissions:
   contents: write
 
+# Un second tag poussé pendant qu'un déploiement de production tourne attend son
+# tour au lieu de l'interrompre.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  # `scripts/release.sh` refuse déjà de taguer ailleurs que sur `main`, mais un
+  # `git tag` posé à la main contourne le script — et ce workflow, lui, déploie
+  # la production. La garde est donc rejouée ici.
+  guard:
+    name: Le tag est sur main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier que le commit tagué est sur main
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} désigne un commit absent de main — rien ne sera déployé."
+            exit 1
+          fi
+          echo "✓ ${GITHUB_REF_NAME} est sur main"
+
+  checks:
+    name: Contrôles
+    needs: [guard]
+    uses: ./.github/workflows/checks.yml
+
+  # Ce que la CI de `main` ne construit jamais : le job de démarrage monte la
+  # stack de développement, si bien qu'une erreur dans un `Dockerfile.prod` ne se
+  # découvrait qu'en ligne, après le déploiement. Elle échoue ici, avant.
+  prod-build:
+    name: Les images de production se construisent
+    runs-on: ubuntu-latest
+    needs: [guard]
+    steps:
+      - uses: actions/checkout@v5
+      - name: make prod-build
+        run: make prod-build
+
   release:
     name: Publier la release GitHub
     runs-on: ubuntu-latest
+    needs: [checks, prod-build]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -36,3 +80,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file notes.md
+
+  # C'est `environment: production` qui produit l'attente d'approbation : le job
+  # reste en « Waiting » jusqu'au clic d'un relecteur déclaré sur l'environnement.
+  # Sans l'Environment créé côté GitHub, cette ligne ne bloque rien.
+  deploy-production:
+    name: Déployer la production
+    runs-on: ubuntu-latest
+    needs: [release]
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v5
+
+      # `github.sha` est ici le commit que désigne le tag : c'est lui qu'on
+      # épingle, et non le HEAD de `main`, qui peut avoir avancé depuis.
+      - uses: ./.github/actions/coolify-deploy
+        with:
+          url: ${{ vars.COOLIFY_URL }}
+          token: ${{ secrets.COOLIFY_TOKEN }}
+          uuid: ${{ secrets.COOLIFY_PRODUCTION_UUID }}
+          sha: ${{ github.sha }}

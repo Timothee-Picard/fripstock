@@ -893,6 +893,71 @@ même une page d'erreur à lire.
 Le seed, lui, ne tourne jamais en production : il refuse `NODE_ENV=production`, puisqu'il
 crée des comptes de démonstration.
 
+### C'est la CI qui déploie, plus Coolify
+
+**L'auto-deploy de Coolify est coupé sur les deux ressources.** Il se déclenchait au push
+sans rien savoir de la CI : un `make check` rouge partait en ligne exactement comme un
+vert. Désormais c'est GitHub Actions qui appelle Coolify, et seulement après ses contrôles.
+
+| Événement                     | Ce qui est rejoué                    | Ce qui est déployé                            |
+| ----------------------------- | ------------------------------------ | --------------------------------------------- |
+| Push / merge sur `main`       | `make check` + démarrage de la stack | **Staging**, sur le commit                    |
+| Tag `vX.Y.Z` (`make release`) | les mêmes, plus `make prod-build`    | **Production**, sur le tag, après approbation |
+
+Les deux ressources Coolify suivent `main`, ce qui ne veut pas dire qu'elles déploient son
+`HEAD` : l'action **épingle le commit** (`git_commit_sha` de l'API Coolify) avant de
+déclencher. Sans cela, un déploiement lancé par un tag construirait le sommet de `main`,
+c'est-à-dire potentiellement du code que le tag ne désigne pas.
+
+Deux conséquences à connaître :
+
+- **Ce champ est persistant.** Un « Redeploy » depuis l'interface Coolify redonne la
+  version épinglée — voulu pour une production versionnée — mais **aucune des deux
+  ressources ne suit plus `main` d'elle-même**. Seule la CI les fait avancer.
+- **Coolify doit être en 4.1.0 ou plus.** En dessous, `git_commit_sha` est ignoré au
+  profit de `HEAD` (corrigé par `coollabsio/coolify#9865`). L'action vérifie la version et
+  refuse de déployer plus bas, plutôt que de mettre en ligne autre chose que le commit
+  demandé.
+
+`.github/actions/coolify-deploy/` est le **seul endroit qui parle à Coolify** : épinglage,
+déclenchement, attente de la fin du déploiement, puis appel de la sonde `/api/health` du
+domaine — que l'action lit sur la ressource et non dans une variable GitHub, une URL
+recopiée finissant par désigner l'autre environnement. Le webhook de Coolify répond `200`
+immédiatement : s'arrêter là rendrait la CI verte sur un déploiement en train d'échouer.
+
+De même, `checks.yml` est appelé par `ci.yml` **et** par `release.yml`. Le chemin qui
+déploie la production rejoue ainsi exactement ce que rejoue celui de `main` — deux copies
+finiraient par ne plus vérifier la même chose.
+
+À créer une fois côté GitHub (Settings → Secrets and variables → Actions) :
+
+| Nom                       | Type     | Contenu                                                                                |
+| ------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `COOLIFY_URL`             | variable | URL de l'instance, sans slash final                                                    |
+| `COOLIFY_TOKEN`           | secret   | Jeton d'API, portée **`write`** — `deploy` seule ne suffit pas pour épingler le commit |
+| `COOLIFY_STAGING_UUID`    | secret   | UUID de la ressource de staging                                                        |
+| `COOLIFY_PRODUCTION_UUID` | secret   | UUID de la ressource de production                                                     |
+
+Plus deux **Environments** GitHub : `staging`, et `production` avec un _required reviewer_.
+C'est cet Environment, et lui seul, qui produit l'attente d'approbation avant la
+production — sans lui, la ligne `environment: production` du workflow ne bloque rien.
+
+Enfin, la protection de `main` : PR obligatoire et checks requis `Contrôles / Vérifications`
+et `Contrôles / La stack démarre`. « La CI est responsable du déploiement » n'est vrai que
+si personne ne peut pousser sur `main` sans elle.
+
+### Revenir en arrière n'est pas un rollback
+
+`prisma migrate deploy` tourne au démarrage du conteneur `api`. Redéployer un tag antérieur
+remet donc l'**ancien code sur une base déjà migrée** : les migrations ne se rejouent pas à
+l'envers, et rien ne le signalera. Selon la migration franchie, l'application repart comme
+si de rien n'était ou se casse sur une colonne qu'elle ne connaît pas encore.
+
+Un retour en arrière se prépare donc dans l'autre sens : **corriger et publier un nouveau
+tag** est le chemin normal. Le retour à une version antérieure ne vaut que pour un
+changement dont on sait qu'aucune migration ne l'accompagnait — à vérifier dans
+`apps/api/prisma/migrations/` avant, pas après.
+
 ### Si la construction échoue
 
 Un `npm ci` qui s'arrête sur `npm error code ETIMEDOUT` ne dit rien de la configuration :
