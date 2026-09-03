@@ -91,10 +91,16 @@ invisibles en développement :
   `devDependency`, et `migrate deploy` en a besoin au démarrage : un
   `npm ci --omit=dev` donne une image plus légère et un conteneur qui ne démarre
   pas.
-- **La sonde de l'API vise `127.0.0.1`, jamais `localhost`.** `main.ts` écoute
-  sur `0.0.0.0`, donc en IPv4 seulement, tandis que le `wget` de busybox tente
-  `::1` en premier — la sonde renvoie « Connection refused » sur une API
-  parfaitement démarrée.
+- **Les sondes visent `127.0.0.1`, jamais `localhost`.** `main.ts` (comme le
+  `HOSTNAME=0.0.0.0` du front) écoute sur `0.0.0.0`, donc en IPv4 seulement,
+  tandis que le `wget` de busybox tente `::1` en premier — la sonde renvoie
+  « Connection refused » sur un service parfaitement démarré.
+- **Les deux services applicatifs ont une sonde**, `api` sur `/health`
+  (`src/health/health.controller.ts`) et `web` sur `/api/health`
+  (`app/api/health/route.ts`). Celle du front est celle que **Coolify affiche**,
+  puisque `web` est le seul service à porter un domaine ; son absence donnait
+  « Running (no healthcheck) ». Elle ne relaie pas l'API : sinon une API tombée
+  ferait retirer le domaine du proxy par ricochet.
 
 **`npm ci` qui expire au déploiement Coolify** (`npm error code ETIMEDOUT`) :
 ce n'est pas la configuration, c'est le serveur. Compose bâtit les deux services
