@@ -144,4 +144,32 @@ make prod-down    # l'arrête et détruit SES volumes
 `SHOP_TIMEZONE` ne figure dans aucun `.env.example` alors que le code la lit des
 deux côtés (défaut `Europe/Paris`). En production, la poser explicitement.
 
+**Le déploiement part de la CI, plus de Coolify.** L'auto-deploy est coupé sur
+les deux ressources. `ci.yml` déploie le **staging** après ses contrôles sur
+chaque push de `main` ; `release.yml`, déclenché par le tag de `make release`,
+déploie la **production** après approbation d'un relecteur de l'Environment
+GitHub `production`.
+
+- `.github/workflows/checks.yml` est un `workflow_call` : les deux workflows
+  l'appellent, donc le chemin de la production rejoue ce que rejoue `main`.
+  N'y recopie rien, appelle-le.
+- `.github/actions/coolify-deploy/` est le **seul** endroit qui parle à Coolify.
+  Il **épingle le commit** (`PATCH git_commit_sha`) avant de déclencher : les
+  deux ressources suivent `main`, et sans épinglage un tag déploierait son
+  `HEAD`. Il lit le domaine sur la ressource pour appeler la sonde, plutôt que
+  de le reprendre d'une variable GitHub.
+- **Seuil de version : Coolify ≥ 4.1.0.** En dessous, `git_commit_sha` est
+  ignoré au profit de `HEAD` (`coollabsio/coolify#9865`, mai 2026) — l'action
+  vérifie et refuse, sinon le déploiement mettrait en ligne autre chose que le
+  commit demandé, sans le dire.
+- L'endpoint de statut renvoie parfois « Deployment not found » sur un
+  déploiement bien actif (`coollabsio/coolify#8925`) : l'attente tolère
+  l'absence de réponse et ne s'arrête que sur un statut explicitement raté.
+- Le champ épinglé est persistant : un « Redeploy » depuis l'interface redonne
+  la même version, et **aucune ressource ne suit plus `main` d'elle-même**.
+
+Les checks requis par la protection de `main` s'appellent
+`Contrôles / Vérifications` et `Contrôles / La stack démarre` — le préfixe est
+le nom du job appelant dans `ci.yml`, il change si on le renomme.
+
 Voir aussi [ou-chercher](ou-chercher.md).

@@ -1,0 +1,164 @@
+# Déclenche un déploiement Coolify et n'en sort qu'une fois la version en ligne.
+#
+# C'est le SEUL endroit du dépôt qui parle à Coolify : le staging et la
+# production passent tous les deux par ici, avec des UUID différents. Deux
+# copies du même enchaînement finiraient par ne plus vérifier la même chose.
+#
+# Coolify ne déploie que des branches, et les deux ressources suivent `main` —
+# on épingle donc le commit AVANT de déclencher, sinon un déploiement lancé par
+# un tag construirait le HEAD de `main`, c'est-à-dire potentiellement pas le code
+# qui vient d'être vérifié. Le champ `git_commit_sha` n'est respecté qu'à partir
+# de Coolify 4.1.0 : en dessous, cette action déploierait silencieusement autre
+# chose que le SHA demandé, d'où la vérification de version en préambule.
+name: Déployer sur Coolify
+description: Épingle un commit sur une ressource Coolify, la déploie, et attend que sa sonde réponde.
+
+inputs:
+  url:
+    description: URL de l'instance Coolify, sans slash final.
+    required: true
+  token:
+    description: Jeton d'API Coolify. Portée `write` — `deploy` seule ne permet pas d'épingler le commit.
+    required: true
+  uuid:
+    description: UUID de la ressource applicative à déployer.
+    required: true
+  sha:
+    description: Commit à déployer.
+    required: true
+  health-path:
+    description: Chemin de la sonde, ajouté au domaine que porte la ressource dans Coolify.
+    required: false
+    default: /api/health
+
+runs:
+  using: composite
+  steps:
+    - name: Vérifier la version de Coolify
+      shell: bash
+      env:
+        COOLIFY_URL: ${{ inputs.url }}
+        COOLIFY_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        version=$(curl -sS --fail-with-body -H "Authorization: Bearer $COOLIFY_TOKEN" \
+          "$COOLIFY_URL/api/v1/version" | tr -d '"[:space:]')
+        echo "Coolify $version"
+        # 4.1.0 est le seuil auquel `git_commit_sha` cesse d'être ignoré
+        # (PR coollabsio/coolify#9865). Plus bas, le déploiement prendrait le
+        # HEAD de la branche sans le dire, et la prod ne porterait pas le tag.
+        if [ "$(printf '%s\n4.1.0\n' "$version" | sort -V | head -1)" != "4.1.0" ]; then
+          echo "::error::Coolify $version < 4.1.0 : le commit épinglé serait ignoré et le HEAD de la branche déployé à la place."
+          exit 1
+        fi
+
+    - name: Épingler le commit sur la ressource
+      id: pin
+      shell: bash
+      env:
+        COOLIFY_URL: ${{ inputs.url }}
+        COOLIFY_TOKEN: ${{ inputs.token }}
+        COOLIFY_UUID: ${{ inputs.uuid }}
+        SHA: ${{ inputs.sha }}
+      run: |
+        set -euo pipefail
+        echo "Épinglage de $SHA sur $COOLIFY_UUID"
+        curl -sS --fail-with-body -X PATCH \
+          -H "Authorization: Bearer $COOLIFY_TOKEN" \
+          -H 'Content-Type: application/json' \
+          -d "{\"git_commit_sha\":\"$SHA\"}" \
+          "$COOLIFY_URL/api/v1/applications/$COOLIFY_UUID" > /dev/null
+        # Relu depuis l'API et non supposé : un PATCH accepté mais ignoré
+        # laisserait déployer le HEAD de la branche sans que rien ne le signale.
+        app=$(curl -sS --fail-with-body -H "Authorization: Bearer $COOLIFY_TOKEN" \
+          "$COOLIFY_URL/api/v1/applications/$COOLIFY_UUID")
+        pinned=$(echo "$app" | jq -r '.git_commit_sha')
+        if [ "$pinned" != "$SHA" ]; then
+          echo "::error::Coolify a retenu '$pinned' au lieu de '$SHA'."
+          exit 1
+        fi
+        # Le domaine sort de la ressource et n'est pas configuré une seconde fois
+        # côté GitHub : une URL recopiée finit par désigner l'autre environnement,
+        # et la sonde dirait alors « vert » sur un déploiement qu'elle n'a pas vu.
+        # Coolify peut en lister plusieurs, séparés par des virgules.
+        fqdn=$(echo "$app" | jq -r '.fqdn // empty' | cut -d, -f1)
+        if [ -z "$fqdn" ]; then
+          echo "::error::la ressource $COOLIFY_UUID ne porte aucun domaine."
+          exit 1
+        fi
+        echo "fqdn=$fqdn" >> "$GITHUB_OUTPUT"
+        echo "✓ commit épinglé, domaine $fqdn"
+
+    - name: Déclencher le déploiement
+      id: trigger
+      shell: bash
+      env:
+        COOLIFY_URL: ${{ inputs.url }}
+        COOLIFY_TOKEN: ${{ inputs.token }}
+        COOLIFY_UUID: ${{ inputs.uuid }}
+      run: |
+        set -euo pipefail
+        response=$(curl -sS --fail-with-body -H "Authorization: Bearer $COOLIFY_TOKEN" \
+          "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_UUID")
+        echo "$response" | jq .
+        deployment=$(echo "$response" | jq -r '.deployments[0].deployment_uuid // empty')
+        if [ -z "$deployment" ]; then
+          echo "::error::Coolify n'a pas renvoyé de deployment_uuid — rien n'a été mis en file."
+          exit 1
+        fi
+        echo "deployment=$deployment" >> "$GITHUB_OUTPUT"
+        echo "Déploiement $deployment en file"
+
+    - name: Attendre la fin du déploiement
+      shell: bash
+      env:
+        COOLIFY_URL: ${{ inputs.url }}
+        COOLIFY_TOKEN: ${{ inputs.token }}
+        DEPLOYMENT: ${{ steps.trigger.outputs.deployment }}
+      run: |
+        set -uo pipefail
+        # Le webhook répond 200 tout de suite : s'arrêter là rendrait la CI verte
+        # sur un déploiement en train d'échouer.
+        #
+        # L'absence de réponse n'est pas un échec. L'endpoint de statut renvoie
+        # « Deployment not found » sur un déploiement pourtant actif
+        # (coollabsio/coolify#8925), et le temps que la file le prenne il n'existe
+        # pas encore : on retente, et seul un statut explicitement raté arrête.
+        for i in $(seq 1 180); do
+          status=$(curl -sS -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_URL/api/v1/deployments/$DEPLOYMENT" 2>/dev/null \
+            | jq -r '.status // empty' 2>/dev/null)
+          case "${status:-}" in
+            finished|success)
+              echo "✓ déploiement terminé après $((i * 10)) s"
+              exit 0 ;;
+            failed|error|cancelled-by-user)
+              echo "::error::déploiement $status — voir les logs dans Coolify."
+              exit 1 ;;
+            *)
+              echo "t+$((i * 10))s : ${status:-en attente}" ;;
+          esac
+          sleep 10
+        done
+        echo "::error::le déploiement n'a pas abouti en 30 min."
+        exit 1
+
+    - name: Vérifier que la sonde répond
+      shell: bash
+      env:
+        HEALTH_URL: ${{ steps.pin.outputs.fqdn }}${{ inputs.health-path }}
+      run: |
+        set -uo pipefail
+        # Le proxy peut mettre quelques secondes à basculer sur le nouveau
+        # conteneur : « déploiement terminé » et « le domaine répond » ne sont
+        # pas la même affirmation, et c'est la seconde qui intéresse l'utilisateur.
+        for i in $(seq 1 30); do
+          if curl -sf --max-time 10 "$HEALTH_URL" > /dev/null; then
+            echo "✓ $HEALTH_URL répond après $((i * 5)) s"
+            curl -s --max-time 10 "$HEALTH_URL"
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "::error::$HEALTH_URL n'a pas répondu en 150 s après un déploiement pourtant terminé."
+        exit 1

@@ -5,112 +5,21 @@ on:
     branches: [main]
   pull_request:
 
-# Une branche poussée plusieurs fois d'affilée n'empile pas les runs :
-# seul le dernier survit.
+# Une branche poussée plusieurs fois d'affilée n'empile pas les runs : seul le
+# dernier survit. Sur `main`, en revanche, rien n'est annulé — un run y déploie
+# le staging, et l'interrompre à mi-chemin laisserait un déploiement en cours
+# sans personne pour en lire l'issue. Les runs de `main` se mettent donc en file.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  check:
-    name: Vérifications
-    runs-on: ubuntu-latest
-
-    # `make check-db` rejoue les migrations dans une base miroir pour détecter
-    # une dérive du schéma : sans Postgres ici, cette vérification se
-    # contenterait de passer, ce qui est pire que de ne pas l'avoir.
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: fripstock
-          POSTGRES_PASSWORD: fripstock
-          POSTGRES_DB: fripstock
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U fripstock"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock?schema=public
-      SHADOW_DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock_shadow?schema=public
-      # Le runner installe ses node_modules nativement : les cibles make
-      # s'exécutent directement, sans passer par les conteneurs.
-      FRIPSTOCK_RUNNER: local
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Créer la base miroir
-        run: PGPASSWORD=fripstock psql -h localhost -U fripstock -d fripstock -c 'CREATE DATABASE fripstock_shadow'
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            apps/api/package-lock.json
-            apps/web/package-lock.json
-
-      - name: Installer les dépendances
-        run: |
-          npm ci
-          npm ci --prefix apps/api
-          npm ci --prefix apps/web
-
-      # `make check` est la seule commande de qualité de ce workflow. Rien n'est
-      # recopié ici : sinon le Makefile et la CI divergent, et un `make check`
-      # vert en local ne veut plus rien dire. Node étant présent sur le runner,
-      # scripts/node-run.sh s'exécute directement, sans conteneur.
-      - name: make check
-        run: make check
-
-  smoke:
-    name: La stack démarre
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Démarrer la stack
-        run: |
-          cp .env.example .env
-          docker compose build
-          docker compose up -d
-
-      - name: Attendre que l'API réponde
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:3001/health > /dev/null; then
-              echo "API prête après ${i} tentative(s)"
-              curl -s http://localhost:3001/health
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::l'API n'a pas répondu en 120 s"
-          docker compose logs
-          exit 1
-
-      - name: Attendre que le front réponde
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:3000 > /dev/null; then
-              echo "Front prêt après ${i} tentative(s)"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::le front n'a pas répondu en 120 s"
-          docker compose logs web
-          exit 1
-
-      - name: Arrêter la stack
-        if: always()
-        run: docker compose down -v
+  # Vérifications et démarrage de la stack vivent dans un workflow à part, que
+  # `release.yml` appelle aussi : le chemin qui déploie en production rejoue
+  # ainsi exactement ce que rejoue celui de `main`.
+  checks:
+    name: Contrôles
+    uses: ./.github/workflows/checks.yml
 
   commits:
     name: Convention de commit
@@ -135,3 +44,29 @@ jobs:
         run: |
           make check-commits \
             RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+  # Coolify ne se déclenche plus lui-même : son auto-deploy est coupé, et c'est
+  # ce job qui le déclenche — après les contrôles, jamais avant. Sur une PR il
+  # n'existe pas : `needs` ne suffirait pas, un fork n'a de toute façon pas accès
+  # aux secrets.
+  deploy-staging:
+    name: Déployer le staging
+    runs-on: ubuntu-latest
+    needs: [checks]
+    if: github.event_name == 'push'
+    environment:
+      name: staging
+    # Deux merges rapprochés ne se marchent pas dessus, et surtout aucun n'est
+    # annulé : couper un déploiement en cours est pire que d'en attendre un.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/coolify-deploy
+        with:
+          url: ${{ vars.COOLIFY_URL }}
+          token: ${{ secrets.COOLIFY_TOKEN }}
+          uuid: ${{ secrets.COOLIFY_STAGING_UUID }}
+          sha: ${{ github.sha }}

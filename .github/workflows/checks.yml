@@ -1,0 +1,112 @@
+# Les vérifications, à un seul endroit.
+#
+# Ce fichier ne se déclenche pas tout seul : `ci.yml` et `release.yml` l'appellent
+# tous les deux. Même raison que « la CI n'exécute que des cibles make » — recopier
+# ces jobs dans les deux workflows les ferait diverger, et un vert ne voudrait plus
+# rien dire. Le chemin qui déploie en production rejoue donc exactement ce que
+# rejoue le chemin de `main`.
+name: Vérifications
+
+on:
+  workflow_call:
+
+jobs:
+  check:
+    name: Vérifications
+    runs-on: ubuntu-latest
+
+    # `make check-db` rejoue les migrations dans une base miroir pour détecter
+    # une dérive du schéma : sans Postgres ici, cette vérification se
+    # contenterait de passer, ce qui est pire que de ne pas l'avoir.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: fripstock
+          POSTGRES_PASSWORD: fripstock
+          POSTGRES_DB: fripstock
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fripstock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock?schema=public
+      SHADOW_DATABASE_URL: postgresql://fripstock:fripstock@localhost:5432/fripstock_shadow?schema=public
+      # Le runner installe ses node_modules nativement : les cibles make
+      # s'exécutent directement, sans passer par les conteneurs.
+      FRIPSTOCK_RUNNER: local
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Créer la base miroir
+        run: PGPASSWORD=fripstock psql -h localhost -U fripstock -d fripstock -c 'CREATE DATABASE fripstock_shadow'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+
+      - name: Installer les dépendances
+        run: |
+          npm ci
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
+
+      # `make check` est la seule commande de qualité de ce workflow. Rien n'est
+      # recopié ici : sinon le Makefile et la CI divergent, et un `make check`
+      # vert en local ne veut plus rien dire. Node étant présent sur le runner,
+      # scripts/node-run.sh s'exécute directement, sans conteneur.
+      - name: make check
+        run: make check
+
+  smoke:
+    name: La stack démarre
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Démarrer la stack
+        run: |
+          cp .env.example .env
+          docker compose build
+          docker compose up -d
+
+      - name: Attendre que l'API réponde
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3001/health > /dev/null; then
+              echo "API prête après ${i} tentative(s)"
+              curl -s http://localhost:3001/health
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::l'API n'a pas répondu en 120 s"
+          docker compose logs
+          exit 1
+
+      - name: Attendre que le front réponde
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 > /dev/null; then
+              echo "Front prêt après ${i} tentative(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::le front n'a pas répondu en 120 s"
+          docker compose logs web
+          exit 1
+
+      - name: Arrêter la stack
+        if: always()
+        run: docker compose down -v
