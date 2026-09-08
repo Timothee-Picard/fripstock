@@ -26,4 +26,9 @@ Deux subagents existent dans `.claude/agents/` : `revue-fripstock` (règles
 métier, scoping multi-tenant, permissions) et `revue-schema-prisma` (relations,
 `onDelete`, index). Ne les lancer que si l'utilisateur le demande.
 
+Codex partage `CLAUDE.md` et ces notes via `AGENTS.md` à la racine. Ses trois skills
+vivent dans `.agents/skills/`, ses deux rôles de revue dans `.codex/agents/`.
+`docs/CODEX.md` explique les correspondances, les permissions et l'activation des
+hooks. Une évolution de skill ou de rôle doit tenir les deux adaptations alignées.
+
 Voir aussi [outillage](outillage.md) et [code-reperes](code-reperes.md).
