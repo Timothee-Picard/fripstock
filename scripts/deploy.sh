@@ -377,7 +377,7 @@ fi
 
 if [ "${SKIP_CHECK:-0}" != "1" ]; then
   echo "${DIM}Vérification du dépôt (make check)...${OFF}"
-  make check >/dev/null || die "make check échoue — corrige avant de publier une version."
+  make check || die "make check échoue — corrige avant de publier une version."
   echo "${GREEN}✓${OFF} make check est vert"
 fi
 
@@ -400,10 +400,13 @@ fi
   printf '%s\n' "$existing"
 } > CHANGELOG.md
 
+./scripts/node-run.sh . npx --no -- prettier --write CHANGELOG.md
+
 echo "${GREEN}✓${OFF} CHANGELOG.md mis à jour"
 
 git add CHANGELOG.md
 git commit -q -m "chore(release): ${tag}"
+make check-commits RANGE="${upstream:-HEAD^}..HEAD"
 git tag -a "$tag" -m "${tag}"
 echo "${GREEN}✓${OFF} commit et tag ${BOLD}${tag}${OFF} créés sur ${BOLD}${branch}${OFF}"
 

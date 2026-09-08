@@ -150,6 +150,11 @@ chaque push de `main` ; `release.yml`, déclenché par le tag de `make deploy`,
 déploie la **production** après approbation d'un relecteur de l'Environment
 GitHub `production`.
 
+`make deploy` formate le `CHANGELOG.md` généré avant de le commiter : sans ce
+passage Prettier, le hook `pre-commit` refuse la version même après un
+`make check` vert. Les sorties des contrôles restent visibles pour diagnostiquer
+un échec. Les messages des nouveaux commits sont vérifiés avant de créer le tag.
+
 - `.github/workflows/checks.yml` est un `workflow_call` : les deux workflows
   l'appellent, donc le chemin de la production rejoue ce que rejoue `main`.
   N'y recopie rien, appelle-le.
