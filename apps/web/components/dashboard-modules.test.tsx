@@ -197,7 +197,7 @@ describe('DashboardModules', () => {
     await user.click(screen.getByRole('button', { name: 'Personnaliser' }));
     await user.click(screen.getByRole('button', { name: 'Terminer' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Session expirée.');
-    expect(screen.getByRole('button', { name: 'Terminer' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Terminer' })).toBeInTheDocument();
   });
 
   it('le dit plutôt que de laisser une zone vide sans explication', () => {
