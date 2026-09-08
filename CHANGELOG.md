@@ -49,6 +49,7 @@
 
 ### Correctifs
 
+- test(web): wait for dashboard save transition to finish
 - fix(ci): format changelog before committing a release (6c14a36)
 - fix(ci): déclenche le déploiement coolify en post (#10) (c22044c)
 - fix(docker): donne une sonde de santé au service web (a81e835)
