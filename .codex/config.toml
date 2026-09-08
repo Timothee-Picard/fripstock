@@ -1,0 +1,28 @@
+# Configuration Codex du dépôt ; modèle hérité des préférences utilisateur.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[agents."revue-schema-prisma"]
+description = "Relit les changements du schéma Prisma de Fripstock (relations, onDelete, index, scoping multi-tenant). Use after editing apps/api/prisma/schema.prisma or generating a new migration."
+config_file = "agents/revue-schema-prisma.toml"
+
+[agents."revue-fripstock"]
+description = "Relit le code récemment modifié dans ce repo à la lumière des règles métier Fripstock (scoping multi-tenant, permissions par boutique, logique de statut bloquant la revente, conventions de nommage). Use after completing a prompts/ step, before moving to the next one, or after any change touching auth, produits, or statuts."
+config_file = "agents/revue-fripstock.toml"
+
+[[hooks.PreToolUse]]
+matcher = "^apply_patch$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = 'python3 "$(git rev-parse --show-toplevel)/.codex/hooks/file_edits.py" protect'
+timeout = 120
+
+[[hooks.PostToolUse]]
+matcher = "^apply_patch$"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'python3 "$(git rev-parse --show-toplevel)/.codex/hooks/file_edits.py" format'
+timeout = 120
+

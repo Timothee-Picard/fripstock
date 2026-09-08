@@ -3,6 +3,10 @@
 Application de gestion de stock pour boutiques de vêtements et objets de seconde main —
 achat-revente et dépôt-vente.
 
+La configuration des assistants est versionnée : Claude lit `CLAUDE.md`, Codex entre
+par `AGENTS.md` et partage les mêmes règles et notes de mémoire. Voir
+[la configuration Codex](docs/CODEX.md) pour les skills, agents de revue et hooks.
+
 ## Démarrage
 
 Prérequis : Docker et Docker Compose. Node n'est **pas** nécessaire sur la machine, tout
