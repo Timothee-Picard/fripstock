@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 — 2026-09-08
+
+### Divers
+
+- Codex/fix deploy v1.0.0 (#15) (1e15c11)
+
 ## v1.0.0 — 2026-09-08
 
 ### Breaking changes
