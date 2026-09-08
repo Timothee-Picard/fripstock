@@ -538,20 +538,25 @@ doc croirait encore à tort**.
 ## Commits, versions et vérifications
 
 - **Conventional Commits obligatoires**, appliqués par un hook `commit-msg` (commitlint) :
-  `type(scope): sujet`. Types : `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
+  `type(scope): subject` (scope facultatif). **Tous les messages de commit sont en
+  anglais**, y compris le corps et les pieds. Types : `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
   `test`, `build`, `ci`, `chore`, `revert`. Scopes usuels : `api`, `web`, `db`, `docker`,
-  `ci`, `deps`, `auth`, `catalogue`, `produits`, `depots`, `stats`.
+  `ci`, `deps`, `auth`, `catalog`, `products`, `deposits`, `stats`.
 - Sujet sur **une seule ligne, 72 caractères maximum**, en minuscule, à l'impératif, sans
   point final. Corps facultatif après une ligne vide, réservé au _pourquoi_ d'un choix
   non évident. Breaking change : `feat!:` ou un pied `BREAKING CHANGE: ...`.
 
   ```
-  feat(produits): bloque la vente d'un produit rendu au client
-  fix(api): scope les contrats de dépôt via client.companyId
+  feat(products): prevent selling returned products
+  fix(api): scope deposit contracts through client.companyId
   ```
 
-- **Versions en tags `vX.Y.Z`** (semver), posés par `make deploy` : le script calcule le
-  bump depuis les commits conventionnels et le présélectionne, l'humain valide. Tant que la
+- **PR créées ou modifiées par Codex : titre et description en anglais.** Le titre
+  respecte également Conventional Commits, afin que le commit de squash soit conforme.
+- **`make check-commits RANGE="<base>..HEAD"` avant un push ou une PR** : vérifier
+  tous les commits de la branche. `make check` ne couvre pas leurs messages.
+- **Versions en tags `vX.Y.Z`** (semver), posés par `make release` : le script calcule le
+  bump depuis les commits conventionnels et le propose, l'humain valide. Tant que la
   version majeure est `0`, un breaking change ne bump que le mineur.
 - **Poser un tag, c'est déployer la production** — `release.yml` s'y déclenche. D'où les
   garde-fous de `make deploy` : la branche est comparée à son équivalent GitHub et une

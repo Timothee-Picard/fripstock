@@ -49,6 +49,10 @@ export default {
         'ci',
         'deps',
         'auth',
+        'catalog',
+        'products',
+        'deposits',
+        // Anciens scopes conservés pour la validation de l'historique.
         'catalogue',
         'produits',
         'depots',
